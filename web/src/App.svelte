@@ -3,6 +3,7 @@
   import Icon from './lib/Icon.svelte'
   import Login from './lib/Login.svelte'
   import Jobs from './lib/Jobs.svelte'
+  import Overview from './pages/Overview.svelte'
   import { ApiError, request, type Status } from './lib/api'
 
   const pages = [
@@ -81,12 +82,7 @@
       {:else if loading}
         <section class="panel empty-state" aria-busy="true"><span class="loading-ring"></span><h2>Connecting to your server</h2><p>Reading server status…</p></section>
       {:else if selected === 'overview'}
-        <section class="welcome panel">
-          <div class="eyebrow">CONNECTION ESTABLISHED</div><h2>Welcome to your server.</h2><p>Serverman is connected to <strong>{status?.hostname}</strong>. The application foundation is ready.</p>
-          <div class="welcome-status"><span class="connection-dot connected"></span>Go server online<span class="muted">·</span>Svelte 5 interface</div>
-        </section>
-        <div class="section-heading"><h2>Workspace</h2><span class="muted">Implementation in progress</span></div>
-        <div class="module-grid">{#each pages.slice(1) as p}<button class="panel module-card" onclick={() => { selected = p.id }}><span class="module-icon"><Icon name={p.id} size={24} /></span><h3>{p.name}</h3><p>{p.subtitle}</p><span class="module-footer">Planned module<Icon name="arrow" size={17} /></span></button>{/each}</div>
+        <Overview />
       {:else}
         <section class="panel empty-state"><span class="module-icon"><Icon name={selected} size={30} /></span><h2>{page.name}</h2><p>This module is next in the implementation plan. Controls will appear here when its backend is ready.</p><button onclick={() => { selected = 'overview' }}>Back to overview</button></section>
       {/if}

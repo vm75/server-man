@@ -16,12 +16,13 @@ import (
 )
 
 type Config struct {
-	Listen       string `json:"listen"`
-	VMRoot       string `json:"vmRoot"`
-	StateDir     string `json:"stateDir"`
-	TokenFile    string `json:"tokenFile"`
-	PublicOrigin string `json:"publicOrigin"`
-	AllowWrites  bool   `json:"allowWrites"`
+	Listen                string `json:"listen"`
+	VMRoot                string `json:"vmRoot"`
+	StateDir              string `json:"stateDir"`
+	TokenFile             string `json:"tokenFile"`
+	PublicOrigin          string `json:"publicOrigin"`
+	AllowWrites           bool   `json:"allowWrites"`
+	SampleIntervalSeconds int    `json:"sampleIntervalSeconds"`
 }
 
 func Defaults() (Config, error) {
@@ -37,7 +38,7 @@ func Defaults() (Config, error) {
 	if stateRoot == "" {
 		stateRoot = filepath.Join(home, ".local", "state")
 	}
-	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token")}, nil
+	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token"), SampleIntervalSeconds: 2}, nil
 }
 
 func Load(path string) (Config, error) {
@@ -74,6 +75,9 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.SampleIntervalSeconds < 1 || c.SampleIntervalSeconds > 10 {
+		return errors.New("sampleIntervalSeconds must be between 1 and 10")
+	}
 	host, port, err := net.SplitHostPort(c.Listen)
 	if err != nil {
 		return fmt.Errorf("listen must be host:port: %w", err)

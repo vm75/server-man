@@ -10,6 +10,7 @@ Serverman runs as one Linux process. Go serves an embedded Svelte application an
 | `internal/app/` | Register the application's modules and tools |
 | `internal/auth/` | Private access token, browser sessions, host/origin restrictions |
 | `internal/core/` | Tool schemas, validation, write policy, process execution, jobs, audit |
+| `internal/modules/monitor/` | Shared Linux resource sampler, bounded history and read-only tools |
 | `internal/httpapi/` | HTTP transport, request limits, authentication, JSON responses |
 | `internal/webui/` | Embed and serve production assets |
 | `web/src/` | Responsive Svelte UI; API client, login, job activity |
@@ -31,7 +32,9 @@ flowchart LR
 
 Tools define their fields once. The registry derives an input JSON Schema and uses those same fields to reject unknown parameters, incorrect types, invalid enums, missing fields, and values outside declared limits. Domain modules must also validate resource names and file paths before using them. There is no shell execution API or arbitrary program API.
 
-Reads run with a 20 second request deadline, at most four at once. Management writes require `allowWrites: true` in server configuration. They return a job immediately and execute independently of the requesting connection. A destructive tool additionally requires `confirm: true`. The job cancellation control runs immediately through the same registry and write policy.
+Reads run with a 20 second request deadline, at most four at once. Monitoring reads use the shared cached sampler rather than recollecting for every request. Management writes require `allowWrites: true` in server configuration. They return a job immediately and execute independently of the requesting connection. A destructive tool additionally requires `confirm: true`. The job cancellation control runs immediately through the same registry and write policy.
+
+The monitoring module samples Linux every one to ten seconds, keeping up to 60 aggregate history points and one current process list. Native SVG charts and CSS meters render the dashboard. Missing data, initial/reset counters, stale snapshots, process limits and namespace scope are explicit. See [monitoring design](docs/design/monitoring.md) for source mappings and calculation rules.
 
 ## Resource bounds and failure handling
 
@@ -56,4 +59,4 @@ The process has the permissions of its operating-system account. Read/write poli
 
 `make check` runs Go vet and frontend type checking. `make test` runs race tests for configuration, authentication, HTTP policy, tool validation, job bounds/cancellation, output capture, and process timeouts. Building frontend assets first also enables embedded production asset checks. Command-changing domain integration tests must use fixtures or a command recorder; development verification must preserve the host's actual workloads.
 
-Live TCP serving and browser verification remain outstanding because this development sandbox denies local socket creation. See the plan's evidence log for exact verification and remaining limits.
+Live TCP serving and browser verification remain outstanding because this development sandbox denies local socket creation; Chromium also exits on a denied `setsockopt` call. See the plan's evidence log for exact verification and remaining limits.

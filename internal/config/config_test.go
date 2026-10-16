@@ -23,6 +23,9 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		{"public origin", `{"publicOrigin":"https://server.example.com"}`, true},
 		{"insecure origin", `{"publicOrigin":"http://server.example.com"}`, false},
 		{"origin with path", `{"publicOrigin":"https://server.example.com/path"}`, false},
+		{"sample interval", `{"sampleIntervalSeconds":5}`, true},
+		{"sample interval too small", `{"sampleIntervalSeconds":0}`, false},
+		{"sample interval too large", `{"sampleIntervalSeconds":11}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "config.json")

@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"serverman/internal/app"
 	"serverman/internal/auth"
 	"serverman/internal/core"
+	"serverman/internal/modules/monitor"
 )
 
 func TestHealthAndUnknownAPI(t *testing.T) {
@@ -42,6 +44,10 @@ func TestHealthAndUnknownAPI(t *testing.T) {
 }
 
 func testHandler(t *testing.T, allowWrites bool) (http.Handler, string) {
+	return testHandlerWithMonitor(t, allowWrites, false)
+}
+
+func testHandlerWithMonitor(t *testing.T, allowWrites, includeMonitor bool) (http.Handler, string) {
 	t.Helper()
 	root := t.TempDir()
 	path := filepath.Join(root, "token")
@@ -55,11 +61,32 @@ func testHandler(t *testing.T, allowWrites bool) (http.Handler, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(jobs.Close)
-	registry, err := app.Registry(allowWrites, jobs)
+	var monitoring *monitor.Sampler
+	if includeMonitor {
+		monitoring = monitor.New(context.Background(), time.Second)
+		t.Cleanup(monitoring.Close)
+	}
+	registry, err := app.Registry(allowWrites, jobs, monitoring)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return Handler(authentication, registry), strings.TrimSpace(string(token))
+}
+
+func TestLiveMonitoringThroughAuthenticatedHTTP(t *testing.T) {
+	handler, token := testHandlerWithMonitor(t, false, true)
+	r := httptest.NewRequest("POST", "http://127.0.0.1:8080/api/tools/monitor_snapshot", strings.NewReader(`{}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	var snapshot monitor.Snapshot
+	if err := json.Unmarshal(w.Body.Bytes(), &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || !snapshot.Valid || snapshot.Memory.Total == 0 || len(snapshot.CPU.Cores) == 0 {
+		t.Fatalf("invalid live HTTP response: status=%d valid=%v error=%s", w.Code, snapshot.Valid, snapshot.LastError)
+	}
 }
 
 func TestSessionAuthenticationAndToolHTTPBoundary(t *testing.T) {

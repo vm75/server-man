@@ -16,6 +16,7 @@ import (
 	"serverman/internal/config"
 	"serverman/internal/core"
 	"serverman/internal/httpapi"
+	"serverman/internal/modules/monitor"
 )
 
 func main() {
@@ -43,7 +44,9 @@ func run() error {
 		return err
 	}
 	defer jobs.Close()
-	registry, err := app.Registry(cfg.AllowWrites, jobs)
+	monitoring := monitor.New(ctx, time.Duration(cfg.SampleIntervalSeconds)*time.Second)
+	defer monitoring.Close()
+	registry, err := app.Registry(cfg.AllowWrites, jobs, monitoring)
 	if err != nil {
 		return err
 	}

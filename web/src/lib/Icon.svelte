@@ -1,6 +1,10 @@
 <script lang="ts">
   let { name, size = 20 }: { name: string; size?: number } = $props()
   const paths: Record<string, string> = {
+    cpu: 'M7 7h10v10H7z M10 10h4v4h-4z M9 3v4 M15 3v4 M9 17v4 M15 17v4 M3 9h4 M3 15h4 M17 9h4 M17 15h4',
+    memory: 'M3 5h18v13H3z M7 9h3v5H7z M14 9h3v5h-3z M6 18v3 M10 18v3 M14 18v3 M18 18v3',
+    network: 'M9 3h6v6H9z M2 16h6v5H2z M16 16h6v5h-6z M12 9v4 M5 16v-3h14v3',
+    drive: 'M5 4h14l3 12H2z M2 16v5h20v-5 M6 18.5h.01 M17 18.5h2',
     server: 'M4 3h16v7H4z M4 14h16v7H4z M8 6.5h.01 M8 17.5h.01 M12 6.5h5 M12 17.5h5',
     overview: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
     containers: 'M12 3 3 8v9l9 5 9-5V8z M3 8l9 5 9-5 M12 13v9 M7 5.8l9 5',

@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"serverman/internal/core"
+	"serverman/internal/modules/monitor"
 )
 
-func Registry(allowWrites bool, jobs *core.Jobs) (*core.Registry, error) {
+func Registry(allowWrites bool, jobs *core.Jobs, monitoring *monitor.Sampler) (*core.Registry, error) {
 	registry := core.NewRegistry(allowWrites, jobs)
 	startedAt := time.Now().UTC()
 	err := registry.AddModule(core.Module{ID: "system", Title: "Server", Available: true},
@@ -36,5 +37,8 @@ func Registry(allowWrites bool, jobs *core.Jobs) (*core.Registry, error) {
 				return map[string]string{"status": "cancellation requested"}, nil
 			}},
 	)
+	if err == nil && monitoring != nil {
+		err = monitor.Register(registry, monitoring)
+	}
 	return registry, err
 }
