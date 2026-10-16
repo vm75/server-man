@@ -1,0 +1,15 @@
+services:
+  heartbeat:
+    image: docker.io/library/busybox:1.37.0
+    command: ["sh", "-c", "while true; do date -u; sleep 30; done"]
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    pids_limit: 16
+    mem_limit: 16m
+    cpus: 0.1
+    restart: "no"
+    labels:
+      org.server-man.demo: "${DEMO_LABEL:-heartbeat}"

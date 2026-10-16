@@ -1,0 +1,14 @@
+services:
+  status:
+    image: docker.io/library/busybox:1.37.0
+    command: ["httpd", "-f", "-p", "8080", "-h", "/www"]
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    mem_limit: 32m
+    cpus: 0.25
+    restart: "no"
+    ports: ["127.0.0.1:18080:8080"]
+    volumes: ["./site:/www:ro"]

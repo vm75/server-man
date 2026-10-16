@@ -168,7 +168,7 @@ preserved; buildable checkout; prepared local service; safe discoverable example
 under this account's `~/vms`; complete host change record.
 
 - [x] Migrate visible branding, MCP identity and package labels; document stable identifiers and verify parity/UI.
-- [ ] Install missing prerequisites and prepare three stopped Compose examples, preserving env ordering and disabled markers.
+- [x] Install missing prerequisites and prepare three stopped Compose examples, preserving env ordering and disabled markers.
 - [ ] Build and verify the current host over loopback HTTP/MCP and install a private user service.
 - [ ] Record every host change and verification limit in [host setup](../operations/host-setup.md).
 
@@ -191,3 +191,12 @@ verification SDK 1.30.0 → 1.32.1 and compatible transitive packages (`devalue`
 passes with the new lockfiles, including official SDK parity and all three
 Firefox sizes. All three `npm audit --json` reports have zero findings.
 Dependencies remain development/build-only; Go has no external modules.
+
+Host preparation evidence: installed Go 1.27.1, Node 24.19.0, rootless Podman
+5.8.6 and standalone Compose v2 2.40.3 using signed Ubuntu packages. All three
+example definitions pass native Compose `config --quiet` with ordered env files.
+The rootless provider returns empty successful status. Files were copied only
+into an absent `~/vms`, root mode 0700. Images/containers remain empty; Docker
+engine, classic LXC, libvirt, LXD pools and guests were not provisioned. The
+[operations ledger](../operations/host-setup.md) lists all packages and changes,
+including the Ubuntu LXD launcher installation side effect.
