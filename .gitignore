@@ -1,0 +1,9 @@
+/bin/
+/web/node_modules/
+/web/dist/
+/internal/webui/dist/
+*.log
+.env
+.env.*
+!.env.example
+.serverman/
