@@ -10,10 +10,9 @@ uses fixtures. No credential values belong in this record.
 
 ## Current access
 
-Open **https://192.168.192.78** from a machine on `192.168.192.0/24`.
-Trust the public CA at `~/.config/serverman/lan-ca.crt` on that client, then sign
-in with the existing private access token. The direct LAN follow-up at the end
-supersedes the original loopback-only access arrangement below.
+Open **http://192.168.192.78:8080** from a machine on `192.168.192.0/24`, then
+sign in with the existing private access token. The direct LAN HTTP follow-up
+at the end records the current listener and supersedes the earlier HTTPS setup.
 
 ## Initial inventory
 
@@ -395,10 +394,13 @@ Remaining integration limits: no real workload lifecycle, Docker daemon,
 classic LXC/libvirt guests, share reload/mount, package-update job, reboot,
 external TLS proxy, reboot persistence or hosted CI was exercised. These are
 recorded limits of verification; the headless loopback deployment and examples
-are ready. The installed source revision is `e4424dd`; later commits update
-handoff documentation only.
+are ready. The installed binary reports `4191209-dirty`; later commits update
+deployment and verification documentation only.
 
 ## Direct LAN access follow-up (2026-10-16)
+
+Historical record: this HTTPS configuration was subsequently retired by the
+user's request; the current plain HTTP arrangement is recorded below.
 
 The user explicitly requested access from another machine. This supersedes the
 loopback-only access arrangement above. Inspection found LAN address
@@ -499,7 +501,7 @@ remains write-disabled, and its token permissions remain unchanged.
   are client-side prerequisites. No host firewall, router forwarding or DNS was
   changed. No guest/container or application management job was launched.
 
-### Trusting the certificate from another machine
+### Historical certificate setup (retired)
 
 Copy the **public certificate** over your authenticated SSH connection:
 
@@ -519,7 +521,36 @@ The current address comes from DHCP. If it changes, update the proxy bind/site
 and the app's publicOrigin together, validate, then restart both services. A DHCP
 reservation can keep this address stable; none was changed by this task.
 
-To return to the prior access arrangement, disable/stop `caddy.service`, restore
-`config.before-lan.json` over `config.json` with mode 0600, and restart the user app.
-This rollback was documented but not executed. Do not delete Caddy CA state if
-clients still trust/use it. No setup change was reverted.
+At the time of this HTTPS setup, this was the documented rollback procedure.
+It was superseded by the direct HTTP follow-up below; the Caddy service, package,
+CA state, exported certificate and config backup have since been removed.
+
+## Direct LAN HTTP follow-up (2026-10-16)
+
+The user requested plain HTTP directly from the application, bound to
+`0.0.0.0`. The live config now sets `listen` to `0.0.0.0:8080` and
+`publicOrigin` to `http://192.168.192.78:8080`; `allowWrites:false` and the
+existing token file are preserved. Config remains mode 0600 in the private
+serverman config directory. The application validates this explicit remote
+listener against a non-loopback IP origin and matching port, and uses
+non-Secure session cookies for HTTP.
+
+Caddy was stopped and disabled before restarting the app. Direct checks then
+confirmed the app owns wildcard TCP 8080, health returns 200 through both
+loopback and the LAN address, unauthenticated API access returns 401, a foreign
+Origin returns 403, login/logout work with HttpOnly and SameSite Strict cookies
+without Secure, and the jobs tool reports no active jobs. There is no listener
+on TCP 80 or 443. The Caddy package and its three dependencies
+(`libnspr4`, `libnss3`, `libnss3-tools`) were purged, removing exactly four
+packages and freeing 55.0 MB, with zero upgrades or installs. Its system
+service, account, configuration and CA state were removed. The exported public
+CA and the private pre-HTTPS config backup created during the previous follow-up
+were deleted. No firewall, router, DHCP, or DNS settings changed. Other physical
+clients have not been tested; this HTTP deployment is intended for a trusted
+network only.
+
+The app was rebuilt and installed at `/usr/local/bin/serverman`; the running
+user service uses the new binary. HTTP health, authentication, cookie behavior,
+Host and Origin rejection, API jobs state, unauthenticated MCP denial, and an
+authenticated official SDK MCP session (48 tools and ping) were checked after
+the change. Go test suites were not rerun.

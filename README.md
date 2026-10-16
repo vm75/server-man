@@ -51,11 +51,11 @@ Use `./bin/serverman -config /absolute/path/config.json` to override defaults:
 }
 ```
 
-`vmRoot` defaults to `~/vms`. Compose projects default to `vmRoot/config/podman/<project>/` and `vmRoot/config/docker/<project>/`. Optional `podmanRoot` and `dockerRoot` override those discovery roots; environment files and disabled markers remain under `vmRoot/data/`. All roots, optional `tokenFile`, and optional `stateDir` must be absolute paths. Unknown fields, relative roots, and non-loopback listen addresses are rejected. server-man does not edit Compose or environment files. Enabled Compose actions change workloads through the installed provider.
+`vmRoot` defaults to `~/vms`. Compose projects default to `vmRoot/config/podman/<project>/` and `vmRoot/config/docker/<project>/`. Optional `podmanRoot` and `dockerRoot` override those discovery roots; environment files and disabled markers remain under `vmRoot/data/`. All roots, optional `tokenFile`, and optional `stateDir` must be absolute paths. Unknown fields and relative roots are rejected. Remote listening requires `0.0.0.0` plus an HTTP `publicOrigin` pinned to the server's non-loopback IP and same port. server-man does not edit Compose or environment files. Enabled Compose actions change workloads through the installed provider.
 
 `sampleIntervalSeconds` ranges from 1 to 10. History retains at most 60 samples; the default interval shows two minutes. Process and network data follow the server's visible Linux namespaces/permissions. The first sample has null rates until the next sample establishes a delta.
 
-For remote browser/API access, use a TLS reverse proxy and set `publicOrigin` to its HTTPS origin, such as `https://server.example.com`. Forward the original Host header. HTTPS deployments use Secure session cookies. See [installation and TLS proxy setup](docs/installation.md).
+For direct remote browser/API access, bind to `0.0.0.0:8080` and set `publicOrigin` to the server's non-loopback IP and matching HTTP port, such as `http://192.168.192.78:8080`. The application restricts accepted Host and Origin values to that origin. HTTP session cookies are not Secure; use this only on a trusted network. HTTPS deployments can still use a TLS reverse proxy. See [installation and remote access](docs/installation.md).
 
 ## HTTP API
 
@@ -91,4 +91,4 @@ See [architecture](ARCHITECTURE.md) for shared operation boundaries, resource li
 
 This checkout is rooted at `/home/shasak/ws/server-man` with its own writable `.git` directory. See the [host setup record](docs/operations/host-setup.md) for this server’s deployment and example workloads.
 
-This headless host is available on the LAN at **https://192.168.192.78**, with token authentication and writes disabled. Caddy serves HTTPS on the LAN and proxies to the loopback user service. Trust the exported public CA on your client first; see [LAN access and certificate setup](docs/operations/host-setup.md#trusting-the-certificate-from-another-machine).
+This headless host is available on the LAN at **http://192.168.192.78:8080**, with token authentication and writes disabled. See the [host setup record](docs/operations/host-setup.md#direct-lan-http-follow-up-2026-10-16).

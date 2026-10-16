@@ -33,20 +33,16 @@ Set `publicOrigin` to the exact browser origin, for example `https://server.exam
 The example system unit expects `/usr/local/bin/serverman`. If installing under another prefix, adjust `ExecStart` before enabling it. Back up configuration and state before upgrading; package updates and service management remain explicit operations initiated through server-man.
 
 
-## Direct LAN HTTPS
+## Direct LAN HTTP
 
-For an IP-only private LAN deployment, [Caddyfile.lan.example](../packaging/Caddyfile.lan.example)
-binds HTTPS only to this host's `192.168.192.78` address, restricts sources to
-`192.168.192.0/24`, and proxies to `127.0.0.1:8080`. It uses `tls internal` and
-serves no plaintext HTTP listener. Set `publicOrigin` to `https://192.168.192.78`
-in the app's config and restart the app so login uses Secure cookies and the
-external Host/origin is accepted. Adjust all address/subnet values together for
-another network. If creating a new Caddy installation, put the reviewed config
-in place before its package starts the default HTTP example server.
+For a headless host that should serve HTTP directly, set `listen` to
+`0.0.0.0:8080` and `publicOrigin` to the host's non-loopback IP and same port,
+for example `http://192.168.192.78:8080`. This explicit configuration enables
+IPv4 remote access and restricts accepted Host and Origin values to that
+address. The service does not configure firewall or router rules; permit port
+8080 only on a trusted network. Browser session cookies are HttpOnly and
+SameSite Strict, but are not Secure over HTTP. For untrusted networks, use the
+TLS reverse proxy setup above instead.
 
-Each client must trust the local CA; the deployment exports only its public
-certificate as `~/.config/serverman/lan-ca.crt`, readable over authenticated SSH.
-See the [host-specific trust steps and certificate fingerprint](operations/host-setup.md#trusting-the-certificate-from-another-machine).
-Never copy the CA private key to a client or repository. Caddy's state must persist
-for certificate renewal and client trust. A publicly trusted domain certificate
-can use the domain-based example above instead of this local CA arrangement.
+The current headless host uses this configuration with writes disabled. See its
+[access and verification record](operations/host-setup.md#direct-lan-http-follow-up-2026-10-16).

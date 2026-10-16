@@ -219,6 +219,9 @@ acceptance limits remain explicitly open and were not claimed as completed.
 
 ## Direct LAN access follow-up (2026-10-16)
 
+Historical: the HTTPS deployment below was retired per the user's later request;
+the replacement plain HTTP listener is tracked in the follow-up after it.
+
 The user requested access from another machine without an SSH tunnel.
 
 - [x] Configure HTTPS at `https://192.168.192.78` using a LAN-bound Caddy proxy, preserving loopback backend and token/origin policy.
@@ -235,3 +238,19 @@ temporary profile and passes login/live samples/project rendering/logout without
 TLS bypass. Another physical client is untested and must import the exported
 public CA. No Go/frontend code changed, so relevant verification is the actual
 proxy/service/auth/browser path. Direct LAN follow-up complete.
+
+## Direct LAN HTTP follow-up (2026-10-16)
+
+- [x] Serve the app directly over HTTP on `0.0.0.0:8080` with a pinned LAN
+  `publicOrigin`, preserving token authentication and disabled writes.
+- [x] Stop and remove the HTTPS proxy and its CA/client-trust artifacts.
+
+Evidence: rebuilt and installed the app; the user service reports
+`0.0.0.0:8080`, and `ss` shows no TCP 80 or 443 listener. Loopback and LAN
+health checks return 200; unauthenticated API returns 401; foreign Origin is
+rejected; browser login/session/logout pass with HttpOnly, SameSite Strict, and
+no Secure cookie flag. The jobs tool reports no active jobs and `allowWrites`
+remains false. Official SDK MCP over HTTP lists 48 tools and passes ping.
+Purging Caddy and its three dependencies removed exactly four packages. Other
+physical clients are untested. No Go test suites were run for this
+deployment-only change. See the [HTTP host ledger](../operations/host-setup.md#direct-lan-http-follow-up-2026-10-16).
