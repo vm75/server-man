@@ -87,13 +87,19 @@ func (a *Auth) ValidOrigin(r *http.Request) bool {
 		return false
 	}
 	host := requestURL.Hostname()
-	allowedHost := strings.EqualFold(host, "localhost")
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		allowedHost = true
-	}
+	allowedHost := false
 	if a.publicOrigin != "" {
 		publicURL, _ := url.Parse(a.publicOrigin)
-		allowedHost = allowedHost || strings.EqualFold(r.Host, publicURL.Host)
+		allowedHost = strings.EqualFold(r.Host, publicURL.Host)
+		if publicURL.Scheme != "http" {
+			ip := net.ParseIP(host)
+			allowedHost = allowedHost || strings.EqualFold(host, "localhost") || (ip != nil && ip.IsLoopback())
+		}
+	} else {
+		allowedHost = strings.EqualFold(host, "localhost")
+		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+			allowedHost = true
+		}
 	}
 	if !allowedHost {
 		return false
@@ -131,6 +137,11 @@ func (a *Auth) Authorized(r *http.Request) bool {
 	return false
 }
 
+func (a *Auth) secureCookie() bool {
+	origin, err := url.Parse(a.publicOrigin)
+	return err == nil && origin.Scheme == "https"
+}
+
 func (a *Auth) Login(w http.ResponseWriter, token string) error {
 	if !a.MatchesToken(token) {
 		return errors.New("invalid access token")
@@ -152,7 +163,7 @@ func (a *Auth) Login(w http.ResponseWriter, token string) error {
 		return errors.New("too many active sessions; sign out from another browser or wait for a session to expire")
 	}
 	a.sessions[sha256.Sum256([]byte(value))] = now.Add(sessionLifetime)
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: value, Path: "/", HttpOnly: true, Secure: a.publicOrigin != "", SameSite: http.SameSiteStrictMode, MaxAge: int(sessionLifetime.Seconds())})
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: value, Path: "/", HttpOnly: true, Secure: a.secureCookie(), SameSite: http.SameSiteStrictMode, MaxAge: int(sessionLifetime.Seconds())})
 	return nil
 }
 
@@ -162,5 +173,5 @@ func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 		delete(a.sessions, sha256.Sum256([]byte(cookie.Value)))
 		a.mu.Unlock()
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: "/", HttpOnly: true, Secure: a.publicOrigin != "", SameSite: http.SameSiteStrictMode, MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: "/", HttpOnly: true, Secure: a.secureCookie(), SameSite: http.SameSiteStrictMode, MaxAge: -1})
 }

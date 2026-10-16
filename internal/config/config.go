@@ -101,9 +101,17 @@ func (c Config) Validate() error {
 	if err != nil || portNumber < 1 || portNumber > 65535 {
 		return errors.New("listen port must be between 1 and 65535")
 	}
-	// Use a TLS reverse proxy for remote access; the management socket stays local.
-	if host != "localhost" && (net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback()) {
-		return errors.New("listen must be a loopback address")
+	// Remote listening is an explicit opt-in: bind the IPv4 wildcard and pin
+	// the accepted Host/Origin and port with publicOrigin.
+	wildcard := host == "0.0.0.0"
+	if host != "localhost" && !wildcard {
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			return errors.New("listen must be loopback or 0.0.0.0 with a configured publicOrigin")
+		}
+	}
+	if wildcard && c.PublicOrigin == "" {
+		return errors.New("0.0.0.0 requires publicOrigin to restrict accepted Host and Origin")
 	}
 	if !filepath.IsAbs(c.VMRoot) {
 		return errors.New("vmRoot must be an absolute path")
@@ -148,8 +156,18 @@ func (c Config) Validate() error {
 	}
 	if c.PublicOrigin != "" {
 		origin, err := url.Parse(c.PublicOrigin)
-		if err != nil || origin.Scheme != "https" || origin.Host == "" || origin.User != nil || (origin.Path != "" && origin.Path != "/") || origin.RawQuery != "" || origin.Fragment != "" {
-			return errors.New("publicOrigin must be an HTTPS origin, e.g. https://server.example.com")
+		if err != nil || (origin.Scheme != "https" && origin.Scheme != "http") || origin.Host == "" || origin.User != nil || (origin.Path != "" && origin.Path != "/") || origin.RawQuery != "" || origin.Fragment != "" {
+			return errors.New("publicOrigin must be an HTTP(S) origin without a path, query or fragment")
+		}
+		if origin.Scheme == "http" {
+			originPort, portErr := strconv.Atoi(origin.Port())
+			if portErr != nil || originPort != portNumber || !wildcard {
+				return errors.New("HTTP publicOrigin requires a 0.0.0.0 listener and the same port")
+			}
+			ip := net.ParseIP(origin.Hostname())
+			if ip == nil || !ip.IsGlobalUnicast() || ip.IsLoopback() {
+				return errors.New("HTTP publicOrigin must use the server's non-loopback IP address")
+			}
 		}
 		if strings.HasSuffix(origin.Host, ":") {
 			return errors.New("publicOrigin has an invalid port")
