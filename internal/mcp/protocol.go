@@ -140,7 +140,7 @@ func (s *Server) dispatch(ctx context.Context, message request) *response {
 		if !SupportedVersion(version) {
 			version = ProtocolVersion
 		}
-		result.Result = map[string]any{"protocolVersion": version, "serverInfo": map[string]string{"name": "serverman", "title": "Serverman", "version": buildinfo.Version}, "capabilities": map[string]any{"tools": map[string]bool{"listChanged": false}}, "instructions": "Use system_capabilities for backend availability and write policy. All tools share the web API's validation and permissions. Writes return a job; poll jobs_get until terminal, and use jobs_cancel to stop remaining work. Destructive tools require confirm=true. A stdio process owns its job history; keep the connection open until its jobs finish."}
+		result.Result = map[string]any{"protocolVersion": version, "serverInfo": map[string]string{"name": "server-man", "title": "server-man", "version": buildinfo.Version}, "capabilities": map[string]any{"tools": map[string]bool{"listChanged": false}}, "instructions": "Use system_capabilities for backend availability and write policy. All tools share the web API's validation and permissions. Writes return a job; poll jobs_get until terminal, and use jobs_cancel to stop remaining work. Destructive tools require confirm=true. A stdio process owns its job history; keep the connection open until its jobs finish."}
 	case "ping":
 		result.Result = map[string]any{}
 	case "tools/list":
@@ -164,7 +164,7 @@ func (s *Server) dispatch(ctx context.Context, message request) *response {
 			return failure(message.ID, -32602, "Tool name is required")
 		}
 		if len(params.Task) > 0 {
-			return failure(message.ID, -32602, "Task-augmented calls are not supported; management writes return Serverman jobs")
+			return failure(message.ID, -32602, "Task-augmented calls are not supported; management writes return server-man jobs")
 		}
 		if !s.names[params.Name] {
 			return failure(message.ID, -32602, "Unknown tool")

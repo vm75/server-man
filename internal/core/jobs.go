@@ -85,7 +85,7 @@ func (j *Jobs) Start(tool, source string, run func(context.Context, io.Writer) (
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = lock.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return Job{}, &Error{Code: "busy", Message: "Another Serverman process is running a management job in this state directory.", Status: 409}
+			return Job{}, &Error{Code: "busy", Message: "Another server-man process is running a management job in this state directory.", Status: 409}
 		}
 		return Job{}, fmt.Errorf("lock management writes: %w", err)
 	}

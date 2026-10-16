@@ -1,5 +1,5 @@
 {
-  "name": "serverman-ui-verification",
+  "name": "server-man-ui-verification",
   "private": true,
   "type": "module",
   "scripts": { "verify": "node verify.mjs" },

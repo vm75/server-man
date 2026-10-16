@@ -11,7 +11,7 @@ func (b *Backend) Register(registry *core.Registry) error {
 	for _, name := range []string{"podman", "docker"} {
 		module := core.Module{ID: name, Title: name + " engine", Available: b.programs[name] != ""}
 		if !module.Available {
-			module.Reason = name + " executable was not found; install it and restart Serverman"
+			module.Reason = name + " executable was not found; install it and restart server-man"
 		}
 		if err := registry.AddModule(module); err != nil {
 			return err

@@ -1,5 +1,5 @@
 [Unit]
-Description=Serverman Linux server manager (user scope)
+Description=server-man Linux server manager (user scope)
 After=default.target
 
 [Service]

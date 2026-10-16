@@ -1,12 +1,12 @@
 # Service management
 
-The Services page and nine `services_*` tools manage existing systemd service units. Serverman does not expose arbitrary commands, unit-file editing, masking, daemon reexecution, or reboot through this module.
+The Services page and nine `services_*` tools manage existing systemd service units. server-man does not expose arbitrary commands, unit-file editing, masking, daemon reexecution, or reboot through this module.
 
 ## Scope and permissions
 
-`systemdScope` is `system` by default; set it to `user` to manage the server account's user manager. All systemctl and journalctl commands use the configured scope. It cannot be changed per request. A user manager also requires that account's normal runtime directory/session bus. System management and journal access require the account's normal operating-system permissions; Serverman never invokes `sudo` or an interactive authorization prompt.
+`systemdScope` is `system` by default; set it to `user` to manage the server account's user manager. All systemctl and journalctl commands use the configured scope. It cannot be changed per request. A user manager also requires that account's normal runtime directory/session bus. System management and journal access require the account's normal operating-system permissions; server-man never invokes `sudo` or an interactive authorization prompt.
 
-`systemctl` and `journalctl` are detected independently at startup. The systemd capability reports the control utility's availability; service inventory also reports whether journalctl is installed. Installed binaries do not prove bus access. A non-systemd host, missing session bus or denied D-Bus connection produces an explicit notice/error while other Serverman modules remain usable. See the upstream [systemctl manual](https://github.com/systemd/systemd/blob/main/man/systemctl.xml) for command behavior.
+`systemctl` and `journalctl` are detected independently at startup. The systemd capability reports the control utility's availability; service inventory also reports whether journalctl is installed. Installed binaries do not prove bus access. A non-systemd host, missing session bus or denied D-Bus connection produces an explicit notice/error while other server-man modules remain usable. See the upstream [systemctl manual](https://github.com/systemd/systemd/blob/main/man/systemctl.xml) for command behavior.
 
 ## Inventory and details
 

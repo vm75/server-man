@@ -16,6 +16,8 @@ const protocolErrors = []
 let bridge
 
 async function exercise(client, label) {
+  assert.equal(client.getServerVersion().name, 'server-man')
+  assert.equal(client.getServerVersion().title, 'server-man')
   const { tools } = await client.listTools()
   const names = tools.map(t => t.name)
   assert(names.includes('monitor_snapshot') && names.includes('system_capabilities') && names.includes('jobs_cancel'))

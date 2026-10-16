@@ -95,7 +95,7 @@ func load(protocol string, s snapshot) ([]Definition, error) {
 		return defs, nil
 	}
 	if !bytes.HasPrefix(s.data, []byte(header)) {
-		return nil, errors.New("managed file is not owned by Serverman; preserve it and choose an empty unused location")
+		return nil, errors.New("managed file is not owned by server-man; preserve it and choose an empty unused location")
 	}
 	seen := map[string]bool{}
 	paths := map[string]bool{}
@@ -123,7 +123,7 @@ func load(protocol string, s snapshot) ([]Definition, error) {
 	}
 	rendered, err := render(protocol, defs)
 	if err != nil || !bytes.Equal(rendered, s.data) {
-		return nil, errors.New("managed file was edited outside Serverman; changes will not be overwritten")
+		return nil, errors.New("managed file was edited outside server-man; changes will not be overwritten")
 	}
 	return defs, nil
 }

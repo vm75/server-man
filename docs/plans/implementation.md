@@ -1,4 +1,4 @@
-# Serverman implementation plan
+# server-man implementation plan
 
 Status: active. Updated: 2026-10-16. Check off a step only after its acceptance criteria have evidence. Commit each completed step separately, including its tracking update. This plan is the scope and progress authority.
 
@@ -17,7 +17,7 @@ Read-only inspection of `~/vms` on 2026-10-15 found:
 - Docker support should use the parallel `config/docker/<project>/` layout, with configurable roots.
 - No KVM or LXC inventory convention was found in that directory. Use libvirt and LXD/classic LXC inventory rather than inventing a filesystem layout.
 
-The workspace's root `.git` is a read-only sandbox mount. The working repository is the `serverman/` subdirectory, with normal Git metadata and commits.
+The migrated checkout is `/home/shasak/ws/server-man` with its own writable `.git` directory. Earlier evidence below describes the previous host; current-host evidence is recorded separately.
 
 ## Design constraints
 
@@ -160,3 +160,26 @@ Use narrow unit tests for parsing, policy, authentication, and file safety, and 
 ## Next action
 
 The planned implementation steps have code and local evidence. The full goal remains active while live socket/TLS, hosted CI, and privileged subsystem integration gates remain environment-limited; see the [verification audit](../verification.md). Continue verification when a suitable Linux integration environment is available.
+
+## Host migration follow-up (2026-10-16)
+
+Requested end state: canonical `server-man` display name with compatibility
+preserved; buildable checkout; prepared local service; safe discoverable examples
+under this account's `~/vms`; complete host change record.
+
+- [x] Migrate visible branding, MCP identity and package labels; document stable identifiers and verify parity/UI.
+- [ ] Install missing prerequisites and prepare three stopped Compose examples, preserving env ordering and disabled markers.
+- [ ] Build and verify the current host over loopback HTTP/MCP and install a private user service.
+- [ ] Record every host change and verification limit in [host setup](../operations/host-setup.md).
+
+Existing live privileged subsystem and hosted CI gaps remain separate acceptance
+limits; this follow-up does not mark them complete.
+
+Branding evidence: `make build check test mcp-test` passes after rebuilding copied
+assets. Official SDK checks assert `server-man` name/title on both transports
+and parity for 48 unchanged tools. `npm --prefix tools/ui run verify` passes
+Firefox at 1440×1000, 390×844 and 320×740, including login branding/title, all
+routes, live samples, fixture confirmation flows and denied production writes.
+The first runs exposed stale assets and missing browser libraries; both were
+resolved before acceptance. Share ownership bytes and compatibility identifiers
+were preserved.

@@ -1,5 +1,5 @@
 {
-  "name": "serverman-mcp-verification",
+  "name": "server-man-mcp-verification",
   "private": true,
   "type": "module",
   "scripts": { "verify": "node verify.mjs" },

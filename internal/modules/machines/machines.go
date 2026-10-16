@@ -89,7 +89,7 @@ func (b *Backend) capabilities() []Capability {
 	for i := range result {
 		c := &result[i]
 		if !c.Available {
-			c.Reason = map[string]string{"lxd": "LXD client lxc was not found", "lxc": "Classic lxc-ls and lxc-info are required", "kvm": "virsh was not found"}[c.ID] + "; install tools and restart Serverman"
+			c.Reason = map[string]string{"lxd": "LXD client lxc was not found", "lxc": "Classic lxc-ls and lxc-info are required", "kvm": "virsh was not found"}[c.ID] + "; install tools and restart server-man"
 			continue
 		}
 		switch c.ID {

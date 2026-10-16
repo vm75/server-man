@@ -152,7 +152,7 @@ func detect(requested string, programs, release map[string]string, ostree bool) 
 	b.manager.Available = b.program != ""
 	b.manager.CanRefresh = b.manager.Available
 	if !b.manager.Available {
-		b.manager.Reason = program + " executable was not found; install the native tools and restart Serverman"
+		b.manager.Reason = program + " executable was not found; install the native tools and restart server-man"
 	}
 	if requested == "pacman" && b.checkupdates == "" {
 		b.manager.CanRefresh = false
@@ -210,7 +210,7 @@ func (b *Backend) Status(ctx context.Context) (Snapshot, error) {
 		c.Args = []string{"--query", "--upgrades", "--color", "never"}
 		if stat, err := os.Stat(filepath.Join(b.cacheDir(), "sync")); err == nil && stat.IsDir() {
 			c.Args = append(c.Args, "--dbpath", b.cacheDir())
-			s.CacheSource = "Serverman's isolated checkupdates database"
+			s.CacheSource = "server-man's isolated checkupdates database"
 		}
 	case "zypper":
 		c.Args = []string{"--non-interactive", "--no-refresh", "--xmlout", "list-updates", "--type", "package"}

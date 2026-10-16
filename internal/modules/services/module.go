@@ -10,7 +10,7 @@ import (
 func (b *Backend) Register(r *core.Registry) error {
 	module := core.Module{ID: "systemd", Title: "systemd services (" + b.scope + ")", Available: b.systemctl != ""}
 	if !module.Available {
-		module.Reason = "systemctl was not found; install systemd tools and restart Serverman"
+		module.Reason = "systemctl was not found; install systemd tools and restart server-man"
 	}
 	if err := r.AddModule(module); err != nil {
 		return err

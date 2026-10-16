@@ -1,6 +1,6 @@
 # MCP access
 
-Serverman exposes the shared tool registry over stdio and Streamable HTTP. The **Agent access** page shows the endpoint, available backends, tools and input schemas. Agent calls use the same validation and write policy as the web API.
+server-man exposes the shared tool registry over stdio and Streamable HTTP. Initialization advertises `serverInfo.name` and `title` as `server-man`; executable paths and existing tool identifiers remain unchanged. The **Agent access** page shows the endpoint, available backends, tools and input schemas. Agent calls use the same validation and write policy as the web API.
 
 ## Local process
 
@@ -30,7 +30,7 @@ For [Hermes](https://hermes-agent.nousresearch.com/docs/reference/mcp-config-ref
 
 ```yaml
 mcp_servers:
-  serverman:
+  server-man:
     command: /absolute/path/to/serverman
     args: ["-transport", "stdio", "-config", "/absolute/path/to/config.json"]
 ```
@@ -39,7 +39,7 @@ Or connect Hermes to the existing HTTP instance. Put the access token in the age
 
 ```yaml
 mcp_servers:
-  serverman:
+  server-man:
     url: https://your-server.example/mcp
     headers:
       Authorization: "Bearer ${SERVERMAN_TOKEN}"
@@ -51,7 +51,7 @@ For [OpenClaw](https://docs.openclaw.ai/tools/mcp), configure a stdio server und
 {
   "mcp": {
     "servers": {
-      "serverman": {
+      "server-man": {
         "transport": "stdio",
         "command": "/absolute/path/to/serverman",
         "args": ["-transport", "stdio", "-config", "/absolute/path/to/config.json"],
@@ -62,7 +62,7 @@ For [OpenClaw](https://docs.openclaw.ai/tools/mcp), configure a stdio server und
 }
 ```
 
-OpenClaw's Settings → MCP also accepts a Streamable HTTP URL. Configure its sensitive Authorization header through the agent's secret settings. Its documented `openclaw mcp doctor serverman --probe` command checks discovery. These examples follow the agents' documented configuration surfaces; this repository's interoperability verification uses the official MCP SDK, rather than running either agent.
+OpenClaw's Settings → MCP also accepts a Streamable HTTP URL. Configure its sensitive Authorization header through the agent's secret settings. Its documented `openclaw mcp doctor server-man --probe` command checks discovery. These examples follow the agents' documented configuration surfaces; this repository's interoperability verification uses the official MCP SDK, rather than running either agent.
 
 ## Tool results and jobs
 

@@ -1,6 +1,6 @@
 # Adding a management module
 
-Serverman modules register typed operations with the shared Go registry. The HTTP API and both MCP transports derive their tool names, argument validation, write policy, and errors from that registry. A module does not add its own transport or execute shell text.
+server-man modules register typed operations with the shared Go registry. The HTTP API and both MCP transports derive their tool names, argument validation, write policy, and errors from that registry. A module does not add its own transport or execute shell text.
 
 ## Add a module
 

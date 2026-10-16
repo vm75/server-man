@@ -47,7 +47,7 @@ func (b *Backend) List(ctx context.Context, protocol string) (Inventory, error) 
 			}
 			info.CanManage = info.CanManage && !info.SetupRequired
 			if !info.Available {
-				info.Reason = "testparm is unavailable; install Samba tools and restart Serverman"
+				info.Reason = "testparm is unavailable; install Samba tools and restart server-man"
 			} else if b.programs["smbcontrol"] == "" {
 				info.Reason = "smbcontrol is unavailable; inventory can be read but changes cannot be applied"
 			}
@@ -113,7 +113,7 @@ func (b *Backend) List(ctx context.Context, protocol string) (Inventory, error) 
 			info.Available = b.programs["exportfs"] != ""
 			info.CanManage = info.Available && info.Reason == ""
 			if !info.Available {
-				info.Reason = "exportfs is unavailable; install the NFS server utilities and restart Serverman"
+				info.Reason = "exportfs is unavailable; install the NFS server utilities and restart server-man"
 			}
 			if stat, err := os.Stat(b.nfsDir); err != nil || !stat.IsDir() {
 				info.SetupRequired = true

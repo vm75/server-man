@@ -76,7 +76,7 @@ func (b *Backend) command(action string, args ...string) core.Command {
 func (b *Backend) List(ctx context.Context) (Inventory, error) {
 	result := Inventory{Scope: b.scope, Available: b.systemctl != "", JournalAvailable: b.journalctl != "", Services: []Service{}, Warnings: []string{}}
 	if !result.Available {
-		result.Reason = "systemctl was not found; install systemd tools and restart Serverman"
+		result.Reason = "systemctl was not found; install systemd tools and restart server-man"
 		return result, nil
 	}
 	merged := map[string]Service{}

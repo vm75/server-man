@@ -1,5 +1,5 @@
 [Unit]
-Description=Serverman Linux server manager
+Description=server-man Linux server manager
 After=network.target
 
 [Service]

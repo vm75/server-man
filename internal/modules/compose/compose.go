@@ -93,7 +93,7 @@ func (b *Backend) Discover(engine string) (Inventory, error) {
 		}
 		status := Engine{Name: name, Root: b.roots[name], Available: b.programs[name] != ""}
 		if !status.Available {
-			status.Reason = name + " executable was not found; install it and restart Serverman"
+			status.Reason = name + " executable was not found; install it and restart server-man"
 		}
 		entries, err := os.ReadDir(status.Root)
 		if errors.Is(err, os.ErrNotExist) {

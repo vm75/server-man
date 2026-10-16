@@ -1,12 +1,12 @@
 # Samba and NFS shares
 
-File shares and the five `shares_*`/protocol tools inspect existing shares and manage application-owned fragments. Serverman does not edit unmanaged host configuration, create accounts, change directory permissions/ownership/ACLs/SELinux labels, or remove shared data. The server account needs native file/daemon permissions; writes also require `allowWrites: true`.
+File shares and the five `shares_*`/protocol tools inspect existing shares and manage application-owned fragments. server-man does not edit unmanaged host configuration, create accounts, change directory permissions/ownership/ACLs/SELinux labels, or remove shared data. The server account needs native file/daemon permissions; writes also require `allowWrites: true`.
 
 ## One-time host setup
 
 ### Samba
 
-Install and configure a standalone Samba file server using your distribution's normal setup. Serverman uses `testparm`, `smbcontrol` and optional `smbstatus`. Set these absolute configuration paths if the defaults do not fit:
+Install and configure a standalone Samba file server using your distribution's normal setup. server-man uses `testparm`, `smbcontrol` and optional `smbstatus`. Set these absolute configuration paths if the defaults do not fit:
 
 ```json
 {
@@ -21,9 +21,9 @@ Choose a new, unused managed filename. Add exactly one literal include at the **
 include = /etc/samba/serverman.conf
 ```
 
-Use the configured managed path verbatim, without variable substitutions. The owned file may be absent initially; Serverman creates it on the first successful save. Do not prefill it with another configuration or create an empty placeholder: existing files must have Serverman's ownership marker and exact generated format. No include is inserted automatically into the host file. See Samba's [include and reload semantics](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html).
+Use the configured managed path verbatim, without variable substitutions. The owned file may be absent initially; server-man creates it on the first successful save. Do not prefill it with another configuration or create an empty placeholder: existing files must have server-man's ownership marker and exact generated format. No include is inserted automatically into the host file. See Samba's [include and reload semantics](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html).
 
-The account must be able to read the main configuration, create temporary files in its directory and the managed directory, replace the owned fragment, and send smbd reload messages. Serverman preserves main-file bytes and uses its directory for validation snapshots so relative configuration context is retained. File-based configuration is inspected; registry/usershare-only discovery and AD controller administration are outside this module.
+The account must be able to read the main configuration, create temporary files in its directory and the managed directory, replace the owned fragment, and send smbd reload messages. server-man preserves main-file bytes and uses its directory for validation snapshots so relative configuration context is retained. File-based configuration is inspected; registry/usershare-only discovery and AD controller administration are outside this module.
 
 ### NFS
 
@@ -60,7 +60,7 @@ Reads are bounded to 1 MiB per file/captured command, 1 MiB total unmanaged NFS 
 5. Samba sends a bounded `smbcontrol ... smbd reload-config` request. It does not disconnect existing sessions. NFS uses `exportfs -i -o <validated options> <client>:<path>` for desired pairs and `exportfs -u <client>:<path>` only for removed, previously owned pairs. IPv6 command targets are bracketed. Global `-ra`, `-ua` and flush operations are never used, preserving unrelated runtime exports. NFS validates typed syntax before publication; native exportability checks happen during apply, followed by a registered-table access check. See the upstream [exportfs interface](https://github.com/linux-nfs/nfs-utils/blob/master/utils/exportfs/exportfs.man).
 6. On failure/cancellation after publication, restore the previous fragment (or its prior absence), then request Samba reload or restore the affected NFS pairs and their complete prior native options. NFS rollback rereads/verifies affected entries; unrelated pairs are retained. Cleanup gets an independent 30-second deadline. Failed or refused rollback is reported in job error/output, including when the job is cancelled. External edits to the new fragment prevent overwriting it during rollback.
 
-This is an atomic file replacement with bounded best-effort runtime recovery. Other administrators and native daemon reloads are not covered by Serverman's lock. Coordinate external changes; daemon/client effects are not a multi-process atomic transaction. A crash between publication and apply can leave configured and runtime states different; inventory and Edit/apply expose that distinction. Rollback cannot undo client I/O or guarantee old settings for already connected Samba sessions.
+This is an atomic file replacement with bounded best-effort runtime recovery. Other administrators and native daemon reloads are not covered by server-man's lock. Coordinate external changes; daemon/client effects are not a multi-process atomic transaction. A crash between publication and apply can leave configured and runtime states different; inventory and Edit/apply expose that distinction. Rollback cannot undo client I/O or guarantee old settings for already connected Samba sessions.
 
 ## Verification
 

@@ -15,7 +15,7 @@ func TestEmbeddedProductionUI(t *testing.T) {
 	handler := Handler()
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "<title>Serverman</title>") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "<title>server-man</title>") {
 		t.Fatalf("index: status=%d, body=%s", w.Code, w.Body)
 	}
 	script := regexp.MustCompile(`src="(/assets/[^\"]+\.js)"`).FindStringSubmatch(w.Body.String())

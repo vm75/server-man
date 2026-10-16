@@ -21,7 +21,7 @@
 </script>
 
 <main id="main" class="login-shell">
-  <div class="login-brand"><span class="brand-mark"><Icon name="server" size={25} /></span><span>serverman</span></div>
+  <div class="login-brand"><span class="brand-mark"><Icon name="server" size={25} /></span><span>server-man</span></div>
   <section class="panel login-panel" aria-labelledby="sign-in-heading">
     <div class="eyebrow">YOUR SERVER WORKSPACE</div>
     <h1 id="sign-in-heading">Welcome back.</h1>

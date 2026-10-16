@@ -1,6 +1,6 @@
 # Project guide
 
-Serverman is a Linux administration application built with Go, Svelte 5, TypeScript, and Vite. Web and MCP operations must share the same validated management functions.
+server-man is a Linux administration application built with Go, Svelte 5, TypeScript, and Vite. Web and MCP operations must share the same validated management functions.
 
 ## Repository map and commands
 

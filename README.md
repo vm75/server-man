@@ -1,4 +1,4 @@
-# Serverman
+# server-man
 
 A lightweight Linux server manager inspired by Cockpit, with a responsive web interface and MCP access for AI agents. Built with Go, Svelte 5, TypeScript, and Vite.
 
@@ -15,6 +15,8 @@ The overview has CPU/network histories, per-core CPU meters, memory/swap, local 
 **File shares** inspects existing Samba/NFS shares and creates, edits, removes or reapplies application-owned shares. Saves validate a candidate, publish an atomic fragment and apply native changes, with rollback on failure. Existing host configuration and shared directory data are preserved. See [share setup and behavior](docs/design/shares.md) for the required Samba include, NFS server setup, access fields and runtime-state limits.
 
 **Updates** inspects cached candidates, refreshes metadata and installs normal system updates through APT, DNF/DNF5, Pacman or Zypper. It reports reboot requirements where detectable and never requests reboot or a distribution migration. `packageManager` defaults to `auto`; an explicit supported family can be configured. Arch metadata refresh uses an isolated `checkupdates` database. See [update behavior](docs/design/updates.md) for commands, capabilities, cancellation and repository limits.
+
+The canonical product name is **server-man**. Compatibility identifiers remain `serverman`: the Go module and entry point, executable, systemd unit names, default config/state paths, session cookie, internal browser events, share ownership format and native fragment filenames, and `SERVERMAN_*` environment variables. Existing installations need no path migration. MCP advertises `server-man`; tool names and schemas are unchanged.
 
 ## Build and run
 
@@ -49,7 +51,7 @@ Use `./bin/serverman -config /absolute/path/config.json` to override defaults:
 }
 ```
 
-`vmRoot` defaults to `~/vms`. Compose projects default to `vmRoot/config/podman/<project>/` and `vmRoot/config/docker/<project>/`. Optional `podmanRoot` and `dockerRoot` override those discovery roots; environment files and disabled markers remain under `vmRoot/data/`. All roots, optional `tokenFile`, and optional `stateDir` must be absolute paths. Unknown fields, relative roots, and non-loopback listen addresses are rejected. Serverman does not edit Compose or environment files. Enabled Compose actions change workloads through the installed provider.
+`vmRoot` defaults to `~/vms`. Compose projects default to `vmRoot/config/podman/<project>/` and `vmRoot/config/docker/<project>/`. Optional `podmanRoot` and `dockerRoot` override those discovery roots; environment files and disabled markers remain under `vmRoot/data/`. All roots, optional `tokenFile`, and optional `stateDir` must be absolute paths. Unknown fields, relative roots, and non-loopback listen addresses are rejected. server-man does not edit Compose or environment files. Enabled Compose actions change workloads through the installed provider.
 
 `sampleIntervalSeconds` ranges from 1 to 10. History retains at most 60 samples; the default interval shows two minutes. Process and network data follow the server's visible Linux namespaces/permissions. The first sample has null rates until the next sample establishes a delta.
 
@@ -87,4 +89,4 @@ Use HTTP to share the web server's jobs and history. A local stdio process has i
 
 See [architecture](ARCHITECTURE.md) for shared operation boundaries, resource limits, and authentication, and [project guidance](AGENTS.md) for working commands.
 
-The repository lives in this `serverman/` directory because the parent workspace's `.git` mount is read-only.
+This checkout is rooted at `/home/shasak/ws/server-man` with its own writable `.git` directory. See the [host setup record](docs/operations/host-setup.md) for this server’s deployment and example workloads.

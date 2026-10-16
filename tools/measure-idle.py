@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure a quiet Serverman stdio process without opening a network socket."""
+"""Measure a quiet server-man stdio process without opening a network socket."""
 import json
 import os
 import subprocess
@@ -69,4 +69,4 @@ with tempfile.TemporaryDirectory(prefix="serverman-idle-") as root:
             process.wait()
         if process.returncode:
             error = process.stderr.read().decode("utf-8", "replace") if process.stderr else ""
-            raise SystemExit(f"Serverman exited {process.returncode}: {error}")
+            raise SystemExit(f"server-man exited {process.returncode}: {error}")

@@ -1,6 +1,6 @@
 # Machine management
 
-The Virtual machines page and MCP expose LXD, classic LXC and KVM/libvirt independently. A missing backend does not disable the others. Serverman runs the installed CLIs as its own account, using the same registry, write policy, jobs and cancellation as Compose. It does not install a hypervisor, initialize LXD, create networks/storage pools, or elevate privileges.
+The Virtual machines page and MCP expose LXD, classic LXC and KVM/libvirt independently. A missing backend does not disable the others. server-man runs the installed CLIs as its own account, using the same registry, write policy, jobs and cancellation as Compose. It does not install a hypervisor, initialize LXD, create networks/storage pools, or elevate privileges.
 
 ## Backend setup
 
@@ -16,7 +16,7 @@ LXD requires the `lxc` client and access to an initialized daemon, project, prof
 
 Classic LXC requires `lxc-ls` and `lxc-info` for inventory/details. Start and stop are advertised separately when `lxc-start` and `lxc-stop` exist. These tools are separate from the LXD `lxc` client; see the [classic LXC tools overview](https://linuxcontainers.org/lxc/manpages/man7/lxc.7.html). Configure container ownership, permissions and networking using the backend's normal setup.
 
-KVM requires `virsh`, a working local libvirt/QEMU connection, suitable account permissions and host virtualization support. Serverman accepts only the two local QEMU URIs above. Remote libvirt/SSH connection management is outside this version's scope. The [virsh manual](https://www.libvirt.org/manpages/virsh.html) defines the inventory, domain, autostart and XML commands used here.
+KVM requires `virsh`, a working local libvirt/QEMU connection, suitable account permissions and host virtualization support. server-man accepts only the two local QEMU URIs above. Remote libvirt/SSH connection management is outside this version's scope. The [virsh manual](https://www.libvirt.org/manpages/virsh.html) defines the inventory, domain, autostart and XML commands used here.
 
 ## Inventory and identifiers
 
@@ -44,15 +44,15 @@ All actions require enabled writes and execute as serialized, cancellable jobs. 
 | `kvm_define` | Define/replace persistent configuration from trusted existing XML; do not start it | Yes |
 | `kvm_undefine` | Require shut-off state; retain disks and NVRAM (`--keep-nvram`) | Yes |
 
-Classic LXC's default stop can kill the guest after a timeout; Serverman selects its documented [no-kill option](https://linuxcontainers.org/lxc/manpages/man1/lxc-stop.1.html). Libvirt undefine never requests storage removal, wiping, snapshot cleanup or managed-save cleanup. Existing metadata or unsupported flags cause a failure for the operator to resolve through native tools. LXD deletion permanently removes instance-owned storage; separately attached custom volumes follow LXD's own lifecycle.
+Classic LXC's default stop can kill the guest after a timeout; server-man selects its documented [no-kill option](https://linuxcontainers.org/lxc/manpages/man1/lxc-stop.1.html). Libvirt undefine never requests storage removal, wiping, snapshot cleanup or managed-save cleanup. Existing metadata or unsupported flags cause a failure for the operator to resolve through native tools. LXD deletion permanently removes instance-owned storage; separately attached custom volumes follow LXD's own lifecycle.
 
-The shared mutation lock covers Serverman processes using the same state directory. External administrators can still change a machine between a state check and an action. Backend failures remain visible in the job output. Cancellation stops the CLI process group and does not undo changes already submitted to a daemon. Refresh inventory/details to observe eventual guest state.
+The shared mutation lock covers server-man processes using the same state directory. External administrators can still change a machine between a state check and an action. Backend failures remain visible in the job output. Cancellation stops the CLI process group and does not undo changes already submitted to a daemon. Refresh inventory/details to observe eventual guest state.
 
 ## Domain XML import
 
 `kvm_define` accepts an absolute existing XML `file` inside `libvirtXMLRoot`. It resolves symlinks, rejects escapes, nonregular files, files above 1 MiB, malformed XML, directives, multiple roots and non-KVM domain types. The domain name must use the supported format. The file is opened without following a final symlink and without blocking on a FIFO.
 
-Serverman copies the validated bytes to an owner-only temporary XML file in `stateDir`, passes it to `virsh define --validate`, then removes the snapshot on success or failure. The original is never edited. Libvirt validates the full domain schema. Device paths, disks, QEMU extensions and other XML references are trusted administrative input and are interpreted by libvirt. This is a registration operation, not an XML editor or guest provisioning wizard.
+server-man copies the validated bytes to an owner-only temporary XML file in `stateDir`, passes it to `virsh define --validate`, then removes the snapshot on success or failure. The original is never edited. Libvirt validates the full domain schema. Device paths, disks, QEMU extensions and other XML references are trusted administrative input and are interpreted by libvirt. This is a registration operation, not an XML editor or guest provisioning wizard.
 
 ## Verification
 

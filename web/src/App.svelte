@@ -50,7 +50,7 @@
   })
 </script>
 
-<svelte:head><title>{page.name} · Serverman</title></svelte:head>
+<svelte:head><title>{page.name} · server-man</title></svelte:head>
 
 <a class="skip-link" href="#main">Skip to content</a>
 {#if needsAuth}
@@ -60,7 +60,7 @@
   <aside class:open={menuOpen} aria-label="Main navigation">
     <a class="brand" href="#overview" onclick={() => { selected = 'overview'; menuOpen = false }}>
       <span class="brand-mark"><Icon name="server" size={24} /></span>
-      <span>serverman<span class="brand-caption">LINUX CONTROL</span></span>
+      <span>server-man<span class="brand-caption">LINUX CONTROL</span></span>
     </a>
     <div class="nav-label">WORKSPACE</div>
     <nav>
@@ -104,7 +104,7 @@
       {:else}
         <section class="panel empty-state"><span class="module-icon"><Icon name={selected} size={30} /></span><h2>{page.name}</h2><p>This module is next in the implementation plan. Controls will appear here when its backend is ready.</p><button onclick={() => { selected = 'overview' }}>Back to overview</button></section>
       {/if}
-      <footer class="page-footer"><span>Serverman<span class="muted"> / </span>{status?.version ?? 'dev'}</span><span>One place for your Linux server</span></footer>
+      <footer class="page-footer"><span>server-man<span class="muted"> / </span>{status?.version ?? 'dev'}</span><span>One place for your Linux server</span></footer>
     </main>
   </div>
 </div>
