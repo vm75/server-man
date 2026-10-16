@@ -144,7 +144,7 @@ try {
     bridge.stdin.write(`${JSON.stringify({ id, ...request })}\n`)
   })
   browser = await firefox.launch({ headless: true })
-  for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'mobile', width: 390, height: 844 }]) {
+  for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'mobile', width: 390, height: 844 }, { name: 'small-mobile', width: 320, height: 740 }]) {
     sampleTimes.clear()
     console.log(`Checking ${viewport.name} ${viewport.width}x${viewport.height}`)
     const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } })
@@ -196,7 +196,7 @@ try {
     await page.getByText('Connected', { exact: true }).waitFor()
     assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, `${viewport.name} overview overflows horizontally`)
     for (const name of ['Containers', 'Virtual machines', 'Services', 'File shares', 'Updates', 'Agent access']) {
-      if (viewport.name === 'mobile') {
+      if (viewport.width < 900) {
         await page.getByRole('button', { name: 'Toggle navigation' }).click()
         await page.getByRole('navigation').getByRole('button', { name }).click()
       } else {
@@ -206,14 +206,14 @@ try {
       console.log(`${viewport.name}: ${name}`)
       assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, `${viewport.name} ${name} overflows horizontally`)
     }
-    if (viewport.name === 'mobile') await page.getByRole('button', { name: 'Toggle navigation' }).click()
+    if (viewport.width < 900) await page.getByRole('button', { name: 'Toggle navigation' }).click()
     await page.getByRole('navigation').getByRole('button', { name: 'Overview' }).click()
     await page.getByText(/Live ·/).waitFor()
     await page.waitForTimeout(2300)
     assert(sampleTimes.size >= 2, 'monitor snapshot did not advance across browser polls')
     await page.screenshot({ path: path.join(artifacts, `${viewport.name}.png`), fullPage: true })
     if (viewport.name === 'desktop') await exerciseManagement(page)
-    else {
+    else if (viewport.name === 'mobile') {
       fixtureMode = true
       await page.reload()
       await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
