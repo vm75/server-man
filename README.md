@@ -2,7 +2,7 @@
 
 A lightweight Linux server manager inspired by Cockpit, with a responsive web interface and MCP access for AI agents. Built with Go, Svelte 5, TypeScript, and Vite.
 
-Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides Linux resource monitoring, Podman/Docker Compose management, LXD/classic LXC/KVM management, systemd services, Samba/NFS shares, system package updates, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. Packaging and the final verification audit remain in progress.
+Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides Linux resource monitoring, Podman/Docker Compose management, LXD/classic LXC/KVM management, systemd services, Samba/NFS shares, system package updates, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. See [installation and privilege guidance](docs/installation.md), [module extension guide](docs/extensions.md), and the [verification audit](docs/verification.md) for deployment and evidence limits.
 
 The overview has CPU/network histories, per-core CPU meters, memory/swap, local storage usage and I/O, uptime/load, optional temperatures, and a searchable/sortable process table. Monitoring uses one shared Linux sampler and native SVG charts. See [monitoring details](docs/design/monitoring.md) for units, limits, and missing-data behavior.
 
@@ -25,6 +25,7 @@ make setup
 make check
 make test
 make mcp-test
+make ui-test
 make build
 ./bin/serverman
 ```
@@ -52,7 +53,7 @@ Use `./bin/serverman -config /absolute/path/config.json` to override defaults:
 
 `sampleIntervalSeconds` ranges from 1 to 10. History retains at most 60 samples; the default interval shows two minutes. Process and network data follow the server's visible Linux namespaces/permissions. The first sample has null rates until the next sample establishes a delta.
 
-For remote browser/API access, use a TLS reverse proxy and set `publicOrigin` to its HTTPS origin, such as `https://server.example.com`. Forward the original Host header. HTTPS deployments use Secure session cookies. A complete deployment example is tracked in the plan.
+For remote browser/API access, use a TLS reverse proxy and set `publicOrigin` to its HTTPS origin, such as `https://server.example.com`. Forward the original Host header. HTTPS deployments use Secure session cookies. See [installation and TLS proxy setup](docs/installation.md).
 
 ## HTTP API
 

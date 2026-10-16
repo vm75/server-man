@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+func TestPackagedExampleConfig(t *testing.T) {
+	if _, err := Load("../../packaging/serverman.example.json"); err != nil {
+		t.Fatalf("packaged example config is invalid: %v", err)
+	}
+}
+
 func TestLoadStrictConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string

@@ -1,0 +1,21 @@
+[Unit]
+Description=Serverman Linux server manager
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/
+ExecStart=/usr/local/bin/serverman -config /etc/serverman/config.json
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=60s
+KillMode=mixed
+StateDirectory=serverman
+StateDirectoryMode=0700
+ConfigurationDirectory=serverman
+ConfigurationDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target

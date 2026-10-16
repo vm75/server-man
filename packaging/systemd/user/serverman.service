@@ -1,0 +1,15 @@
+[Unit]
+Description=Serverman Linux server manager (user scope)
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h
+ExecStart=/usr/local/bin/serverman -config %h/.config/serverman/config.json
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=60s
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

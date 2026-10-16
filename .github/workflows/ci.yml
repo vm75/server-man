@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            tools/mcp/package-lock.json
+            tools/ui/package-lock.json
+      - name: Install native share validator
+        run: sudo apt-get update && sudo apt-get install -y samba-common-bin
+      - name: Install dependencies
+        run: make setup
+      - name: Install browser engines
+        run: npm --prefix tools/ui exec -- playwright install --with-deps firefox
+      - name: Verify
+        run: make check test mcp-test ui-test
+      - name: Verify staged install
+        run: |
+          make install DESTDIR="$RUNNER_TEMP/serverman-stage"
+          test -x "$RUNNER_TEMP/serverman-stage/usr/local/bin/serverman"
+          "$RUNNER_TEMP/serverman-stage/usr/local/bin/serverman" -version
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: serverman-browser-verification
+          path: tools/ui/artifacts/
+          if-no-files-found: ignore

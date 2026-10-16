@@ -1,0 +1,7 @@
+{
+  "name": "serverman-ui-verification",
+  "private": true,
+  "type": "module",
+  "scripts": { "verify": "node verify.mjs" },
+  "devDependencies": { "playwright": "1.63.0" }
+}

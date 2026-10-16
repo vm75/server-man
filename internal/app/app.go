@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"serverman/internal/buildinfo"
 	"serverman/internal/config"
 	"serverman/internal/core"
 	"serverman/internal/modules/compose"
@@ -31,7 +32,7 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 				if err != nil {
 					return nil, err
 				}
-				return map[string]any{"hostname": hostname, "startedAt": startedAt, "version": "dev", "allowWrites": registry.AllowWrites}, nil
+				return map[string]any{"hostname": hostname, "startedAt": startedAt, "version": buildinfo.Version, "allowWrites": registry.AllowWrites}, nil
 			}},
 		core.Tool{Name: "jobs_list", Title: "Recent jobs", Description: "List up to 64 recent management jobs, newest first. Fetch an individual job for output.", ReadOnly: true,
 			Run: func(context.Context, core.Input, io.Writer) (any, error) { return jobs.List(), nil }},

@@ -14,6 +14,7 @@ import (
 
 	"serverman/internal/app"
 	"serverman/internal/auth"
+	"serverman/internal/buildinfo"
 	"serverman/internal/config"
 	"serverman/internal/core"
 	"serverman/internal/httpapi"
@@ -29,9 +30,14 @@ func main() {
 }
 
 func run() error {
+	version := flag.Bool("version", false, "print version and exit")
 	configPath := flag.String("config", "", "path to a JSON configuration file")
 	transport := flag.String("transport", "http", "transport: http (UI, APIs and MCP) or stdio (MCP only)")
 	flag.Parse()
+	if *version {
+		fmt.Println(buildinfo.Version)
+		return nil
+	}
 	if *transport != "http" && *transport != "stdio" {
 		return fmt.Errorf("unknown transport %q", *transport)
 	}
