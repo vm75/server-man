@@ -76,16 +76,7 @@ async function exerciseManagement(page) {
   await page.locator('.activity-button').click()
 
   await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
-  await page.getByRole('button', { name: 'New share' }).click()
-  await page.getByLabel('Share name').fill('documents')
-  await page.getByLabel('Existing directory on server').fill('/srv/shares/documents')
-  await page.getByLabel('Allowed users or groups').fill('alice')
-  await page.getByRole('button', { name: 'Review and apply' }).click()
-  const shareDialog = page.getByRole('dialog')
-  await shareDialog.getByRole('heading', { name: 'Create Samba share: documents' }).waitFor()
-  await shareDialog.getByRole('button', { name: 'Save and apply' }).click()
-  await page.getByText('Share job started. Follow validation, apply and any rollback in Activity.', { exact: true }).waitFor()
-  await page.locator('.activity-button').click()
+  await exerciseShareCreation(page, 'documents')
 
   await page.getByRole('navigation').getByRole('button', { name: 'Updates' }).click()
   await page.getByRole('button', { name: 'Install system updates' }).click()
@@ -106,6 +97,30 @@ async function exerciseManagement(page) {
   assert.equal(submitted.updates_install?.confirm, true)
   assert.deepEqual(deniedByServer.sort(), ['compose_restart', 'lxd_launch', 'samba_share_save', 'services_stop', 'updates_install'].sort())
   fixtureMode = false
+}
+
+async function exerciseShareCreation(page, name) {
+  const callCount = managementCalls.length
+  const denialCount = deniedByServer.length
+  await page.getByRole('button', { name: 'New share' }).click()
+  await page.getByLabel('Share name').fill(name)
+  await page.getByLabel('Existing directory on server').fill(`/srv/shares/${name}`)
+  await page.getByLabel('Allowed users or groups').fill('alice')
+  await page.getByRole('button', { name: 'Review and apply' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('heading', { name: `Create Samba share: ${name}` }).waitFor()
+  assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, 'share review dialog overflows horizontally')
+  if (name === 'mobile-documents') await page.screenshot({ path: path.join(artifacts, 'mobile-share-review.png') })
+  await dialog.getByRole('button', { name: 'Save and apply' }).click()
+  await page.getByText('Share job started. Follow validation, apply and any rollback in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+  const submitted = managementCalls.slice(callCount).find(call => call.tool === 'samba_share_save')
+  assert.equal(submitted?.args.name, name)
+  assert.equal(submitted?.args.path, `/srv/shares/${name}`)
+  assert.equal(submitted?.args.revision, 'a'.repeat(64))
+  assert.equal(submitted?.args.users, 'alice')
+  assert.equal(submitted?.args.confirm, true)
+  assert.equal(deniedByServer.length, denialCount + 1)
 }
 
 try {
@@ -198,12 +213,22 @@ try {
     assert(sampleTimes.size >= 2, 'monitor snapshot did not advance across browser polls')
     await page.screenshot({ path: path.join(artifacts, `${viewport.name}.png`), fullPage: true })
     if (viewport.name === 'desktop') await exerciseManagement(page)
+    else {
+      fixtureMode = true
+      await page.reload()
+      await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
+      await page.getByText('Management enabled', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Toggle navigation' }).click()
+      await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
+      await exerciseShareCreation(page, 'mobile-documents')
+      fixtureMode = false
+    }
     await page.getByRole('button', { name: 'Sign out' }).click()
     await page.getByLabel('Access token').waitFor()
     await context.close()
   }
   assert.deepEqual(failures, [], `browser errors: ${failures.join('; ')}`)
-  console.log('Rendered desktop/mobile navigation, live monitoring, page overflow, management forms, confirmation dialogs, payloads and server-denied fixture writes passed.')
+  console.log('Rendered desktop/mobile navigation, live monitoring, management forms and confirmations in both viewports, payloads, and server-denied fixture writes passed.')
 } finally {
   if (browser) await browser.close()
   if (bridge && bridge.exitCode === null) { bridge.stdin.end(); bridge.kill('SIGTERM') }
