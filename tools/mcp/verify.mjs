@@ -45,6 +45,17 @@ async function exercise(client, label) {
   assert.equal(invalidProject.structuredContent.error.code, 'invalid_arguments')
   const deniedCompose = await client.callTool({ name: 'compose_down', arguments: { engine: 'docker', project: 'demo', confirm: true } })
   assert.equal(deniedCompose.structuredContent.error.code, 'writes_disabled')
+  for (const [name, args] of [
+    ['compose_project_create', { engine: 'podman', project: 'new-demo', content: 'services: {}' }],
+    ['compose_file_read', { engine: 'podman', project: 'demo' }],
+    ['compose_file_save', { engine: 'podman', project: 'demo', revision: 'a'.repeat(64), content: 'services: {}', confirm: true }],
+    ['compose_env_read', { engine: 'podman', project: 'demo', filename: 'app.env' }],
+    ['compose_env_save', { engine: 'podman', project: 'demo', filename: 'app.env', revision: 'missing', content: 'KEY=value', confirm: true }],
+    ['compose_data_mkdir', { engine: 'podman', project: 'demo', path: 'cache' }],
+  ]) {
+    const result = await client.callTool({ name, arguments: args })
+    assert.equal(result.structuredContent.error.code, 'writes_disabled', `${name} must respect allowWrites`)
+  }
   assert(names.includes('machines_list') && names.includes('lxd_launch') && names.includes('lxc_stop') && names.includes('kvm_define'))
   assert.equal(tools.find(t => t.name === 'kvm_undefine').annotations.destructiveHint, true)
   const machines = await client.callTool({ name: 'machines_list', arguments: { backend: 'kvm' } })

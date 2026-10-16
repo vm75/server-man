@@ -20,10 +20,12 @@ const managementCalls = []
 const deniedByServer = []
 let fixtureMode = false
 
-const project = { engine: 'podman', name: 'demo', directory: '/tmp/vms/config/podman/demo', file: '/tmp/vms/config/podman/demo/compose.yml', envFiles: [], disabled: false, state: 'running', containers: 1, running: 1 }
+const project = { engine: 'podman', name: 'demo', directory: '/tmp/vms/config/podman/demo', file: '/tmp/vms/config/podman/demo/compose.yml', envFiles: ['/tmp/vms/data/demo/10-app.env'], disabled: false, state: 'running', containers: 1, running: 1 }
 const fixtures = {
   compose_projects: () => ({ engines: [{ name: 'podman', root: '/tmp/vms/config/podman', available: true }, { name: 'docker', root: '/tmp/vms/config/docker', available: true }], projects: [project], warnings: [] }),
   compose_status: () => ({ project, containers: [{ id: '1234567890abcdef', name: 'demo-web-1', service: 'web', image: 'example/web:latest', state: 'running', status: 'Up', health: '', ports: '', infra: false }], pods: [], warnings: [] }),
+  compose_file_read: () => ({ content: 'services:\n  app:\n    image: alpine:latest\n', revision: 'a'.repeat(64) }),
+  compose_env_read: () => ({ content: 'SECRET=fixture-value\n', revision: 'b'.repeat(64) }),
   machines_list: args => ({ backends: [{ id: args.backend, title: args.backend, available: true, context: 'local', actions: args.backend === 'lxd' ? ['launch', 'start', 'stop', 'restart', 'delete'] : [] }], machines: [] }),
   services_list: () => ({ scope: 'system', available: true, journalAvailable: true, services: [{ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled' }], warnings: [] }),
   services_details: () => ({ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', canStart: false, canStop: true, canReload: true, mainPID: 1234 }),
@@ -47,6 +49,47 @@ async function exerciseManagement(page) {
   await page.reload()
   await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
   await page.getByText('Management enabled', { exact: true }).waitFor()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Containers' }).click()
+  await page.getByRole('button', { name: 'demo', exact: true }).click()
+  await page.getByRole('button', { name: 'Edit Compose' }).click()
+  let editor = page.getByRole('dialog')
+  await editor.getByRole('heading', { name: 'Edit demo' }).waitFor()
+  await editor.locator('textarea').fill('services:\n  app:\n    image: alpine:latest\n# updated\n')
+  await editor.getByRole('button', { name: 'Save file' }).click()
+  await page.getByText('File save started. Follow its validation in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Virtual machines' }).click()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Containers' }).click()
+  await page.getByRole('button', { name: 'demo', exact: true }).click()
+  const envFiles = page.locator('.environment-files')
+  await envFiles.locator('summary').click()
+  await envFiles.getByRole('button', { name: 'Edit' }).click()
+  editor = page.getByRole('dialog')
+  await editor.getByRole('heading', { name: 'Edit environment file' }).waitFor()
+  await editor.locator('textarea').fill('SECRET=changed-fixture-value\n')
+  await editor.getByRole('button', { name: 'Save file' }).click()
+  await page.getByText('File save started. Follow its validation in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Virtual machines' }).click()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Containers' }).click()
+  await page.getByRole('button', { name: 'demo', exact: true }).click()
+  await page.getByLabel('Folder path').fill('config/cache')
+  await page.getByRole('button', { name: 'Create folder' }).click()
+  await page.getByText('Data directory creation started for demo.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Virtual machines' }).click()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Containers' }).click()
+  await page.getByRole('button', { name: 'New project' }).click()
+  editor = page.getByRole('dialog')
+  await editor.getByLabel('Project name').fill('fixture-new')
+  await editor.getByRole('button', { name: 'Create project' }).click()
+  await page.getByText('Project creation started. Follow its validation in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Virtual machines' }).click()
 
   await page.getByRole('navigation').getByRole('button', { name: 'Containers' }).click()
   await page.getByRole('button', { name: 'demo', exact: true }).click()
@@ -89,13 +132,23 @@ async function exerciseManagement(page) {
   const submitted = Object.fromEntries(managementCalls.map(call => [call.tool, call.args]))
   assert.equal(submitted.compose_restart?.project, 'demo')
   assert.equal(submitted.compose_restart?.confirm, true)
+  assert.match(submitted.compose_file_save?.content, /# updated/)
+  assert.equal(submitted.compose_file_save?.revision, 'a'.repeat(64))
+  assert.equal(submitted.compose_file_save?.confirm, true)
+  assert.match(submitted.compose_env_save?.content, /changed-fixture-value/)
+  assert.equal(submitted.compose_env_save?.filename, '10-app.env')
+  assert.equal(submitted.compose_env_save?.revision, 'b'.repeat(64))
+  assert.equal(submitted.compose_env_save?.confirm, true)
+  assert.equal(submitted.compose_data_mkdir?.path, 'config/cache')
+  assert.equal(submitted.compose_project_create?.project, 'fixture-new')
+  assert.match(submitted.compose_project_create?.content, /your-image:tag/)
   assert.equal(submitted.lxd_launch?.name, 'fixture-vm')
   assert.equal(submitted.services_stop?.unit, 'sshd.service')
   assert.equal(submitted.services_stop?.confirm, true)
   assert.equal(submitted.samba_share_save?.revision, 'a'.repeat(64))
   assert.equal(submitted.samba_share_save?.users, 'alice')
   assert.equal(submitted.updates_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['compose_restart', 'lxd_launch', 'samba_share_save', 'services_stop', 'updates_install'].sort())
+  assert.deepEqual(deniedByServer.sort(), ['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'samba_share_save', 'services_stop', 'updates_install'].sort())
   fixtureMode = false
 }
 
@@ -163,7 +216,7 @@ try {
           await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
           return
         }
-        if (['compose_restart', 'lxd_launch', 'services_stop', 'samba_share_save', 'updates_install'].includes(tool)) {
+        if (['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'services_stop', 'samba_share_save', 'updates_install'].includes(tool)) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
           assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)

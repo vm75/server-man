@@ -52,7 +52,7 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 		err = monitor.Register(registry, monitoring)
 	}
 	if err == nil {
-		err = compose.New(cfg.VMRoot, map[string]string{"podman": cfg.PodmanRoot, "docker": cfg.DockerRoot}, runner).Register(registry)
+		err = compose.New(cfg.VMRoot, map[string]string{"podman": cfg.PodmanRoot, "docker": cfg.DockerRoot}, runner, cfg.AllowWrites).Register(registry)
 	}
 	if err == nil {
 		err = machines.New(cfg, runner).Register(registry)

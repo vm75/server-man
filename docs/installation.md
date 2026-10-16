@@ -41,8 +41,10 @@ for example `http://192.168.192.78:8080`. This explicit configuration enables
 IPv4 remote access and restricts accepted Host and Origin values to that
 address. The service does not configure firewall or router rules; permit port
 8080 only on a trusted network. Browser session cookies are HttpOnly and
-SameSite Strict, but are not Secure over HTTP. For untrusted networks, use the
-TLS reverse proxy setup above instead.
+SameSite Strict, but are not Secure over HTTP. The project editor can return
+private Compose/env file contents to authenticated web and MCP clients, and env
+values travel over HTTP. For untrusted networks, use the TLS reverse proxy
+setup above instead.
 
 The current headless host uses this configuration with writes disabled. See its
 [access and verification record](operations/host-setup.md#direct-lan-http-follow-up-2026-10-16).

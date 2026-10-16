@@ -34,6 +34,30 @@ func (b *Backend) Register(registry *core.Registry) error {
 		{Name: "compose_logs", Title: "Compose logs", Description: "Read bounded logs, optionally for one service. Logs may contain private application data; only request relevant output.", ReadOnly: true, Fields: fields, Run: func(ctx context.Context, input core.Input, out io.Writer) (any, error) {
 			return b.Logs(ctx, input.String("engine"), input.String("project"), input.String("service"), int(input.Number("tail")))
 		}},
+		{Name: "compose_project_create", Title: "Create Compose project", Description: "Create a new project with compose.yaml under the selected engine root and an isolated data/<project> directory. Compose is validated against the per-project isolation policy before publication. File contents are private administrative configuration.", Fields: map[string]core.Field{"engine": core.EnumField("Container engine", true, "podman", "docker"), "project": core.StringField("New project directory name", true, 128), "content": core.StringField("Compose YAML content (maximum 256 KiB)", true, 256<<10)}, Run: func(ctx context.Context, input core.Input, out io.Writer) (any, error) {
+			return b.CreateProject(ctx, input.String("engine"), input.String("project"), input.String("content"), out)
+		}},
+		{Name: "compose_file_read", Title: "Read Compose file", Description: "Read the selected project's raw Compose YAML for the authenticated editor. The result may contain private values; use only on a trusted connection.", ReadOnly: true, Fields: identity(), Run: func(ctx context.Context, input core.Input, out io.Writer) (any, error) {
+			if !b.allowFileRead {
+				return nil, &core.Error{Code: "writes_disabled", Message: "File editing is disabled with management writes.", Status: 403}
+			}
+			return b.ComposeFile(input.String("engine"), input.String("project"))
+		}},
+		{Name: "compose_file_save", Title: "Save Compose file", Description: "Replace the selected Compose file after validation and stale-edit checking. Bind mounts must be inside data/<project>; privileged/device access and host namespaces are rejected. File contents are not included in job output.", Destructive: true, Fields: map[string]core.Field{"engine": core.EnumField("Container engine", true, "podman", "docker"), "project": core.StringField("Project directory name", true, 128), "revision": core.StringField("Current file revision from compose_file_read", true, 64), "content": core.StringField("Compose YAML content (maximum 256 KiB)", true, 256<<10)}, Run: func(ctx context.Context, input core.Input, out io.Writer) (any, error) {
+			return b.SaveCompose(ctx, input.String("engine"), input.String("project"), input.String("revision"), input.String("content"), out)
+		}},
+		{Name: "compose_env_read", Title: "Read project environment file", Description: "Read one project's private .env file for the authenticated editor. Secret values are returned only to the caller; use only on a trusted connection.", ReadOnly: true, Fields: map[string]core.Field{"engine": core.EnumField("Container engine", true, "podman", "docker"), "project": core.StringField("Project directory name", true, 128), "filename": core.StringField("Project environment filename ending in .env", true, 128)}, Run: func(ctx context.Context, input core.Input, out io.Writer) (any, error) {
+			if !b.allowFileRead {
+				return nil, &core.Error{Code: "writes_disabled", Message: "File editing is disabled with management writes.", Status: 403}
+			}
+			return b.EnvFile(input.String("engine"), input.String("project"), input.String("filename"))
+		}},
+		{Name: "compose_env_save", Title: "Save project environment file", Description: "Create or replace one project .env file with stale-edit checking and Compose validation. Secret contents are excluded from job output.", Destructive: true, Fields: map[string]core.Field{"engine": core.EnumField("Container engine", true, "podman", "docker"), "project": core.StringField("Project directory name", true, 128), "filename": core.StringField("Project environment filename ending in .env", true, 128), "revision": core.StringField("Current revision, or missing for a new file", true, 64), "content": core.StringField("Environment file content (maximum 64 KiB)", true, 64<<10)}, Run: func(ctx context.Context, input core.Input, out io.Writer) (any, error) {
+			return b.SaveEnv(ctx, input.String("engine"), input.String("project"), input.String("filename"), input.String("revision"), input.String("content"))
+		}},
+		{Name: "compose_data_mkdir", Title: "Create project data directory", Description: "Create a private directory or nested directory under data/<project>, rejecting traversal and symlinks. Bind mounts may use paths within this project data root.", Fields: map[string]core.Field{"engine": core.EnumField("Container engine", true, "podman", "docker"), "project": core.StringField("Project directory name", true, 128), "path": core.StringField("Relative folder path under data/<project>", true, 1024)}, Run: func(ctx context.Context, input core.Input, out io.Writer) (any, error) {
+			return b.CreateDataDirectory(input.String("engine"), input.String("project"), input.String("path"))
+		}},
 	}
 	for _, action := range []string{"up", "start", "stop", "restart", "pull", "down"} {
 		destructive := action == "up" || action == "stop" || action == "restart" || action == "down"

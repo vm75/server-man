@@ -31,6 +31,9 @@ func (r *recorder) Capture(ctx context.Context, command core.Command) (string, e
 	if r.capture != nil {
 		return r.capture(command)
 	}
+	if slices.Contains(command.Args, "config") {
+		return `{"services":{"web":{}}}`, nil
+	}
 	return "[]", nil
 }
 func (r *recorder) Run(ctx context.Context, command core.Command, out io.Writer) error {
@@ -126,6 +129,105 @@ func TestCommandsPreserveProjectAndEnvironmentContext(t *testing.T) {
 				t.Fatal("unexpected destructive Compose option")
 			}
 		}
+	}
+}
+
+func TestProjectEditorCreatesPrivateFilesWithRevisionChecks(t *testing.T) {
+	b, _ := fixture(t)
+	content := "services:\n  app:\n    image: alpine:latest\n"
+	if _, err := b.CreateProject(context.Background(), "podman", "editor-demo", content, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	composePath := filepath.Join(b.roots["podman"], "editor-demo", "compose.yaml")
+	if info, err := os.Stat(composePath); err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("compose mode or file: %v %v", info, err)
+	}
+	if _, err := b.SaveEnv(context.Background(), "podman", "editor-demo", "10-app.env", "missing", "PASSWORD=private\n"); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(b.vmRoot, "data", "editor-demo", "10-app.env")
+	info, err := os.Stat(envPath)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("environment mode: %v %v", info, err)
+	}
+	file, err := b.EnvFile("podman", "editor-demo", "10-app.env")
+	if err != nil || file.Content != "PASSWORD=private\n" || len(file.Revision) != 64 {
+		t.Fatalf("environment read=%+v error=%v", file, err)
+	}
+	result, err := b.SaveEnv(context.Background(), "podman", "editor-demo", "10-app.env", file.Revision, "PASSWORD=updated\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(result)
+	if strings.Contains(string(encoded), "updated") || strings.Contains(string(encoded), "private") {
+		t.Fatal("environment values were returned from the write operation")
+	}
+	if _, err := b.SaveEnv(context.Background(), "podman", "editor-demo", "10-app.env", file.Revision, "PASSWORD=stale\n"); err == nil {
+		t.Fatal("stale environment revision was accepted")
+	}
+	composeFile, err := b.ComposeFile("podman", "editor-demo")
+	if err != nil || composeFile.Content != content || len(composeFile.Revision) != 64 {
+		t.Fatalf("compose read=%+v error=%v", composeFile, err)
+	}
+	if _, err := b.SaveCompose(context.Background(), "podman", "editor-demo", composeFile.Revision, content+"# edited\n", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateDataDirectory("podman", "editor-demo", "config/cache"); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(filepath.Join(b.vmRoot, "data", "editor-demo", "config", "cache")); err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+		t.Fatalf("private nested directory: %v %v", info, err)
+	}
+	if _, err := b.CreateDataDirectory("podman", "editor-demo", "../outside"); err == nil {
+		t.Fatal("data directory traversal was accepted")
+	}
+}
+
+func TestProjectIsolationRejectsOutsideMountsAndHostAccess(t *testing.T) {
+	b, runner := fixture(t)
+	project, err := b.resolve("podman", "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, output := range []string{
+		`{"services":{"web":{"volumes":[{"type":"bind","source":"/etc","target":"/host"}]}}}`,
+		`{"services":{"web":{"privileged":true}}}`,
+		`{"services":{"web":{"network_mode":"host"}}}`,
+		`{"services":{"web":{"volumes":[{"type":"volume","source":"shared","target":"/data"}]}}}`,
+	} {
+		runner.capture = func(command core.Command) (string, error) { return output, nil }
+		if err := b.validateCompose(context.Background(), project, project.realFile); err == nil {
+			t.Fatalf("unsafe Compose config was accepted: %s", output)
+		}
+	}
+	allowed := filepath.Join(b.vmRoot, "data", "demo", "storage")
+	if err := os.MkdirAll(allowed, 0700); err != nil {
+		t.Fatal(err)
+	}
+	runner.capture = func(core.Command) (string, error) {
+		return `{"services":{"web":{"volumes":[{"type":"bind","source":"` + allowed + `","target":"/data"}]}}}`, nil
+	}
+	if err := b.validateCompose(context.Background(), project, project.realFile); err != nil {
+		t.Fatalf("project data mount rejected: %v", err)
+	}
+}
+
+func TestEnvironmentEditorCannotReachSharedOrSymlinkedPaths(t *testing.T) {
+	b, _ := fixture(t)
+	for _, name := range []string{"../other.env", "data_root.env", "global.env", ".secret.env", "nested/file.env"} {
+		if _, err := b.SaveEnv(context.Background(), "podman", "demo", name, "missing", "KEY=value\n"); err == nil {
+			t.Fatalf("unsafe environment filename %q accepted", name)
+		}
+	}
+	outside := t.TempDir()
+	if err := os.RemoveAll(filepath.Join(b.vmRoot, "data", "demo")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(b.vmRoot, "data", "demo")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateDataDirectory("podman", "demo", "cache"); err == nil {
+		t.Fatal("project data symlink was accepted")
 	}
 }
 
@@ -310,8 +412,9 @@ func TestRegistryUsesAcknowledgementAndTrackedJobs(t *testing.T) {
 		case <-time.After(time.Millisecond):
 		}
 	}
-	if len(runner.recorded()) != 1 {
-		t.Fatal("tracked action did not execute once")
+	commands := runner.recorded()
+	if len(commands) != 2 || commands[1].Args[len(commands[1].Args)-1] != "-d" {
+		t.Fatal("tracked action did not validate and execute once")
 	}
 }
 
