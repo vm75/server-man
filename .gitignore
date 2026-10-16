@@ -2,6 +2,8 @@
 /web/node_modules/
 /web/dist/
 /internal/webui/dist/
+/internal/webui/assets/dist/
+/.cache/
 *.log
 .env
 .env.*

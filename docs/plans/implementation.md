@@ -36,17 +36,17 @@ The workspace's root `.git` is a read-only sandbox mount. The working repository
 
 - [x] Inspect workspace, available toolchains, and existing VM/Compose layout.
 - [x] Initialize a new repository and write this detailed tracked plan.
-- [ ] Commit the plan and concise project guidance.
+- [x] Commit the plan and concise project guidance.
 
 Acceptance: a real initial Git commit containing the plan and no copied secrets or host data.
 
 ### 1. Runnable application foundation
 
-- [ ] Add Go entry point, typed configuration, graceful shutdown, and health API.
-- [ ] Add Svelte 5 + TypeScript + Vite with reproducible dependency lockfile.
-- [ ] Serve built assets from the Go binary; support Vite development proxy.
-- [ ] Add concise build/development commands and ignore generated artifacts.
-- [ ] Add responsive app navigation and explicit connection/error states.
+- [x] Add Go entry point, typed configuration, graceful shutdown, and health API.
+- [x] Add Svelte 5 + TypeScript + Vite with reproducible dependency lockfile.
+- [x] Serve built assets from the Go binary; support Vite development proxy.
+- [x] Add concise build/development commands and ignore generated artifacts.
+- [x] Add responsive app navigation and explicit connection/error states.
 
 Acceptance: frontend type checking/build and Go build pass; the built executable serves the UI and health endpoint without Node at runtime.
 
@@ -144,8 +144,9 @@ Use narrow unit tests for parsing, policy, authentication, and file safety, and 
 
 | Step | Evidence | Remaining limits |
 | --- | --- | --- |
-| 0 | Empty workspace confirmed; Go 1.26.5 and Node 24.18.0 installed; `~/vms/vms.sh` and Compose structure inspected without reading environment values; new repository initialized. | Initial commit pending. |
+| 0 | Initial commit `a20a0ef`; Go 1.26.5 and Node 24.18.0 installed; `~/vms/vms.sh` and Compose structure inspected without reading environment values. | Root `.git` is read-only; nested repository is fully writable. |
+| 1 | `make check` passes (Go vet, Svelte/TypeScript: zero errors/warnings); `make build` passes; `make test` passes with race detection, including embedded index/JS responses, asset boundaries, health, and strict config. Initial stripped binary: 6.2 MiB; UI JS: 42.33 kB (16.84 kB gzip). | TCP listen is blocked by sandbox (`socket: operation not permitted`), so live executable/browser acceptance remains outstanding. Registry DNS is unavailable; dependencies were installed from existing local cache using standard lockfile metadata. npm lifecycle scripts are disabled because the supplied toolchain packages build without them; the esbuild install script's synchronous spawn is blocked here. |
 
 ## Next action
 
-Commit step 0, then implement the runnable foundation in step 1. Keep subsequent work aligned with the full scope above.
+Implement the shared management boundary in step 2, then monitoring. Retain step 1's live runtime/browser check for the final audit; the sandbox currently prevents listening on TCP.

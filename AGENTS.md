@@ -2,6 +2,17 @@
 
 Serverman is a Linux administration application built with Go, Svelte 5, TypeScript, and Vite. Web and MCP operations must share the same validated management functions.
 
+## Repository map and commands
+
+- `cmd/serverman/`: entry point and process lifecycle.
+- `internal/config/`, `internal/httpapi/`, `internal/webui/`: configuration, HTTP routes, and embedded assets.
+- `web/src/`: Svelte UI; `web/vite.config.ts` sets its Go asset output and development proxy.
+- `make setup`: install Go and frontend dependencies from manifests/lockfile.
+- `make api` and `make dev`: backend and frontend development servers, in separate terminals.
+- `make check`: Go vet and frontend type checking. `make test`: Go race tests.
+- `make build`: production UI and Go binary at `bin/serverman`.
+- Generated frontend assets and dependencies are ignored; do not edit them.
+
 ## Scope and tracking
 
 - Follow [the implementation plan](docs/plans/implementation.md); commit each verified step and its tracking update separately.
