@@ -18,6 +18,8 @@ import (
 type Config struct {
 	Listen                string `json:"listen"`
 	VMRoot                string `json:"vmRoot"`
+	PodmanRoot            string `json:"podmanRoot"`
+	DockerRoot            string `json:"dockerRoot"`
 	StateDir              string `json:"stateDir"`
 	TokenFile             string `json:"tokenFile"`
 	PublicOrigin          string `json:"publicOrigin"`
@@ -92,6 +94,9 @@ func (c Config) Validate() error {
 	}
 	if !filepath.IsAbs(c.VMRoot) {
 		return errors.New("vmRoot must be an absolute path")
+	}
+	if (c.PodmanRoot != "" && !filepath.IsAbs(c.PodmanRoot)) || (c.DockerRoot != "" && !filepath.IsAbs(c.DockerRoot)) {
+		return errors.New("podmanRoot and dockerRoot must be absolute when configured")
 	}
 	if !filepath.IsAbs(c.StateDir) || !filepath.IsAbs(c.TokenFile) {
 		return errors.New("stateDir and tokenFile must be absolute paths")

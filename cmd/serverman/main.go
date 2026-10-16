@@ -48,7 +48,7 @@ func run() error {
 	defer jobs.Close()
 	monitoring := monitor.New(ctx, time.Duration(cfg.SampleIntervalSeconds)*time.Second)
 	defer monitoring.Close()
-	registry, err := app.Registry(cfg.AllowWrites, jobs, monitoring)
+	registry, err := app.Registry(cfg, jobs, monitoring, core.Runner{})
 	if err != nil {
 		return err
 	}

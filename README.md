@@ -2,9 +2,11 @@
 
 A lightweight Linux server manager inspired by Cockpit, with a responsive web interface and MCP access for AI agents. Built with Go, Svelte 5, TypeScript, and Vite.
 
-Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides live Linux resource monitoring, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. Remaining management modules are under development; their UI entries are labeled as planned.
+Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides Linux resource monitoring, Podman/Docker Compose management, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. Remaining management modules are under development; their UI entries are labeled as planned.
 
 The overview has CPU/network histories, per-core CPU meters, memory/swap, local storage usage and I/O, uptime/load, optional temperatures, and a searchable/sortable process table. Monitoring uses one shared Linux sampler and native SVG charts. See [monitoring details](docs/design/monitoring.md) for units, limits, and missing-data behavior.
+
+**Containers** discovers Compose projects, shows containers and associated Podman pods, reads bounded logs, and runs up/start/stop/restart/pull/down jobs. It preserves the project directories, environment-file order and disabled markers used by `~/vms/vms.sh`. See [Compose setup and behavior](docs/design/compose.md) for paths, provider requirements, and action details.
 
 ## Build and run
 
@@ -38,7 +40,7 @@ Use `./bin/serverman -config /absolute/path/config.json` to override defaults:
 }
 ```
 
-`vmRoot` defaults to `~/vms`. Optional `tokenFile` and `stateDir` must be absolute paths. Unknown fields, relative roots, and non-loopback listen addresses are rejected. The application does not currently modify the VM root.
+`vmRoot` defaults to `~/vms`. Compose projects default to `vmRoot/config/podman/<project>/` and `vmRoot/config/docker/<project>/`. Optional `podmanRoot` and `dockerRoot` override those discovery roots; environment files and disabled markers remain under `vmRoot/data/`. All roots, optional `tokenFile`, and optional `stateDir` must be absolute paths. Unknown fields, relative roots, and non-loopback listen addresses are rejected. Serverman does not edit Compose or environment files. Enabled Compose actions change workloads through the installed provider.
 
 `sampleIntervalSeconds` ranges from 1 to 10. History retains at most 60 samples; the default interval shows two minutes. Process and network data follow the server's visible Linux namespaces/permissions. The first sample has null rates until the next sample establishes a delta.
 
@@ -56,7 +58,7 @@ All `/api/` routes require authentication except token sign-in. Send `Authorizat
 | `GET /api/tools` | Module availability and tool schemas |
 | `POST /api/tools/<name>` | Invoke a tool with a JSON arguments object |
 
-Current tools: `system_status`, `system_capabilities`, `monitor_snapshot`, `monitor_processes`, `jobs_list`, `jobs_get`, and `jobs_cancel`. `monitor_processes` accepts `sort`, `filter`, and `limit`. Mutation tools return a `job`; use `jobs_get` with its `id` to read state/output. `jobs_cancel` is an immediate control operation. Foreign browser origins and unexpected Host headers are rejected.
+Core tools: `system_status`, `system_capabilities`, `monitor_snapshot`, `monitor_processes`, `jobs_list`, `jobs_get`, and `jobs_cancel`. Compose adds `compose_projects`, `compose_status`, `compose_logs`, and six [lifecycle tools](docs/design/compose.md#actions). `monitor_processes` accepts `sort`, `filter`, and `limit`. Mutation tools return a `job`; use `jobs_get` with its `id` to read state/output. `jobs_cancel` is an immediate control operation. Foreign browser origins and unexpected Host headers are rejected.
 
 ## MCP
 

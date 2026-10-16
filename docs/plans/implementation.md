@@ -1,6 +1,6 @@
 # Serverman implementation plan
 
-Status: active. Updated: 2026-10-15. Check off a step only after its acceptance criteria have evidence. Commit each completed step separately, including its tracking update. This plan is the scope and progress authority.
+Status: active. Updated: 2026-10-16. Check off a step only after its acceptance criteria have evidence. Commit each completed step separately, including its tracking update. This plan is the scope and progress authority.
 
 ## Goal
 
@@ -80,11 +80,11 @@ Acceptance: an MCP client can discover and invoke the same operations available 
 
 ### 5. Podman and Docker Compose
 
-- [ ] Discover both roots and supported Compose filenames; handle missing roots and reject path escapes.
-- [ ] Preserve project directory, environment file order, and disabled markers from `~/vms/vms.sh`.
-- [ ] List project/container state and logs; support up, start, stop, restart, pull, and down as jobs. Do not remove volumes implicitly.
-- [ ] Add useful project details and lifecycle controls in UI and MCP.
-- [ ] Verify fixture projects modeled on the actual layout with a command recorder, and read-only live discovery when available.
+- [x] Discover both roots and supported Compose filenames; handle missing roots and reject path escapes.
+- [x] Preserve project directory, environment file order, and disabled markers from `~/vms/vms.sh`.
+- [x] List project/container state and logs; support up, start, stop, restart, pull, and down as jobs. Do not remove volumes implicitly.
+- [x] Add useful project details and lifecycle controls in UI and MCP.
+- [x] Verify fixture projects modeled on the actual layout with a command recorder, and read-only live discovery when available.
 
 Acceptance: both engines use correct commands and project context; disabled projects cannot start; configuration/env contents are never returned by inventory APIs.
 
@@ -150,7 +150,8 @@ Use narrow unit tests for parsing, policy, authentication, and file safety, and 
 | 2 | Shared registry and bounded runner/jobs implemented; private token/session login/logout and authenticated HTTP tool invocation are wired into the UI. Go race tests cover schema/policy, destructive acknowledgement, sessions/origins, job serialization/cancellation/retention, audit failure, separate stdout/stderr, capture limits and real helper-process timeouts. `make check test build` passes (zero frontend diagnostics). | Live listener/browser verification remains blocked by the sandbox. MCP parity evidence is recorded in step 4. No actual host management changes were executed. |
 | 3 | Linux collector, bounded shared sampler and dashboard implemented. Race tests verify real advancing Linux samples, concurrent readers, authenticated HTTP monitoring, counter/PID resets, missing data and history/query bounds. `make check build test` passes with zero frontend diagnostics. Collector benchmark (20 iterations, visible sandbox process set): 4.76 ms/collection, 351,058 allocated bytes/collection; stripped binary approximately 6.8 MiB, frontend JS approximately 70.4 kB / 27 kB gzip. | Desktop/mobile rendering and live browser updates remain unverified: TCP socket creation fails; both playwright-cli and direct Chromium startup fail, with Chromium reporting denied `setsockopt` before any page loads. The benchmark measures the collector in this namespace, not full daemon idle cost or large-host performance. |
 | 4 | `make check build test mcp-test` passes; official TypeScript SDK 1.30.0 initializes the actual stdio binary and Streamable HTTP handler, discovers 7 tools, reads real Linux metrics, and verifies schemas/error results/denied writes. Tool/schema parity with HTTP API and origin/authentication rejection pass. Go race tests cover malformed/oversized messages, lifecycle/cancellation, version negotiation and shared jobs/destructive acknowledgements. Agent access page and source-linked OpenClaw/Hermes examples added; processes sharing state serialize mutations with flock. | Go SDK download is blocked by DNS socket policy, so isolated standard-library adapters implement the documented tools-only protocol. MCP HTTP is verified in process through its real handler; live TCP/TLS and browser checks remain outstanding. OpenClaw/Hermes themselves were not launched. |
+| 5 | `make check build test mcp-test` passes: zero frontend diagnostics, Go race tests, production assets/binary, and official SDK discovery/parity for 16 tools. SDK checks also exercise Compose discovery, invalid identifiers and denied writes. Command fixtures cover both engines, all six actions, project/env context, markers, path escapes, custom project labels, JSON variants, pod association and bounded logs. Read-only discovery finds the existing 22 Podman projects without reading env values. Final Activity completion tracking fix passes `make check build`; completion now refreshes projects even when the drawer is closed or another job is selected. | No real container mutations were executed. Podman runtime setup fails on the sandbox's read-only runtime directory; Docker Compose version detection succeeds, but live runtime inventory and provider execution remain unverified. Desktop/mobile browser and live network checks remain outstanding. |
 
 ## Next action
 
-Implement Compose discovery/lifecycle/logs for Podman and Docker in step 5, matching the observed `~/vms` environment layering and disabled markers. Retain all live TCP/TLS/browser checks for the final audit, then continue the remaining management modules.
+Implement step 6: separate LXD/classic LXC capabilities, libvirt KVM inventory and typed actions, responsive machine management, and matching MCP tools. Retain all live TCP/TLS/browser checks for the final audit, then continue the remaining management modules.

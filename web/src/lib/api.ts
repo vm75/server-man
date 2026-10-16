@@ -43,3 +43,9 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 export function invokeTool<T>(name: string, arguments_: Record<string, unknown> = {}, signal?: AbortSignal): Promise<T> {
   return request<T>(`/api/tools/${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify(arguments_), signal })
 }
+
+export async function startJob(name: string, arguments_: Record<string, unknown>): Promise<Job> {
+  const result = await invokeTool<{ job: Job }>(name, arguments_)
+  window.dispatchEvent(new CustomEvent<Job>('serverman:job-started', { detail: result.job }))
+  return result.job
+}

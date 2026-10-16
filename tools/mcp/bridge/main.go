@@ -15,6 +15,7 @@ import (
 
 	"serverman/internal/app"
 	"serverman/internal/auth"
+	"serverman/internal/config"
 	"serverman/internal/core"
 	"serverman/internal/httpapi"
 	"serverman/internal/modules/monitor"
@@ -45,7 +46,7 @@ func run() error {
 	defer jobs.Close()
 	monitoring := monitor.New(ctx, time.Second)
 	defer monitoring.Close()
-	registry, err := app.Registry(false, jobs, monitoring)
+	registry, err := app.Registry(config.Config{VMRoot: filepath.Join(root, "vms")}, jobs, monitoring, core.Runner{})
 	if err != nil {
 		return err
 	}

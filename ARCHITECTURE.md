@@ -11,13 +11,14 @@ Serverman runs as one Linux process for the web UI, authenticated JSON APIs and 
 | `internal/auth/` | Private access token, browser sessions, host/origin restrictions |
 | `internal/core/` | Tool schemas, validation, write policy, process execution, jobs, audit |
 | `internal/modules/monitor/` | Shared Linux resource sampler, bounded history and read-only tools |
+| `internal/modules/compose/` | Project discovery, safe metadata parsing and fixed Compose/native-engine commands |
 | `internal/httpapi/` | HTTP transport, request limits, authentication, JSON responses |
 | `internal/mcp/` | MCP tools protocol, stdio and stateless Streamable HTTP adapters |
 | `internal/webui/` | Embed and serve production assets |
-| `web/src/` | Responsive Svelte UI; API client, login, job activity, monitoring and agent access |
+| `web/src/` | Responsive Svelte UI; API client, login, job activity, monitoring, Compose and agent access |
 | `tools/mcp/` | Test-only official SDK client and HTTP handler bridge |
 
-Dependency direction is entry point → assembly/transports → core. Domain modules added in later steps depend on core interfaces, and do not import HTTP or UI packages. A module supplies a capability descriptor and named tools; the registry provides discovery to transports.
+Dependency direction is entry point → assembly/transports → core. Domain modules depend on core interfaces, and do not import HTTP or UI packages. Assembly receives configuration, jobs, the shared sampler and a command executor. Tests inject a command recorder. A module supplies a capability descriptor and named tools; the registry provides discovery to transports.
 
 ## Operation flow
 
@@ -41,6 +42,8 @@ Tools define their fields once. The registry derives an input JSON Schema and us
 Reads run with a 20 second request deadline, at most four at once. Monitoring reads use the shared cached sampler rather than recollecting for every request. Management writes require `allowWrites: true` in server configuration. They return a job immediately and execute independently of the requesting connection. A destructive tool additionally requires `confirm: true`. The job cancellation control runs immediately through the same registry and write policy.
 
 The monitoring module samples Linux every one to ten seconds, keeping up to 60 aggregate history points and one current process list. Native SVG charts and CSS meters render the dashboard. Missing data, initial/reset counters, stale snapshots, process limits and namespace scope are explicit. See [monitoring design](docs/design/monitoring.md) for source mappings and calculation rules.
+
+Compose discovery reads file metadata without opening configuration or environment contents. Inventory runs at most one native container query per engine; selected project details and actions delegate project interpretation to its Compose provider. Only whitelisted container/pod metadata is returned. See [Compose design](docs/design/compose.md) for path checks, provider differences and command limits. The UI's shared `startJob` helper opens Activity; completion events refresh the selected project after its job finishes.
 
 ## Resource bounds and failure handling
 

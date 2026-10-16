@@ -7,12 +7,14 @@ import (
 	"os"
 	"time"
 
+	"serverman/internal/config"
 	"serverman/internal/core"
+	"serverman/internal/modules/compose"
 	"serverman/internal/modules/monitor"
 )
 
-func Registry(allowWrites bool, jobs *core.Jobs, monitoring *monitor.Sampler) (*core.Registry, error) {
-	registry := core.NewRegistry(allowWrites, jobs)
+func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, runner core.Executor) (*core.Registry, error) {
+	registry := core.NewRegistry(cfg.AllowWrites, jobs)
 	startedAt := time.Now().UTC()
 	err := registry.AddModule(core.Module{ID: "system", Title: "Server", Available: true},
 		core.Tool{Name: "system_capabilities", Title: "Backend capabilities", Description: "Read backend availability, unavailable reasons, and management write policy.", ReadOnly: true,
@@ -43,6 +45,9 @@ func Registry(allowWrites bool, jobs *core.Jobs, monitoring *monitor.Sampler) (*
 	)
 	if err == nil && monitoring != nil {
 		err = monitor.Register(registry, monitoring)
+	}
+	if err == nil {
+		err = compose.New(cfg.VMRoot, map[string]string{"podman": cfg.PodmanRoot, "docker": cfg.DockerRoot}, runner).Register(registry)
 	}
 	return registry, err
 }

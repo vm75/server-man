@@ -26,6 +26,8 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		{"sample interval", `{"sampleIntervalSeconds":5}`, true},
 		{"sample interval too small", `{"sampleIntervalSeconds":0}`, false},
 		{"sample interval too large", `{"sampleIntervalSeconds":11}`, false},
+		{"custom Compose roots", `{"podmanRoot":"/srv/podman","dockerRoot":"/srv/docker"}`, true},
+		{"relative Compose root", `{"podmanRoot":"config/podman"}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "config.json")

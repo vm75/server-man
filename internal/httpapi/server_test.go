@@ -13,6 +13,7 @@ import (
 
 	"serverman/internal/app"
 	"serverman/internal/auth"
+	"serverman/internal/config"
 	"serverman/internal/core"
 	"serverman/internal/modules/monitor"
 )
@@ -66,7 +67,7 @@ func testHandlerWithMonitor(t *testing.T, allowWrites, includeMonitor bool) (htt
 		monitoring = monitor.New(context.Background(), time.Second)
 		t.Cleanup(monitoring.Close)
 	}
-	registry, err := app.Registry(allowWrites, jobs, monitoring)
+	registry, err := app.Registry(config.Config{AllowWrites: allowWrites, VMRoot: filepath.Join(root, "vms")}, jobs, monitoring, core.Runner{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,6 +14,7 @@
   onMount(() => {
     let stopped = false
     let polling = false
+    const states = new Map<string, Job['state']>()
     let timer: ReturnType<typeof setTimeout>
     const controller = new AbortController()
     async function poll() {
@@ -22,14 +23,29 @@
       clearTimeout(timer)
       try {
         jobs = await invokeTool<Job[]>('jobs_list', {}, controller.signal)
-        if (selected && open) selected = await invokeTool<Job>('jobs_get', { id: selected.id }, controller.signal)
+        for (const job of jobs) {
+          if (states.get(job.id) === 'running' && job.state !== 'running') window.dispatchEvent(new CustomEvent<Job>('serverman:job-finished', { detail: job }))
+          states.set(job.id, job.state)
+        }
+        for (const [id, state] of states) if (state !== 'running' && !jobs.some(job => job.id === id)) states.delete(id)
+        if (selected && open) {
+          const previous = selected
+          const updated = await invokeTool<Job>('jobs_get', { id: previous.id }, controller.signal)
+          if (selected?.id === previous.id) {
+            selected = updated
+            if (states.get(updated.id) === 'running' && updated.state !== 'running') window.dispatchEvent(new CustomEvent<Job>('serverman:job-finished', { detail: updated }))
+            states.set(updated.id, updated.state)
+          }
+        }
         error = ''
       } catch (e) { if (!stopped) error = e instanceof Error ? e.message : 'Could not read jobs' }
       finally { polling = false; if (!stopped) timer = setTimeout(poll, open ? 2000 : 5000) }
     }
     refresh = poll
+    const started = (event: Event) => { selected = (event as CustomEvent<Job>).detail; states.set(selected.id, 'running'); open = true; void poll() }
+    window.addEventListener('serverman:job-started', started)
     void poll()
-    return () => { stopped = true; clearTimeout(timer); controller.abort() }
+    return () => { stopped = true; clearTimeout(timer); controller.abort(); window.removeEventListener('serverman:job-started', started) }
   })
 
   async function select(job: Job) {

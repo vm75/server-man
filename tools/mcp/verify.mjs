@@ -35,6 +35,14 @@ async function exercise(client, label) {
   await assert.rejects(client.callTool({ name: 'unknown_tool', arguments: {} }))
   const jobs = await client.callTool({ name: 'jobs_list', arguments: {} })
   assert.deepEqual(jobs.structuredContent.items, [])
+  const projects = await client.callTool({ name: 'compose_projects', arguments: {} })
+  assert.equal(projects.isError, false)
+  assert.deepEqual(projects.structuredContent.projects, [])
+  assert.equal(projects.structuredContent.engines.length, 2)
+  const invalidProject = await client.callTool({ name: 'compose_status', arguments: { engine: 'podman', project: '../escape' } })
+  assert.equal(invalidProject.structuredContent.error.code, 'invalid_arguments')
+  const deniedCompose = await client.callTool({ name: 'compose_down', arguments: { engine: 'docker', project: 'demo', confirm: true } })
+  assert.equal(deniedCompose.structuredContent.error.code, 'writes_disabled')
   await client.ping()
   console.log(`${label}: initialize, ${tools.length} tools, live monitoring, schemas, error results and denied writes passed`)
   return tools
@@ -42,7 +50,7 @@ async function exercise(client, label) {
 
 try {
   const config = path.join(root, 'stdio.json')
-  await writeFile(config, JSON.stringify({ stateDir: path.join(root, 'stdio-state'), tokenFile: path.join(root, 'unused-token'), allowWrites: false }), { mode: 0o600 })
+  await writeFile(config, JSON.stringify({ vmRoot: path.join(root, 'empty-vms'), stateDir: path.join(root, 'stdio-state'), tokenFile: path.join(root, 'unused-token'), allowWrites: false }), { mode: 0o600 })
   const stdioClient = new Client({ name: 'serverman-verifier', version: '1.0.0' })
   stdioClient.onerror = error => protocolErrors.push(error)
   clients.push(stdioClient)
