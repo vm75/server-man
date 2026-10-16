@@ -15,6 +15,10 @@ func Registry(allowWrites bool, jobs *core.Jobs, monitoring *monitor.Sampler) (*
 	registry := core.NewRegistry(allowWrites, jobs)
 	startedAt := time.Now().UTC()
 	err := registry.AddModule(core.Module{ID: "system", Title: "Server", Available: true},
+		core.Tool{Name: "system_capabilities", Title: "Backend capabilities", Description: "Read backend availability, unavailable reasons, and management write policy.", ReadOnly: true,
+			Run: func(context.Context, core.Input, io.Writer) (any, error) {
+				return map[string]any{"modules": registry.Modules(), "allowWrites": registry.AllowWrites}, nil
+			}},
 		core.Tool{Name: "system_status", Title: "Server status", Description: "Read the connected server identity and management write policy.", ReadOnly: true,
 			Run: func(context.Context, core.Input, io.Writer) (any, error) {
 				hostname, err := os.Hostname()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"serverman/internal/config"
 	"serverman/internal/core"
 	"serverman/internal/httpapi"
+	"serverman/internal/mcp"
 	"serverman/internal/modules/monitor"
 )
 
@@ -28,17 +30,17 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", "", "path to a JSON configuration file")
+	transport := flag.String("transport", "http", "transport: http (UI, APIs and MCP) or stdio (MCP only)")
 	flag.Parse()
+	if *transport != "http" && *transport != "stdio" {
+		return fmt.Errorf("unknown transport %q", *transport)
+	}
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	authentication, err := auth.Load(cfg.TokenFile, cfg.PublicOrigin)
-	if err != nil {
-		return err
-	}
 	jobs, err := core.NewJobs(ctx, cfg.StateDir)
 	if err != nil {
 		return err
@@ -47,6 +49,13 @@ func run() error {
 	monitoring := monitor.New(ctx, time.Duration(cfg.SampleIntervalSeconds)*time.Second)
 	defer monitoring.Close()
 	registry, err := app.Registry(cfg.AllowWrites, jobs, monitoring)
+	if err != nil {
+		return err
+	}
+	if *transport == "stdio" {
+		return mcp.New(registry).Stdio(ctx, os.Stdin, os.Stdout)
+	}
+	authentication, err := auth.Load(cfg.TokenFile, cfg.PublicOrigin)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 
 	"serverman/internal/auth"
 	"serverman/internal/core"
+	"serverman/internal/mcp"
 	"serverman/internal/webui"
 )
 
@@ -56,6 +57,7 @@ func Handler(authentication *auth.Auth, registry *core.Registry) http.Handler {
 		JSON(w, http.StatusOK, map[string]string{"status": "signed in"})
 	})
 	mux.Handle("/api/", RequireAuth(authentication, private))
+	mux.Handle("/mcp", RequireAuth(authentication, mcp.New(registry).HTTP()))
 	mux.Handle("/", webui.Handler())
 	return SecurityHeaders(mux)
 }

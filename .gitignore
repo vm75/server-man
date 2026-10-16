@@ -4,6 +4,7 @@
 /internal/webui/dist/
 /internal/webui/assets/dist/
 /.cache/
+/tools/mcp/node_modules/
 *.log
 .env
 .env.*

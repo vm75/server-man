@@ -1,4 +1,4 @@
-.PHONY: setup dev api check test build clean
+.PHONY: setup dev api check test mcp-test build clean
 
 export GOCACHE ?= $(CURDIR)/.cache/go-build
 export GOMODCACHE ?= $(CURDIR)/.cache/go-mod
@@ -7,6 +7,7 @@ export NPM_CONFIG_CACHE ?= $(CURDIR)/.cache/npm
 setup:
 	go mod download
 	npm --prefix web ci --ignore-scripts
+	npm --prefix tools/mcp ci --ignore-scripts
 
 api:
 	go run ./cmd/serverman
@@ -20,6 +21,10 @@ check:
 
 test:
 	go test -race ./...
+
+mcp-test: build
+	go build -o bin/mcp-http-bridge ./tools/mcp/bridge
+	npm --prefix tools/mcp run verify
 
 build:
 	npm --prefix web run build

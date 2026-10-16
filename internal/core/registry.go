@@ -124,7 +124,16 @@ func (r *Registry) Tools() []Tool {
 	return values
 }
 
-func (r *Registry) Invoke(ctx context.Context, name string, raw json.RawMessage, source string) (any, error) {
+func (r *Registry) Invoke(ctx context.Context, name string, raw json.RawMessage, source string) (result any, err error) {
+	defer func() {
+		if recover() != nil {
+			result = nil
+			err = fmt.Errorf("management operation panicked")
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	tool, ok := r.tools[name]
 	if !ok {
 		return nil, &Error{Code: "not_found", Message: "unknown tool", Status: 404}
@@ -148,6 +157,9 @@ func (r *Registry) Invoke(ctx context.Context, name string, raw json.RawMessage,
 			return nil, Unavailable("job manager is not configured")
 		}
 		if !tool.Immediate {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			job, err := r.jobs.Start(tool.Name, source, func(ctx context.Context, out io.Writer) (any, error) { return tool.Run(ctx, input, out) })
 			if err != nil {
 				return nil, err

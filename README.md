@@ -2,7 +2,7 @@
 
 A lightweight Linux server manager inspired by Cockpit, with a responsive web interface and MCP access for AI agents. Built with Go, Svelte 5, TypeScript, and Vite.
 
-Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides live Linux resource monitoring, authenticated HTTP APIs, a responsive Svelte UI, a shared tool registry, and cancellable management jobs with bounded output and audit records. Remaining management modules and MCP transports are under development; their UI entries are labeled as planned.
+Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides live Linux resource monitoring, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. Remaining management modules are under development; their UI entries are labeled as planned.
 
 The overview has CPU/network histories, per-core CPU meters, memory/swap, local storage usage and I/O, uptime/load, optional temperatures, and a searchable/sortable process table. Monitoring uses one shared Linux sampler and native SVG charts. See [monitoring details](docs/design/monitoring.md) for units, limits, and missing-data behavior.
 
@@ -14,13 +14,14 @@ Requires Linux, Go 1.26 or newer, Node.js 22.12 or newer, npm, and Make. Node is
 make setup
 make check
 make test
+make mcp-test
 make build
 ./bin/serverman
 ```
 
 Open `http://127.0.0.1:8080`. Sign in with the access token from the private file created on first start. The startup log shows its path; the default is `~/.config/serverman/token` (or under `XDG_CONFIG_HOME`). The server binds to loopback. `GET /healthz` provides a small unauthenticated JSON health response.
 
-Management writes are disabled by default. When enabled, jobs run one at a time and appear in **Activity**. Cancelling a job stops its remaining work; it does not undo completed changes. The server retains 64 recent jobs in memory and records audit metadata under `~/.local/state/serverman` (or `XDG_STATE_HOME`).
+Management writes are disabled by default. When enabled, jobs run one at a time and appear in **Activity**. Instances using the same state directory also serialize writes through a file lock. Cancelling a job stops its remaining work; it does not undo completed changes. Each process retains 64 recent jobs in memory and records audit metadata under `~/.local/state/serverman` (or `XDG_STATE_HOME`).
 
 ## Development
 
@@ -55,7 +56,17 @@ All `/api/` routes require authentication except token sign-in. Send `Authorizat
 | `GET /api/tools` | Module availability and tool schemas |
 | `POST /api/tools/<name>` | Invoke a tool with a JSON arguments object |
 
-Current tools: `system_status`, `monitor_snapshot`, `monitor_processes`, `jobs_list`, `jobs_get`, and `jobs_cancel`. `monitor_processes` accepts `sort`, `filter`, and `limit`. Mutation tools return a `job`; use `jobs_get` with its `id` to read state/output. `jobs_cancel` is an immediate control operation. Foreign browser origins and unexpected Host headers are rejected.
+Current tools: `system_status`, `system_capabilities`, `monitor_snapshot`, `monitor_processes`, `jobs_list`, `jobs_get`, and `jobs_cancel`. `monitor_processes` accepts `sort`, `filter`, and `limit`. Mutation tools return a `job`; use `jobs_get` with its `id` to read state/output. `jobs_cancel` is an immediate control operation. Foreign browser origins and unexpected Host headers are rejected.
+
+## MCP
+
+Open **Agent access** in the UI for discovery and connection details. The running server provides Streamable HTTP at `/mcp`, authenticated with the same server access token. Local agents can launch a separate stdio process:
+
+```sh
+/absolute/path/to/serverman -transport stdio -config /absolute/path/to/config.json
+```
+
+Use HTTP to share the web server's jobs and history. A local stdio process has its own history and cancels unfinished work when it exits. See [MCP connection details and Hermes/OpenClaw examples](docs/design/mcp.md) for setup, schemas, protocol limits, and the verification scope. `make mcp-test` checks both transports with the official SDK; Node and its SDK are only verification dependencies.
 
 See [architecture](ARCHITECTURE.md) for shared operation boundaries, resource limits, and authentication, and [project guidance](AGENTS.md) for working commands.
 

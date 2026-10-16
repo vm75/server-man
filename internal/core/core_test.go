@@ -209,6 +209,41 @@ func TestJobHistoryIsBoundedAndAuditFailurePreventsExecution(t *testing.T) {
 	}
 }
 
+func TestManagersSharingStateSerializeMutations(t *testing.T) {
+	root := t.TempDir()
+	first, err := NewJobs(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := NewJobs(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	job, err := first.Start("hold", "test", func(ctx context.Context, out io.Writer) (any, error) { <-ctx.Done(); return nil, ctx.Err() })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.Start("must_not_run", "test", func(context.Context, io.Writer) (any, error) {
+		t.Error("concurrent manager ran a mutation")
+		return nil, nil
+	}); err == nil {
+		t.Fatal("cross-manager write lock was not enforced")
+	}
+	if err := first.Cancel(job.ID); err != nil {
+		t.Fatal(err)
+	}
+	awaitJob(t, first, job.ID)
+	job, err = second.Start("after_release", "test", func(context.Context, io.Writer) (any, error) { return nil, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finished := awaitJob(t, second, job.ID); finished.State != "succeeded" {
+		t.Fatal("lock was not released")
+	}
+}
+
 func awaitJob(t *testing.T, jobs *Jobs, id string) Job {
 	t.Helper()
 	deadline := time.NewTimer(3 * time.Second)

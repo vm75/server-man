@@ -34,6 +34,7 @@ type runningJob struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 	source string
+	lock   *os.File
 }
 
 type Jobs struct {
@@ -44,6 +45,7 @@ type Jobs struct {
 	active    string
 	closed    bool
 	auditPath string
+	lockPath  string
 }
 
 func NewJobs(ctx context.Context, stateDir string) (*Jobs, error) {
@@ -63,7 +65,7 @@ func NewJobs(ctx context.Context, stateDir string) (*Jobs, error) {
 	if err := file.Close(); err != nil {
 		return nil, err
 	}
-	return &Jobs{ctx: ctx, jobs: map[string]*runningJob{}, auditPath: path}, nil
+	return &Jobs{ctx: ctx, jobs: map[string]*runningJob{}, auditPath: path, lockPath: filepath.Join(stateDir, "mutation.lock")}, nil
 }
 
 // Start permits one mutation at a time across all modules. Reads remain independent.
@@ -76,6 +78,23 @@ func (j *Jobs) Start(tool, source string, run func(context.Context, io.Writer) (
 	if j.active != "" {
 		return Job{}, &Error{Code: "busy", Message: "Another management job is running. Wait for it to finish or cancel it.", Status: 409}
 	}
+	lock, err := os.OpenFile(j.lockPath, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0600)
+	if err != nil {
+		return Job{}, fmt.Errorf("open mutation lock: %w", err)
+	}
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = lock.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return Job{}, &Error{Code: "busy", Message: "Another Serverman process is running a management job in this state directory.", Status: 409}
+		}
+		return Job{}, fmt.Errorf("lock management writes: %w", err)
+	}
+	retained := false
+	defer func() {
+		if !retained {
+			_ = lock.Close()
+		}
+	}()
 	var idBytes [12]byte
 	if _, err := rand.Read(idBytes[:]); err != nil {
 		return Job{}, err
@@ -83,6 +102,7 @@ func (j *Jobs) Start(tool, source string, run func(context.Context, io.Writer) (
 	id := hex.EncodeToString(idBytes[:])
 	ctx, cancel := context.WithTimeout(j.ctx, 30*time.Minute)
 	entry := &runningJob{job: Job{ID: id, Tool: tool, State: "running", CreatedAt: time.Now().UTC()}, output: NewTail(128 << 10), cancel: cancel, done: make(chan struct{}), source: source}
+	entry.lock = lock
 	if err := j.audit(entry, "running"); err != nil {
 		cancel()
 		return Job{}, fmt.Errorf("write audit before execution: %w", err)
@@ -92,6 +112,7 @@ func (j *Jobs) Start(tool, source string, run func(context.Context, io.Writer) (
 		j.order = j.order[1:]
 	}
 	j.jobs[id], j.order, j.active = entry, append(j.order, id), id
+	retained = true
 	go j.execute(ctx, entry, run)
 	return entry.job, nil
 }
@@ -110,6 +131,7 @@ func (j *Jobs) execute(ctx context.Context, entry *runningJob, run func(context.
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	defer close(entry.done)
+	defer entry.lock.Close()
 	entry.job.State = "succeeded"
 	if err != nil {
 		entry.job.State, entry.job.Error = "failed", err.Error()

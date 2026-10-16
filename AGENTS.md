@@ -8,10 +8,12 @@ Serverman is a Linux administration application built with Go, Svelte 5, TypeScr
 - `internal/config/`, `internal/httpapi/`, `internal/webui/`: configuration, HTTP routes, and embedded assets.
 - `internal/core/`: shared schemas, registry, execution, jobs, and audit. `internal/auth/`: token/session authentication. `internal/app/`: module assembly.
 - `internal/modules/monitor/`: Linux collector, sampler, and tools; see [monitoring design](docs/design/monitoring.md) for units and bounds. `web/src/pages/Overview.svelte` renders the dashboard.
+- `internal/mcp/`: MCP adapters; [MCP design](docs/design/mcp.md) describes connection/protocol rules. `tools/mcp/`: official SDK interoperability checks and an in-process HTTP bridge.
 - `web/src/`: Svelte UI; `web/vite.config.ts` sets its Go asset output and development proxy.
 - `make setup`: install Go and frontend dependencies from manifests/lockfile.
 - `make api` and `make dev`: backend and frontend development servers, in separate terminals.
 - `make check`: Go vet and frontend type checking. `make test`: Go race tests.
+- `make mcp-test`: build and verify stdio/HTTP MCP using the official SDK; requires `make setup` dependencies. The helper disables writes and does not listen on TCP.
 - `make build`: production UI and Go binary at `bin/serverman`.
 - Generated frontend assets and dependencies are ignored; do not edit them.
 

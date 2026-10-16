@@ -4,6 +4,7 @@
   import Login from './lib/Login.svelte'
   import Jobs from './lib/Jobs.svelte'
   import Overview from './pages/Overview.svelte'
+  import AgentAccess from './pages/AgentAccess.svelte'
   import { ApiError, request, type Status } from './lib/api'
 
   const pages = [
@@ -83,6 +84,8 @@
         <section class="panel empty-state" aria-busy="true"><span class="loading-ring"></span><h2>Connecting to your server</h2><p>Reading server status…</p></section>
       {:else if selected === 'overview'}
         <Overview />
+      {:else if selected === 'agent' && status}
+        <AgentAccess allowWrites={status.allowWrites} />
       {:else}
         <section class="panel empty-state"><span class="module-icon"><Icon name={selected} size={30} /></span><h2>{page.name}</h2><p>This module is next in the implementation plan. Controls will appear here when its backend is ready.</p><button onclick={() => { selected = 'overview' }}>Back to overview</button></section>
       {/if}

@@ -1,6 +1,6 @@
 # Architecture
 
-Serverman runs as one Linux process. Go serves an embedded Svelte application and authenticated JSON APIs. The management boundary is transport independent; MCP adapters are a subsequent implementation step tracked in the [plan](docs/plans/implementation.md).
+Serverman runs as one Linux process for the web UI, authenticated JSON APIs and MCP HTTP. An agent can also launch a standalone stdio process. Both transports call the same management registry.
 
 ## Components
 
@@ -12,8 +12,10 @@ Serverman runs as one Linux process. Go serves an embedded Svelte application an
 | `internal/core/` | Tool schemas, validation, write policy, process execution, jobs, audit |
 | `internal/modules/monitor/` | Shared Linux resource sampler, bounded history and read-only tools |
 | `internal/httpapi/` | HTTP transport, request limits, authentication, JSON responses |
+| `internal/mcp/` | MCP tools protocol, stdio and stateless Streamable HTTP adapters |
 | `internal/webui/` | Embed and serve production assets |
-| `web/src/` | Responsive Svelte UI; API client, login, job activity |
+| `web/src/` | Responsive Svelte UI; API client, login, job activity, monitoring and agent access |
+| `tools/mcp/` | Test-only official SDK client and HTTP handler bridge |
 
 Dependency direction is entry point → assembly/transports → core. Domain modules added in later steps depend on core interfaces, and do not import HTTP or UI packages. A module supplies a capability descriptor and named tools; the registry provides discovery to transports.
 
@@ -22,8 +24,12 @@ Dependency direction is entry point → assembly/transports → core. Domain mod
 ```mermaid
 flowchart LR
   Browser --> Auth[Host, origin, and authentication]
+  MCPHTTP[MCP HTTP client] --> Auth
   Auth --> HTTP[JSON HTTP adapter]
   HTTP --> Registry[Validate arguments and enforce write policy]
+  Auth --> MCP[MCP HTTP adapter]
+  MCP --> Registry
+  Stdio[MCP stdio client] --> Registry
   Registry --> Read[Read operation]
   Registry --> Jobs[Serialized management job]
   Jobs --> Runner[Fixed executable and argument array]
@@ -38,7 +44,7 @@ The monitoring module samples Linux every one to ten seconds, keeping up to 60 a
 
 ## Resource bounds and failure handling
 
-- One management job runs at a time across modules. A competing write receives a `busy` error. No queue or database is needed.
+- One management job runs at a time across modules and processes sharing a state directory. A file lock is held until completion/cancellation and its audit record. A competing write receives a `busy` error. No queue or database is needed.
 - Jobs have a 30 minute deadline and are cancelled on server shutdown. Commands default to a 20 minute timeout and reads captured through the runner default to 15 seconds.
 - Child commands get their own process group. Cancellation kills the group; inherited output pipes have a two second wait limit.
 - Command capture separates stdout from diagnostics and rejects output above 1 MiB. Job output retains the newest 128 KiB.
@@ -55,8 +61,10 @@ HTTP clients can send a bearer token instead of a cookie. API bodies are limited
 
 The process has the permissions of its operating-system account. Read/write policy is an application gate, not privilege escalation. Future backend modules must report unavailable binaries and denied permissions rather than silently invoke `sudo`. Rootless Podman belongs to the invoking account; running as root does not access another user's rootless inventory.
 
+MCP HTTP reuses this authentication/origin boundary. Stdio is accessed by launching a process under the workload's operating-system account; it does not require a browser token. Each process owns its recent in-memory jobs. See [MCP design and connection examples](docs/design/mcp.md) for lifecycle, result shapes, cancellation, shared-state locking and protocol compatibility.
+
 ## Verification
 
-`make check` runs Go vet and frontend type checking. `make test` runs race tests for configuration, authentication, HTTP policy, tool validation, job bounds/cancellation, output capture, and process timeouts. Building frontend assets first also enables embedded production asset checks. Command-changing domain integration tests must use fixtures or a command recorder; development verification must preserve the host's actual workloads.
+`make check` runs Go vet and frontend type checking. `make test` runs race tests for configuration, authentication, HTTP/MCP policy, tool validation, job bounds/cancellation/locking, output capture, and process timeouts. `make mcp-test` verifies the built stdio server and HTTP handler with the official SDK. Building frontend assets first also enables embedded production asset checks. Command-changing domain integration tests must use fixtures or a command recorder; development verification must preserve the host's actual workloads.
 
 Live TCP serving and browser verification remain outstanding because this development sandbox denies local socket creation; Chromium also exits on a denied `setsockopt` call. See the plan's evidence log for exact verification and remaining limits.
