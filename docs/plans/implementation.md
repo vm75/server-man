@@ -183,3 +183,11 @@ routes, live samples, fixture confirmation flows and denied production writes.
 The first runs exposed stale assets and missing browser libraries; both were
 resolved before acceptance. Share ownership bytes and compatibility identifiers
 were preserved.
+
+Dependency follow-up: setup reported security advisories. Updated the exact
+verification SDK 1.30.0 → 1.32.1 and compatible transitive packages (`devalue`
+5.9.4, `source-map-js` 1.2.2, `fast-uri` 3.1.8, `hono` 4.13.13,
+`ip-address` 10.7.4, `proxy-addr` 2.0.8). `make check mcp-test ui-test`
+passes with the new lockfiles, including official SDK parity and all three
+Firefox sizes. All three `npm audit --json` reports have zero findings.
+Dependencies remain development/build-only; Go has no external modules.

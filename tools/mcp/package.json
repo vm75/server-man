@@ -3,5 +3,5 @@
   "private": true,
   "type": "module",
   "scripts": { "verify": "node verify.mjs" },
-  "devDependencies": { "@modelcontextprotocol/sdk": "1.30.0" }
+  "devDependencies": { "@modelcontextprotocol/sdk": "1.32.1" }
 }
