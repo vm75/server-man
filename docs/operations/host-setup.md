@@ -25,12 +25,12 @@ Existing externally bound port 22 is unchanged.
    storage query also timed out. `snap changes` showed change 3 installing LXD
    from `6/stable/ubuntu-26.10`; `snap list` showed `lxd` 6.9-bf243da rev 40916
    and base core24 rev 2124. This was an inspection side effect, not guest
-   provisioning. Final outcome will be recorded below. No `lxd init` was issued.
-2. Planned prerequisite command (simulation: 39 new packages, zero upgrades or
+   provisioning. The installation completed; details are recorded below. No `lxd init` was issued.
+2. Prerequisite command (simulation: 39 new packages, zero upgrades or
    removals): `sudo apt-get install -y --no-install-recommends golang-go nodejs
    podman podman-compose uidmap slirp4netns`. Uses the existing signed native
    repository cache; no metadata refresh, signature bypass, distro upgrade or
-   reboot. Package outcomes and full version inventory follow after execution.
+   reboot. Package outcomes and full version inventory are below.
 
 The sandbox launcher fails before commands run (`bwrap` loopback RTM_NEWADDR:
 operation not permitted). Commands are therefore run through the approved
@@ -43,7 +43,7 @@ outside-sandbox execution path. Failed sandbox attempts changed no files.
    versions are recorded below.
 4. `make setup` installs lockfile dependencies under `web/node_modules`,
    `tools/mcp/node_modules`, `tools/ui/node_modules` and project `.cache/npm`;
-   it uses `--ignore-scripts` and Go caches under `.cache`. Result pending.
+   it uses `--ignore-scripts` and Go caches under `.cache`. Setup succeeded.
    Build outputs live under ignored `bin/` and embedded frontend assets.
 5. `podman info` / `podman ps` may initialize this account's empty rootless
    engine storage/runtime and network metadata. No pull/create/start was requested.
@@ -98,8 +98,9 @@ uidmap 1:4.19.3-2ubuntu2
 - LXD Snap change 3 completed. LXD 6.9-bf243da rev 40916 and core26 base rev 646
   were installed by the launcher. The daemon was started; activate service and
   daemon/user-daemon sockets are enabled. Native instance and storage inventories
-  both return `[]`. No guest, profile, pool, bridge or daemon initialization was
-  created by this task. The installation is retained as an available optional
+  both return `[]`. LXD automatically created its database and empty default
+  profile (zero instances); no guest, storage pool or managed bridge was created.
+  No explicit `lxd init` was performed. The installation is retained as an available optional
   backend. This account's LXD client created its normal Snap config directory.
 - Rootless Podman reports `true netavark`, existing subordinate UID/GID ranges
   `100000:65536` were reused unchanged. Containers and images both return `[]`.
@@ -119,7 +120,7 @@ uidmap 1:4.19.3-2ubuntu2
   removals): `sudo apt-get install -y --no-install-recommends docker-compose-v2
   libgtk-3-0t64 libasound2t64`. Compose v2 provides required project-directory,
   multiple env files and JSON status without a Docker daemon. GTK/audio dependencies
-  allow the requested browser verification. Full versions and result follow.
+  allow the requested browser verification. Full versions and result are below.
 
 ### Compose v2 and browser packages installed
 
@@ -195,12 +196,18 @@ libxrender1:amd64 1:0.9.12-1build1
 libxres1:amd64 2:1.2.1-2
 ```
 
+### Additional Firefox runtime package
+
+```text
+libx11-xcb1:amd64 2:1.8.13-1
+```
+
 ### Current verification and configuration outcomes
 
 - `make setup` succeeded. npm reported advisories; investigation found two high
   transitive frontend advisories and five MCP development dependency findings
   (including one critical). These affect development tooling; Node is not used
-  by the installed Go daemon. Updates will be recorded as a separate step.
+  by the installed Go daemon. Updates were verified and committed separately below.
 - Initial `make check test mcp-test` stopped at the embedded UI test because
   copied ignored assets still contained the old branding. `make build check
   test mcp-test` then passed: no frontend diagnostics, all Go race tests, and
@@ -234,9 +241,9 @@ libxres1:amd64 2:1.2.1-2
   config/state directory, systemd unit, browser event, cookie, tool/schema or
   share ownership marker was renamed.
 - `npm --prefix web audit fix --ignore-scripts` updated two compatible transitive
-  dependencies, with zero findings afterward. The development MCP SDK is being
+  dependencies, with zero findings afterward. The development MCP SDK was
   updated separately to the patched exact release `1.32.1`. No lifecycle scripts
-  are enabled. Final lockfile/audit/verification results follow.
+  were enabled. Final lockfile/audit/verification results are below.
 
 - Dependency security updates are commit `c1d2918`: SDK 1.32.1, devalue 5.9.4,
   source-map-js 1.2.2, fast-uri 3.1.8, hono 4.13.13, ip-address 10.7.4 and
@@ -252,3 +259,133 @@ libxres1:amd64 2:1.2.1-2
 - Example source files are retained in `packaging/examples` for review/reuse.
   Image existence/pulls and live workload lifecycle have not been verified;
   all examples remain definitions only. Two `.disabled` markers are present.
+
+### Headless service installation
+
+This machine is headless. No desktop session, display manager or graphical login
+is needed. Firefox/GTK/X11 libraries above support headless verification only;
+Node, Firefox and these libraries are not application runtime dependencies.
+The daemon is a native Go process. Browser access is through loopback/SSH.
+
+Pre-install checks found no existing serverman unit/binary/config and no listener
+on 8080. `make build` from clean revision `e4424dd` produced `bin/serverman`
+reporting `e4424dd`, SHA-256
+`26cc7c4632ce0b9180a36627fc86a1e26e2f9a41c5e0f2ae34e79faea49c1fb5`.
+
+Commands applied successfully:
+
+```sh
+sudo make install
+systemctl --user daemon-reload
+systemd-analyze verify /usr/local/lib/systemd/system/serverman.service
+systemd-analyze --user verify /usr/local/lib/systemd/user/serverman.service
+sudo loginctl enable-linger shasak
+systemctl --user enable --now serverman.service
+```
+
+Installation writes `/usr/local/bin/serverman` (0755),
+`/usr/local/share/serverman/config.example.json` (0644), and system/user unit files
+under `/usr/local/lib/systemd` (0644), owned by root. Only the **user** serverman
+unit is enabled and started, under the existing `shasak` account; no account or
+group is created. User lingering changes from no to yes so the manager survives
+logout and starts at boot on this headless host. The system/root unit stays
+inactive/disabled. No TLS proxy, firewall, public listener, host hostname or
+host network changes were applied. Final service and verification results are below.
+
+
+### Deployment outcome and live evidence
+
+- Install/start commands all succeeded. Both unit files pass `systemd-analyze`
+  verification. The system checker also emitted pre-existing XFS units' removed
+  `CPUAccounting` option warnings; no server-man unit error occurred. These
+  unrelated vendor unit files were left unchanged.
+- User `serverman.service` is enabled and active, running the installed revision
+  `e4424dd`, with zero restarts. System `serverman.service` is disabled/inactive.
+  Installed and built binary hashes match. User `podman.socket` is enabled/active
+  at `/run/user/1000/podman/podman.sock`; no root Podman service was enabled.
+  `loginctl show-user shasak -p Linger` reports `yes`.
+- First app start created `~/.config/serverman/token` (0600),
+  `~/.local/state/serverman` (0700), and its `audit.jsonl` (0600), owned by
+  `shasak`. Config and token directory are 0700. Podman's account storage is
+  `~/.local/share/containers/storage` (0700). These contain generated private
+  runtime state and are excluded from Git and this document's content.
+- `ss -ltn '( sport = :8080 )'` shows only `127.0.0.1:8080`. `/healthz` returns
+  200. Authenticated status reports revision `e4424dd` and `allowWrites:false`.
+  LXD's `core.https_address` is empty. Its only listed networks are existing,
+  unmanaged physical interfaces; its default profile has zero instances.
+- `node .cache/live-verification.mjs` uses the token file internally without
+  printing it. Real TCP HTTP checks pass health, unauthenticated API/MCP 401,
+  authenticated foreign-origin 403, 48 tool schemas, all three example projects,
+  exact global/project env filename ordering and disabled flags. Both Podman
+  projects return `not_created` and empty containers from the actual provider.
+  Compose Up is rejected with `writes_disabled` and no job is created.
+- Native application inventories succeed for empty LXD and 296 system services
+  with no service warnings. APT 3.3.3 cached status is valid with zero candidates;
+  it was not refreshed. Classic LXC, libvirt, Samba and NFS report absent tools.
+- The official SDK connects to the real `/mcp` endpoint over TCP, checks
+  `server-man` identity, all 48 schemas against HTTP discovery, native project
+  discovery, live monitoring, denied writes and ping. Headless Firefox connects
+  directly over TCP at 1440×1000 and 390×844, signs in/out, sees both provider
+  tabs and all three real examples, and passes branding/overflow/error checks.
+  Screenshots and a credential-free summary are under ignored `.cache/`.
+- The first local probe incorrectly expected HTTP jobs to use MCP's `items`
+  wrapper; another browser assertion looked for Docker content in the Podman
+  tab. Only the scratch verifier was corrected; the final run passes all checks.
+  These failed read probes did not launch jobs or workloads.
+- Final native `podman ps --all --format json` and `podman images --format json`
+  both return `[]`. No guest/container/image/persistent workload data was
+  created, downloaded, started, stopped or removed. No existing workloads,
+  shares, host package updates, host network/firewall or existing failed services
+  were changed. No accounts/groups were created; existing subordinate IDs were
+  reused. No host changes were reverted.
+- Native totals: 107 newly installed APT packages, zero upgraded/removed, plus
+  LXD and its core26 Snap prerequisite. Package-owned configuration, binaries,
+  caches, triggers and font/icon caches were created by their installers. Existing
+  core24 and other Snaps were retained. No APT metadata refresh was requested.
+  Root `thermald.service` remains in its pre-existing failed state.
+- Repository/build mutations: the four commits for branding, dependency patches,
+  examples/preparation and deployment evidence; `make setup/build/check/test/
+  mcp-test/ui-test`, staging installation, Go/npm caches and ignored generated
+  assets/artifacts. Browser fixtures use temporary state and clean it up.
+  Live probes create temporary in-memory browser sessions; successful checks
+  log out. Existing `HANDOFF.md` remains untracked and unchanged.
+- Local logs: `/tmp/server-man-*.log` and audit summaries
+  `/tmp/server-man-*-audit*.json`; no credential values or resolved Compose
+  configuration were written there. The copied `~/vms/README.md` was refreshed
+  from the reviewed example README after documenting the compatible provider.
+
+## Operating this headless host
+
+```sh
+systemctl --user status serverman.service
+journalctl --user -u serverman.service
+systemctl --user restart serverman.service
+```
+
+From another computer, use `ssh -N -L 8080:127.0.0.1:8080 shasak@<server-address>`,
+then open `http://127.0.0.1:8080` there. Read the token directly from the private
+`~/.config/serverman/token` file in your SSH session; never put it in a URL or
+commit it. No desktop session is needed on the server.
+
+The default deployment is read-only. To manage workloads, deliberately change
+`allowWrites` in `~/.config/serverman/config.json` and restart the user service;
+this enables the shared management API under this account's native permissions.
+Remove only the chosen example's `.disabled` marker when ready to use it.
+**Up** creates a workload; **Start** requires an existing container. Both status
+examples publish loopback-only ports; heartbeat has no networking. Images have
+not been pulled. Review definitions and provider access before enabling writes.
+
+To undo this deployment without deleting data: disable/stop the user serverman
+unit and Podman socket, stop the socket-activated user Podman API service, and
+remove the installed files/config only after checking for subsequent use. Disable
+user lingering only if no other user services need it. Preserve tokens/state and
+`~/vms` unless deliberately retiring them. No undo command was executed here.
+Optional package/Snap removal requires separate impact review; their state may
+be used by later work.
+
+Remaining integration limits: no real workload lifecycle, Docker daemon,
+classic LXC/libvirt guests, share reload/mount, package-update job, reboot,
+external TLS proxy, reboot persistence or hosted CI was exercised. These are
+recorded limits of verification; the headless loopback deployment and examples
+are ready. The installed source revision is `e4424dd`; later commits update
+handoff documentation only.

@@ -6,7 +6,7 @@ Implementation follows the [tracked plan](docs/plans/implementation.md). The app
 
 The overview has CPU/network histories, per-core CPU meters, memory/swap, local storage usage and I/O, uptime/load, optional temperatures, and a searchable/sortable process table. Monitoring uses one shared Linux sampler and native SVG charts. See [monitoring details](docs/design/monitoring.md) for units, limits, and missing-data behavior.
 
-**Containers** discovers Compose projects, shows containers and associated Podman pods, reads bounded logs, and runs up/start/stop/restart/pull/down jobs. It preserves the project directories, environment-file order and disabled markers used by `~/vms/vms.sh`. See [Compose setup and behavior](docs/design/compose.md) for paths, provider requirements, and action details.
+**Containers** discovers Compose projects, shows containers and associated Podman pods, reads bounded logs, and runs up/start/stop/restart/pull/down jobs. It preserves the project directories, environment-file order and disabled markers used by `~/vms/vms.sh`. See [Compose setup and behavior](docs/design/compose.md) for paths, provider requirements, and action details, and [disposable examples](packaging/examples/README.md) for safe starter definitions.
 
 **Virtual machines** separates LXD, classic LXC and KVM/libvirt inventory and controls. Launch LXD containers/VMs, manage existing classic containers, and manage libvirt lifecycle/autostart or define an existing KVM XML file. See [machine setup and behavior](docs/design/machines.md) for backend contexts, supported actions and retained storage.
 
@@ -90,3 +90,5 @@ Use HTTP to share the web server's jobs and history. A local stdio process has i
 See [architecture](ARCHITECTURE.md) for shared operation boundaries, resource limits, and authentication, and [project guidance](AGENTS.md) for working commands.
 
 This checkout is rooted at `/home/shasak/ws/server-man` with its own writable `.git` directory. See the [host setup record](docs/operations/host-setup.md) for this server’s deployment and example workloads.
+
+This headless host runs the user `serverman.service` on loopback with writes disabled. From another computer, forward port 8080 through SSH and use its browser; see [headless access and service commands](docs/operations/host-setup.md#operating-this-headless-host).

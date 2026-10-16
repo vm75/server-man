@@ -159,7 +159,7 @@ Use narrow unit tests for parsing, policy, authentication, and file safety, and 
 
 ## Next action
 
-The planned implementation steps have code and local evidence. The full goal remains active while live socket/TLS, hosted CI, and privileged subsystem integration gates remain environment-limited; see the [verification audit](../verification.md). Continue verification when a suitable Linux integration environment is available.
+The planned implementation steps have code and local evidence. The host migration follow-up below is complete: headless loopback service, HTTP/MCP over real TCP, native read-only inventories and discoverable examples are verified. Broader external TLS, hosted CI and privileged subsystem integration gates remain open; see the [verification audit](../verification.md). Future integration work should use disposable guests/workloads and a deliberately configured TLS boundary.
 
 ## Host migration follow-up (2026-10-16)
 
@@ -169,8 +169,8 @@ under this account's `~/vms`; complete host change record.
 
 - [x] Migrate visible branding, MCP identity and package labels; document stable identifiers and verify parity/UI.
 - [x] Install missing prerequisites and prepare three stopped Compose examples, preserving env ordering and disabled markers.
-- [ ] Build and verify the current host over loopback HTTP/MCP and install a private user service.
-- [ ] Record every host change and verification limit in [host setup](../operations/host-setup.md).
+- [x] Build and verify the current host over loopback HTTP/MCP and install a private user service.
+- [x] Record every host change and verification limit in [host setup](../operations/host-setup.md).
 
 Existing live privileged subsystem and hosted CI gaps remain separate acceptance
 limits; this follow-up does not mark them complete.
@@ -200,3 +200,19 @@ into an absent `~/vms`, root mode 0700. Images/containers remain empty; Docker
 engine, classic LXC, libvirt, LXD pools and guests were not provisioned. The
 [operations ledger](../operations/host-setup.md) lists all packages and changes,
 including the Ubuntu LXD launcher installation side effect.
+
+Deployment evidence: `/usr/local/bin/serverman -version` is `e4424dd`; its hash
+matches the built binary. User unit enabled/active, zero restarts, private token
+0600 and state 0700, linger enabled, root unit disabled/inactive. Both systemd
+units verify. Real TCP `/healthz`, authenticated HTTP inventory, 401/403 policy,
+all three projects and both Podman not-created statuses pass. Official SDK checks
+48 schemas, identity, native discovery, monitoring and denied writes over real
+TCP MCP. Headless Firefox directly tests desktop/mobile login, both provider
+tabs, examples and logout with no page errors/overflow. No image, container,
+guest, host share or application update job was created. Full package/config/
+service/permission/command outcomes, including failed inspection/test attempts
+and LXD install side effects, are in the operations ledger. Later commits are
+documentation-only; the deployed code is unchanged from `e4424dd`.
+
+Migration task status: complete. Earlier implementation-wide privileged/TLS/CI
+acceptance limits remain explicitly open and were not claimed as completed.

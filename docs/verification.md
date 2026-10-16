@@ -2,6 +2,30 @@
 
 This audit maps the requested features to implementation and evidence. Fixture tests establish command construction, parsing, safety and failure behavior; they do not establish that privileged changes work on a particular live server.
 
+## Current headless host (2026-10-16)
+
+Checkout `/home/shasak/ws/server-man` on Ubuntu 26.10. The installed native
+binary reports revision `e4424dd`; user `serverman.service` is enabled/running,
+with user lingering enabled and management writes disabled. Its only listener
+is `127.0.0.1:8080`. See the [complete operations ledger](operations/host-setup.md)
+for packages, permissions, configs, services, commands and outcomes.
+
+| Requirement | Current evidence | Scope limit |
+| --- | --- | --- |
+| Canonical `server-man` name | UI login/title/navigation/footer, documentation, package labels, systemd descriptions and MCP name/title updated. Official SDK asserts identity on both transports. | Stable `serverman` executable/module/paths, cookie/events, ownership markers and tool schemas preserved deliberately. |
+| Reproducible build and validation | `make setup`, `make build check test mcp-test`, then `make check mcp-test ui-test` after security patches pass. All three npm audit trees have zero findings. Staged install modes verified. | Current host lacks testparm; optional native Samba validator tests skip. Command fixtures still pass. |
+| Headless operation | Private user config/token/state, matching built/installed binary SHA-256, enabled user unit and linger, active process with zero restarts, real health response, both systemd units verify. | Boot/logout settings inspected; no reboot test. System/root unit remains disabled/inactive. |
+| Real HTTP/MCP network | Authenticated loopback HTTP inventory, API/MCP 401 without auth, foreign-origin 403, write-policy rejection without jobs; official SDK uses real TCP `/mcp`, checks identity, 48 schemas, monitoring and ping. | No external TLS proxy, public listener, or third-party agent deployment. |
+| Useful safe examples | Three definitions under `~/vms`: Podman `demo-status`, disabled Podman `demo-heartbeat`, disabled Docker `demo-status-docker`. All pass Compose v2 syntax validation. Live API/MCP proves discovery, ordered env filenames, disabled flags; both Podman details return not-created. | Native images/containers remain empty. No Docker daemon or workload lifecycle exercised. |
+| Native host inventory | LXD returns empty inventory; application lists 296 real system services without warnings and valid APT cached candidates (zero). Missing classic LXC/libvirt/Samba/NFS tools are explicit. | No guest pool/provisioning, existing-service action, share reload/mount or application package-update job. |
+| Browser behavior | Final headless Firefox fixture suite passes 1440×1000, 390×844, 320×740. Separate direct TCP browser checks pass sign-in/out, live samples, both native provider tabs, all three examples, branding and overflow at desktop/mobile sizes. Screenshots were inspected. | Mutation forms use fixtures and production denied-write checks. No real lifecycle operation is represented as tested. |
+| Host change accounting | 107 native packages installed, no upgrades/removals; LXD Snap plus core26 installed by Ubuntu's launcher; private examples/config, Compose v2 selection, rootless socket and user app service/linger recorded with exact paths and permissions. Existing handoff preserved. | TLS, hosted CI and privileged subsystem acceptance gates remain outstanding. |
+
+The remainder is the previous-host baseline, retained as historical evidence.
+Its sandbox-specific gaps and measurements are not current-host claims.
+
+## Previous-host baseline
+
 | Requirement | Implementation and evidence | Remaining evidence gap |
 | --- | --- | --- |
 | Go server with Svelte 5, TypeScript and Vite; small runtime | `go.mod`, `web/package.json`, embedded UI, no external Go modules. `make check` and `make build` pass. Built binary measured 7,983,369 bytes; JS is 141.53 kB raw / 48.62 kB gzip and CSS 38.20 kB / 8.40 kB gzip. | Network/TLS listener startup is blocked by the current sandbox's socket policy. |
@@ -17,8 +41,8 @@ This audit maps the requested features to implementation and evidence. Fixture t
 
 ## Idle measurement
 
-`python3 tools/measure-idle.py bin/serverman 12` measured one stdio process waiting for input, with the real two-second Linux sampler active and no MCP requests. It used a temporary config/state directory and opened no listener. On this host the 12-second sample used 0.06 CPU seconds (0.50% of one core), 14,528 KiB RSS at the end (11,948 KiB at the start), 11 threads, and 6 file descriptors. This measures this namespace and process shape only; it is not a long-running HTTP daemon or large-host benchmark.
+`python3 tools/measure-idle.py bin/serverman 12` measured one stdio process waiting for input, with the real two-second Linux sampler active and no MCP requests. It used a temporary config/state directory and opened no listener. On the previous host the 12-second sample used 0.06 CPU seconds (0.50% of one core), 14,528 KiB RSS at the end (11,948 KiB at the start), 11 threads, and 6 file descriptors. This measures this namespace and process shape only; it is not a long-running HTTP daemon or large-host benchmark.
 
 ## Network and CI limits
 
-The current environment rejects AF_INET socket creation and bind/listen. Firefox itself can render, so `tools/ui/verify.mjs` routes browser requests over pipes to the production `httpapi.Handler`; the production server executable is built, but this does not prove kernel TCP, a real reverse proxy, or TLS deployment. Chromium startup remains blocked here. The GitHub Actions workflow is committed but cannot be run from this checkout; its equivalent Go/frontend/MCP/browser commands were run locally, with Firefox available.
+The previous environment rejected AF_INET socket creation and bind/listen. Firefox itself can render, so `tools/ui/verify.mjs` routes browser requests over pipes to the production `httpapi.Handler`; the production server executable is built, but this does not prove kernel TCP, a real reverse proxy, or TLS deployment. Chromium startup was blocked there. The GitHub Actions workflow is committed but cannot be run from this checkout; its equivalent Go/frontend/MCP/browser commands were run locally, with Firefox available.
