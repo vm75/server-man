@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -19,7 +20,25 @@ type Command struct {
 	Dir     string
 	Env     []string
 	Timeout time.Duration
+	// CancelGrace requests SIGINT first, then kills the process group after this
+	// grace period. Zero keeps immediate group cancellation for other backends.
+	CancelGrace time.Duration
 }
+
+// CaptureError preserves diagnostics separately for CLIs whose empty-result
+// exit code is also used for failures. Error and Unwrap preserve existing callers.
+type CaptureError struct {
+	Err    error
+	Stderr string
+}
+
+func (e *CaptureError) Error() string {
+	if e.Stderr != "" {
+		return e.Err.Error() + ": " + e.Stderr
+	}
+	return e.Err.Error()
+}
+func (e *CaptureError) Unwrap() error { return e.Err }
 
 // Executor permits integration tests to record commands without changing a host.
 type Executor interface {
@@ -46,17 +65,38 @@ func run(ctx context.Context, command Command, stdout, stderr io.Writer) error {
 	cmd.Env = append(cmd.Env, command.Env...)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	var timer *time.Timer
+	var timerMu sync.Mutex
+	defer func() {
+		timerMu.Lock()
+		defer timerMu.Unlock()
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
 			return os.ErrProcessDone
 		}
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		signal := syscall.SIGKILL
+		if command.CancelGrace > 0 {
+			signal = syscall.SIGINT
+		}
+		err := syscall.Kill(-cmd.Process.Pid, signal)
+		if err == nil && command.CancelGrace > 0 {
+			timerMu.Lock()
+			timer = time.AfterFunc(command.CancelGrace, func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+			timerMu.Unlock()
+		}
 		if errors.Is(err, syscall.ESRCH) {
 			return os.ErrProcessDone
 		}
 		return err
 	}
 	cmd.WaitDelay = 2 * time.Second
+	if command.CancelGrace > 0 {
+		cmd.WaitDelay += command.CancelGrace
+	}
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -80,9 +120,7 @@ func (r Runner) Capture(ctx context.Context, command Command) (string, error) {
 	}
 	if err != nil {
 		message, _ := stderr.Snapshot()
-		if message = strings.TrimSpace(message); message != "" {
-			err = fmt.Errorf("%w: %s", err, message)
-		}
+		err = &CaptureError{Err: err, Stderr: strings.TrimSpace(message)}
 	}
 	return text, err
 }

@@ -2,7 +2,7 @@
 
 A lightweight Linux server manager inspired by Cockpit, with a responsive web interface and MCP access for AI agents. Built with Go, Svelte 5, TypeScript, and Vite.
 
-Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides Linux resource monitoring, Podman/Docker Compose management, LXD/classic LXC/KVM management, systemd services, Samba/NFS shares, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. System updates are under development; their UI entry is labeled as planned.
+Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides Linux resource monitoring, Podman/Docker Compose management, LXD/classic LXC/KVM management, systemd services, Samba/NFS shares, system package updates, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. Packaging and the final verification audit remain in progress.
 
 The overview has CPU/network histories, per-core CPU meters, memory/swap, local storage usage and I/O, uptime/load, optional temperatures, and a searchable/sortable process table. Monitoring uses one shared Linux sampler and native SVG charts. See [monitoring details](docs/design/monitoring.md) for units, limits, and missing-data behavior.
 
@@ -13,6 +13,8 @@ The overview has CPU/network histories, per-core CPU meters, memory/swap, local 
 **Services** combines installed systemd units with runtime state, selected properties and bounded journal output. Start/stop/restart/reload and startup enablement run as jobs. `systemdScope` defaults to `system`; set it to `user` for the server account's user manager. See [service management](docs/design/services.md) for permissions and action semantics.
 
 **File shares** inspects existing Samba/NFS shares and creates, edits, removes or reapplies application-owned shares. Saves validate a candidate, publish an atomic fragment and apply native changes, with rollback on failure. Existing host configuration and shared directory data are preserved. See [share setup and behavior](docs/design/shares.md) for the required Samba include, NFS server setup, access fields and runtime-state limits.
+
+**Updates** inspects cached candidates, refreshes metadata and installs normal system updates through APT, DNF/DNF5, Pacman or Zypper. It reports reboot requirements where detectable and never requests reboot or a distribution migration. `packageManager` defaults to `auto`; an explicit supported family can be configured. Arch metadata refresh uses an isolated `checkupdates` database. See [update behavior](docs/design/updates.md) for commands, capabilities, cancellation and repository limits.
 
 ## Build and run
 
@@ -29,7 +31,7 @@ make build
 
 Open `http://127.0.0.1:8080`. Sign in with the access token from the private file created on first start. The startup log shows its path; the default is `~/.config/serverman/token` (or under `XDG_CONFIG_HOME`). The server binds to loopback. `GET /healthz` provides a small unauthenticated JSON health response.
 
-Management writes are disabled by default. When enabled, jobs run one at a time and appear in **Activity**. Instances using the same state directory also serialize writes through a file lock. Cancelling a job stops its remaining work; it does not undo completed changes. Each process retains 64 recent jobs in memory and records audit metadata under `~/.local/state/serverman` (or `XDG_STATE_HOME`).
+Management writes are disabled by default. When enabled, jobs run one at a time and appear in **Activity**. Instances using the same state directory also serialize writes through a file lock. Cancelling a job stops its remaining work; it does not undo completed changes. Package commands first receive an interrupt and have up to 30 seconds before forced termination; interrupted package transactions can require native recovery. Each process retains 64 recent jobs in memory and records audit metadata under `~/.local/state/serverman` (or `XDG_STATE_HOME`).
 
 ## Development
 
@@ -69,6 +71,8 @@ Core tools: `system_status`, `system_capabilities`, `monitor_snapshot`, `monitor
 Machine tools include `machines_list`, `machines_details`, and [backend-specific actions](docs/design/machines.md#actions). Service tools include `services_list`, `services_details`, `services_logs`, and six [management actions](docs/design/services.md#actions). `GET /api/tools` and the Agent access page provide the complete current schemas.
 
 Share tools are `shares_list`, `samba_share_save`, `samba_share_remove`, `nfs_share_save`, and `nfs_share_remove`. Save/remove require the fragment revision returned by inventory and destructive acknowledgement. They apply the change as a job; see [share transactions](docs/design/shares.md#transactions).
+
+Updates expose `updates_status`, `updates_refresh` and destructive `updates_install`. No arbitrary package names, commands or distro-upgrade arguments are accepted.
 
 ## MCP
 

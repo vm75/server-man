@@ -14,6 +14,7 @@ import (
 	"serverman/internal/modules/monitor"
 	"serverman/internal/modules/services"
 	"serverman/internal/modules/shares"
+	"serverman/internal/modules/updates"
 )
 
 func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, runner core.Executor) (*core.Registry, error) {
@@ -60,6 +61,9 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 	}
 	if err == nil {
 		err = shares.New(cfg, runner).Register(registry)
+	}
+	if err == nil {
+		err = updates.New(cfg, runner).Register(registry)
 	}
 	return registry, err
 }

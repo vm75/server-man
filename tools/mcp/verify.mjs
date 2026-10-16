@@ -73,6 +73,18 @@ async function exercise(client, label) {
     const deniedShare = await client.callTool({ name: `${protocol}_share_remove`, arguments: { name: 'demo', revision: '0'.repeat(64), confirm: true } })
     assert.equal(deniedShare.structuredContent.error.code, 'writes_disabled')
   }
+  const updates = await client.callTool({ name: 'updates_status', arguments: {} })
+  assert.equal(updates.isError, false)
+  assert.equal(typeof updates.structuredContent.manager.available, 'boolean')
+  assert.equal(typeof updates.structuredContent.valid, 'boolean')
+  assert(Array.isArray(updates.structuredContent.packages))
+  assert.equal(tools.find(t => t.name === 'updates_install').annotations.destructiveHint, true)
+  const invalidUpdate = await client.callTool({ name: 'updates_refresh', arguments: { command: 'upgrade' } })
+  assert.equal(invalidUpdate.structuredContent.error.code, 'invalid_arguments')
+  for (const name of ['updates_refresh', 'updates_install']) {
+    const deniedUpdate = await client.callTool({ name, arguments: name === 'updates_install' ? { confirm: true } : {} })
+    assert.equal(deniedUpdate.structuredContent.error.code, 'writes_disabled')
+  }
   await client.ping()
   console.log(`${label}: initialize, ${tools.length} tools, live monitoring, schemas, error results and denied writes passed`)
   return tools
@@ -110,7 +122,7 @@ try {
     const id = ++sequence
     const message = { id, method: request.method, url: request.url, headers: Object.fromEntries(request.headers), body: await request.text() }
     const response = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { pending.delete(id); reject(new Error('HTTP helper request timed out')) }, 10_000)
+      const timer = setTimeout(() => { pending.delete(id); reject(new Error('HTTP helper request timed out')) }, 30_000)
       pending.set(id, { resolve, reject, timer })
       bridge.stdin.write(JSON.stringify(message) + '\n')
     })

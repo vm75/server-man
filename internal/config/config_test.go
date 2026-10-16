@@ -43,6 +43,8 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		{"Samba substitutions", `{"sambaManagedFile":"/srv/%U.conf"}`, false},
 		{"Samba control character", `{"sambaManagedFile":"/srv/tab\tfile"}`, false},
 		{"Samba NFS overlap", `{"sambaManagedFile":"/etc/exports.d/serverman.exports"}`, false},
+		{"selected package manager", `{"packageManager":"dnf"}`, true},
+		{"invalid package manager", `{"packageManager":"yum -y"}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "config.json")

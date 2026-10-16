@@ -73,6 +73,7 @@
       <div class="job-detail">
         <div class="job-detail-heading"><strong>{selected.tool.replaceAll('_', ' ')}</strong>{#if selected.state === 'running' && allowWrites}<button class="small-button" disabled={cancelling} onclick={cancel}>{cancelling ? 'Cancelling…' : 'Cancel job'}</button>{/if}</div>
         {#if selected.error}<p class="form-error">{selected.error}</p>{/if}
+        {#if selected.tool.startsWith('updates_') && selected.state === 'running'}<p class="resource-hint">Cancellation requests an interrupt and allows up to 30 seconds before forced termination. An interrupted package transaction may need recovery with native tools.</p>{/if}
         {#if selected.truncated}<p class="muted">Showing the most recent 128 KiB of output.</p>{/if}
         <pre>{selected.output || (selected.state === 'running' ? 'Waiting for output…' : 'This operation produced no output.')}</pre>
       </div>

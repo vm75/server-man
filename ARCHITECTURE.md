@@ -15,6 +15,7 @@ Serverman runs as one Linux process for the web UI, authenticated JSON APIs and 
 | `internal/modules/machines/` | Independent LXD/classic LXC/libvirt capabilities, whitelisted inventory, lifecycle and XML import |
 | `internal/modules/services/` | System/user systemd inventory, selected properties, bounded journal and fixed service actions |
 | `internal/modules/shares/` | Owned Samba/NFS fragments, selected host inventory, revision checks, validated publication and runtime rollback |
+| `internal/modules/updates/` | Native package-family detection, cached candidates, serialized refresh/install and reboot hints |
 | `internal/httpapi/` | HTTP transport, request limits, authentication, JSON responses |
 | `internal/mcp/` | MCP tools protocol, stdio and stateless Streamable HTTP adapters |
 | `internal/webui/` | Embed and serve production assets |
@@ -54,11 +55,13 @@ Service management fixes system/user scope in configuration, merges installed un
 
 Shares store typed definitions as comments beside their generated native fragment. Ownership markers and deterministic rendering reject foreign/externally edited files. Mutations require a current revision, validate a temporary candidate, check for concurrent edits, then rename/sync the owned file. Samba validates an include-substituted shadow with testparm and requests reload; NFS changes only the selected export pairs through targeted exportfs commands. Failure restores the prior file and attempts native rollback. Cleanup has an independent 30-second deadline so cancellation can restore state; job cancellation preserves rollback diagnostics. See [share design](docs/design/shares.md) for exact guarantees and limits.
 
+Updates choose the native package family from os-release plus installed executables, with an explicit configuration override. Reads never refresh repositories. Package mutations use fixed commands under the shared job lock; install combines refresh and normal updates in one job. Pacman refresh uses checkupdates' isolated database, while installation performs a full sync/system upgrade. Exit-code exceptions are specific to their command; separate capture diagnostics distinguish an empty pacman query from a database failure. See [update design](docs/design/updates.md) for repository, deferred-package and reboot limits.
+
 ## Resource bounds and failure handling
 
 - One management job runs at a time across modules and processes sharing a state directory. A file lock is held until completion/cancellation and its audit record. A competing write receives a `busy` error. No queue or database is needed.
 - Jobs have a 30 minute deadline and are cancelled on server shutdown. Commands default to a 20 minute timeout and reads captured through the runner default to 15 seconds.
-- Child commands get their own process group. Cancellation kills the group; inherited output pipes have a two second wait limit.
+- Child commands get their own process group. Default cancellation kills the group and bounds inherited output pipes to two seconds. Package mutations first send SIGINT, allow 30 seconds for native cleanup, then kill the group if necessary; their pipe wait includes that grace period.
 - Command capture separates stdout from diagnostics and rejects output above 1 MiB. Job output retains the newest 128 KiB.
 - Keep 64 recent jobs in memory; restarting the process clears job history. Job metadata can be listed separately from an individual job's output/result.
 - Record start, cancellation request, and terminal state in a private JSONL audit log. Arguments, results, output, and credentials are excluded. Rotate at approximately 4 MiB and keep one previous file.

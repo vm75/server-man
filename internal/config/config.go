@@ -29,6 +29,7 @@ type Config struct {
 	SystemdScope          string `json:"systemdScope"`
 	SambaConfig           string `json:"sambaConfig"`
 	SambaManagedFile      string `json:"sambaManagedFile"`
+	PackageManager        string `json:"packageManager"`
 	StateDir              string `json:"stateDir"`
 	TokenFile             string `json:"tokenFile"`
 	PublicOrigin          string `json:"publicOrigin"`
@@ -49,7 +50,7 @@ func Defaults() (Config, error) {
 	if stateRoot == "" {
 		stateRoot = filepath.Join(home, ".local", "state")
 	}
-	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/serverman.conf", SampleIntervalSeconds: 2}, nil
+	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/serverman.conf", PackageManager: "auto", SampleIntervalSeconds: 2}, nil
 }
 
 func Load(path string) (Config, error) {
@@ -86,6 +87,9 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.PackageManager != "auto" && c.PackageManager != "apt" && c.PackageManager != "dnf" && c.PackageManager != "pacman" && c.PackageManager != "zypper" {
+		return errors.New("packageManager must be auto, apt, dnf, pacman or zypper")
+	}
 	if c.SampleIntervalSeconds < 1 || c.SampleIntervalSeconds > 10 {
 		return errors.New("sampleIntervalSeconds must be between 1 and 10")
 	}
