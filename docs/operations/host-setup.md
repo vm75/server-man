@@ -554,3 +554,21 @@ user service uses the new binary. HTTP health, authentication, cookie behavior,
 Host and Origin rejection, API jobs state, unauthenticated MCP denial, and an
 authenticated official SDK MCP session (48 tools and ping) were checked after
 the change. Go test suites were not rerun.
+
+## Compose authoring deployment follow-up (2026-10-16)
+
+The requested project editor was built from commit `d016f2c` and installed at
+`/usr/local/bin/serverman` (SHA-256
+`9e06ec36c2275091bab965a3e42a77f34306875fa76779e6b789913357db033d`). The
+existing user service was restarted and remains active. Its configuration was
+left untouched; at deployment it had `allowWrites:true`,
+`listen: "0.0.0.0:8080"`, and
+`publicOrigin: "http://192.168.192.78:8080"`. The token file was read only for an authenticated
+MCP discovery check and was not displayed or changed.
+
+The installed executable reports version `d016f2c`; its hash matches the
+workspace build. Local HTTP health returns 200, and an authenticated official
+SDK session to the configured LAN origin lists 54 tools, including project
+create, Compose read/save, env read/save, and data-directory creation. No
+project files, containers, firewall rules, or network settings were changed.
+Plain HTTP carries env text and is intended for the trusted LAN only.
