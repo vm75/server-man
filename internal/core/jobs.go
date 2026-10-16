@@ -138,6 +138,9 @@ func (j *Jobs) execute(ctx context.Context, entry *runningJob, run func(context.
 	}
 	if ctx.Err() != nil {
 		entry.job.State, entry.job.Error = "cancelled", ctx.Err().Error()
+		if err != nil && err.Error() != ctx.Err().Error() {
+			entry.job.Error += ": " + err.Error()
+		}
 	}
 	entry.cancel()
 	now := time.Now().UTC()

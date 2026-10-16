@@ -2,7 +2,7 @@
 
 A lightweight Linux server manager inspired by Cockpit, with a responsive web interface and MCP access for AI agents. Built with Go, Svelte 5, TypeScript, and Vite.
 
-Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides Linux resource monitoring, Podman/Docker Compose management, LXD/classic LXC/KVM management, systemd services, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. Shares and updates are under development; their UI entries are labeled as planned.
+Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides Linux resource monitoring, Podman/Docker Compose management, LXD/classic LXC/KVM management, systemd services, Samba/NFS shares, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. System updates are under development; their UI entry is labeled as planned.
 
 The overview has CPU/network histories, per-core CPU meters, memory/swap, local storage usage and I/O, uptime/load, optional temperatures, and a searchable/sortable process table. Monitoring uses one shared Linux sampler and native SVG charts. See [monitoring details](docs/design/monitoring.md) for units, limits, and missing-data behavior.
 
@@ -11,6 +11,8 @@ The overview has CPU/network histories, per-core CPU meters, memory/swap, local 
 **Virtual machines** separates LXD, classic LXC and KVM/libvirt inventory and controls. Launch LXD containers/VMs, manage existing classic containers, and manage libvirt lifecycle/autostart or define an existing KVM XML file. See [machine setup and behavior](docs/design/machines.md) for backend contexts, supported actions and retained storage.
 
 **Services** combines installed systemd units with runtime state, selected properties and bounded journal output. Start/stop/restart/reload and startup enablement run as jobs. `systemdScope` defaults to `system`; set it to `user` for the server account's user manager. See [service management](docs/design/services.md) for permissions and action semantics.
+
+**File shares** inspects existing Samba/NFS shares and creates, edits, removes or reapplies application-owned shares. Saves validate a candidate, publish an atomic fragment and apply native changes, with rollback on failure. Existing host configuration and shared directory data are preserved. See [share setup and behavior](docs/design/shares.md) for the required Samba include, NFS server setup, access fields and runtime-state limits.
 
 ## Build and run
 
@@ -65,6 +67,8 @@ All `/api/` routes require authentication except token sign-in. Send `Authorizat
 Core tools: `system_status`, `system_capabilities`, `monitor_snapshot`, `monitor_processes`, `jobs_list`, `jobs_get`, and `jobs_cancel`. Compose adds `compose_projects`, `compose_status`, `compose_logs`, and six [lifecycle tools](docs/design/compose.md#actions). `monitor_processes` accepts `sort`, `filter`, and `limit`. Mutation tools return a `job`; use `jobs_get` with its `id` to read state/output. `jobs_cancel` is an immediate control operation. Foreign browser origins and unexpected Host headers are rejected.
 
 Machine tools include `machines_list`, `machines_details`, and [backend-specific actions](docs/design/machines.md#actions). Service tools include `services_list`, `services_details`, `services_logs`, and six [management actions](docs/design/services.md#actions). `GET /api/tools` and the Agent access page provide the complete current schemas.
+
+Share tools are `shares_list`, `samba_share_save`, `samba_share_remove`, `nfs_share_save`, and `nfs_share_remove`. Save/remove require the fragment revision returned by inventory and destructive acknowledgement. They apply the change as a job; see [share transactions](docs/design/shares.md#transactions).
 
 ## MCP
 

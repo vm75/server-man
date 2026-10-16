@@ -11,6 +11,7 @@ Serverman is a Linux administration application built with Go, Svelte 5, TypeScr
 - `internal/modules/compose/`: filesystem discovery, provider commands and metadata parsing; see [Compose design](docs/design/compose.md). `web/src/pages/Containers.svelte` renders project management.
 - `internal/modules/machines/`: LXD, classic LXC and libvirt; see [machine design](docs/design/machines.md). `web/src/pages/Machines.svelte` renders inventory/actions.
 - `internal/modules/services/`: fixed-scope systemd operations; see [service design](docs/design/services.md). `web/src/pages/Services.svelte` renders service inventory/details/logs.
+- `internal/modules/shares/`: owned Samba/NFS fragments and rollback; see [share design](docs/design/shares.md). `web/src/pages/Shares.svelte` renders inspection/forms.
 - `internal/mcp/`: MCP adapters; [MCP design](docs/design/mcp.md) describes connection/protocol rules. `tools/mcp/`: official SDK interoperability checks and an in-process HTTP bridge.
 - `web/src/`: Svelte UI; `web/vite.config.ts` sets its Go asset output and development proxy.
 - `make setup`: install Go and frontend dependencies from manifests/lockfile.
@@ -33,6 +34,7 @@ Serverman is a Linux administration application built with Go, Svelte 5, TypeScr
 - Do not copy secrets, environment file contents, or resolved Compose configuration into logs, fixtures, APIs, or Git.
 - Verification may read host inventory and metrics. Use temporary directories and command fixtures for operations that change containers, VMs, packages, shares, or services.
 - Do not modify `~/vms`; preserve its conventions through configurable discovery.
+- Share mutations may replace only owned fragments. Preserve unmanaged configuration and shared directory data; verify rollback with temporary files and native-command fixtures.
 - Keep monitoring, retained output, jobs, and process concurrency bounded.
 - Authentication, write policy, and validation apply equally to HTTP and MCP.
 - Register tools through core; keep transports out of domain modules. See [architecture](ARCHITECTURE.md) for execution/resource limits.

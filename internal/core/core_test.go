@@ -44,6 +44,31 @@ func TestSchemaRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+func TestCancellationPreservesRollbackDiagnostics(t *testing.T) {
+	jobs, err := NewJobs(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+	started := make(chan struct{})
+	job, err := jobs.Start("test_rollback", "test", func(ctx context.Context, out io.Writer) (any, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, errors.New("rollback incomplete: inspect configuration")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	if err := jobs.Cancel(job.ID); err != nil {
+		t.Fatal(err)
+	}
+	finished := awaitJob(t, jobs, job.ID)
+	if finished.State != "cancelled" || !strings.Contains(finished.Error, "rollback incomplete") {
+		t.Fatal(finished)
+	}
+}
+
 func TestRegistryWritePolicyAndDestructiveAcknowledgement(t *testing.T) {
 	jobs, err := NewJobs(context.Background(), t.TempDir())
 	if err != nil {

@@ -14,6 +14,7 @@ Serverman runs as one Linux process for the web UI, authenticated JSON APIs and 
 | `internal/modules/compose/` | Project discovery, safe metadata parsing and fixed Compose/native-engine commands |
 | `internal/modules/machines/` | Independent LXD/classic LXC/libvirt capabilities, whitelisted inventory, lifecycle and XML import |
 | `internal/modules/services/` | System/user systemd inventory, selected properties, bounded journal and fixed service actions |
+| `internal/modules/shares/` | Owned Samba/NFS fragments, selected host inventory, revision checks, validated publication and runtime rollback |
 | `internal/httpapi/` | HTTP transport, request limits, authentication, JSON responses |
 | `internal/mcp/` | MCP tools protocol, stdio and stateless Streamable HTTP adapters |
 | `internal/webui/` | Embed and serve production assets |
@@ -50,6 +51,8 @@ Compose discovery reads file metadata without opening configuration or environme
 Machine management fixes backend context in configuration and uses separate executables for LXD and classic LXC. Libvirt mutations resolve the selected domain to a UUID before execution. Deletion checks stopped/inactive state; no disk-removal flags are exposed for libvirt. XML import checks a configured directory boundary and passes a private validated snapshot to `virsh define --validate`. See [machine design](docs/design/machines.md) for CLI mappings and verification limits.
 
 Service management fixes system/user scope in configuration, merges installed unit files with loaded runtime state and reports partial reads explicitly. Only exact validated `.service` names reach lifecycle or journal commands. Details select an explicit property allowlist; enablement does not imply a runtime start/stop. See [service design](docs/design/services.md) for parser compatibility, limits and permissions.
+
+Shares store typed definitions as comments beside their generated native fragment. Ownership markers and deterministic rendering reject foreign/externally edited files. Mutations require a current revision, validate a temporary candidate, check for concurrent edits, then rename/sync the owned file. Samba validates an include-substituted shadow with testparm and requests reload; NFS changes only the selected export pairs through targeted exportfs commands. Failure restores the prior file and attempts native rollback. Cleanup has an independent 30-second deadline so cancellation can restore state; job cancellation preserves rollback diagnostics. See [share design](docs/design/shares.md) for exact guarantees and limits.
 
 ## Resource bounds and failure handling
 

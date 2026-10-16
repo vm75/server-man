@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type Config struct {
@@ -26,6 +27,8 @@ type Config struct {
 	LibvirtURI            string `json:"libvirtURI"`
 	LibvirtXMLRoot        string `json:"libvirtXMLRoot"`
 	SystemdScope          string `json:"systemdScope"`
+	SambaConfig           string `json:"sambaConfig"`
+	SambaManagedFile      string `json:"sambaManagedFile"`
 	StateDir              string `json:"stateDir"`
 	TokenFile             string `json:"tokenFile"`
 	PublicOrigin          string `json:"publicOrigin"`
@@ -46,7 +49,7 @@ func Defaults() (Config, error) {
 	if stateRoot == "" {
 		stateRoot = filepath.Join(home, ".local", "state")
 	}
-	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SystemdScope: "system", SampleIntervalSeconds: 2}, nil
+	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/serverman.conf", SampleIntervalSeconds: 2}, nil
 }
 
 func Load(path string) (Config, error) {
@@ -127,6 +130,17 @@ func (c Config) Validate() error {
 	}
 	if c.SystemdScope != "system" && c.SystemdScope != "user" {
 		return errors.New("systemdScope must be system or user")
+	}
+	for _, path := range []string{c.SambaConfig, c.SambaManagedFile} {
+		if !filepath.IsAbs(path) || strings.ContainsAny(path, "\\%") || strings.ContainsFunc(path, unicode.IsControl) || strings.TrimSpace(path) != path || filepath.Clean(path) != path {
+			return errors.New("Samba config paths must be clean absolute literal paths")
+		}
+		if path == "/etc/exports" || path == "/etc/exports.d/serverman.exports" {
+			return errors.New("Samba config paths must not overlap native NFS configuration")
+		}
+	}
+	if c.SambaConfig == c.SambaManagedFile {
+		return errors.New("sambaManagedFile must differ from sambaConfig")
 	}
 	if c.PublicOrigin != "" {
 		origin, err := url.Parse(c.PublicOrigin)

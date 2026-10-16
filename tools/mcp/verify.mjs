@@ -62,6 +62,17 @@ async function exercise(client, label) {
   assert.equal(invalidService.structuredContent.error.code, 'invalid_arguments')
   const deniedService = await client.callTool({ name: 'services_restart', arguments: { unit: 'demo.service', confirm: true } })
   assert.equal(deniedService.structuredContent.error.code, 'writes_disabled')
+  const shares = await client.callTool({ name: 'shares_list', arguments: { protocol: 'nfs' } })
+  assert.equal(shares.isError, false)
+  assert.equal(shares.structuredContent.backends[0].protocol, 'nfs')
+  assert(Array.isArray(shares.structuredContent.shares))
+  assert.equal(tools.find(t => t.name === 'samba_share_save').annotations.destructiveHint, true)
+  const invalidShare = await client.callTool({ name: 'shares_list', arguments: { protocol: 'ftp' } })
+  assert.equal(invalidShare.structuredContent.error.code, 'invalid_arguments')
+  for (const protocol of ['samba', 'nfs']) {
+    const deniedShare = await client.callTool({ name: `${protocol}_share_remove`, arguments: { name: 'demo', revision: '0'.repeat(64), confirm: true } })
+    assert.equal(deniedShare.structuredContent.error.code, 'writes_disabled')
+  }
   await client.ping()
   console.log(`${label}: initialize, ${tools.length} tools, live monitoring, schemas, error results and denied writes passed`)
   return tools

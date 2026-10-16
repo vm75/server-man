@@ -37,6 +37,12 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		{"relative XML root", `{"libvirtXMLRoot":"xml"}`, false},
 		{"user services", `{"systemdScope":"user"}`, true},
 		{"invalid service scope", `{"systemdScope":"global"}`, false},
+		{"custom Samba paths", `{"sambaConfig":"/srv/samba/smb.conf","sambaManagedFile":"/srv/samba/serverman.conf"}`, true},
+		{"relative Samba path", `{"sambaConfig":"smb.conf"}`, false},
+		{"same Samba paths", `{"sambaConfig":"/srv/smb.conf","sambaManagedFile":"/srv/smb.conf"}`, false},
+		{"Samba substitutions", `{"sambaManagedFile":"/srv/%U.conf"}`, false},
+		{"Samba control character", `{"sambaManagedFile":"/srv/tab\tfile"}`, false},
+		{"Samba NFS overlap", `{"sambaManagedFile":"/etc/exports.d/serverman.exports"}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "config.json")
