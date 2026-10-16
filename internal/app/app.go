@@ -12,6 +12,7 @@ import (
 	"serverman/internal/modules/compose"
 	"serverman/internal/modules/machines"
 	"serverman/internal/modules/monitor"
+	"serverman/internal/modules/services"
 )
 
 func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, runner core.Executor) (*core.Registry, error) {
@@ -52,6 +53,9 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 	}
 	if err == nil {
 		err = machines.New(cfg, runner).Register(registry)
+	}
+	if err == nil {
+		err = services.New(cfg.SystemdScope, runner).Register(registry)
 	}
 	return registry, err
 }

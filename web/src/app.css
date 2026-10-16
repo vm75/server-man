@@ -228,3 +228,17 @@ button.text-button { padding: 8px 0 0; border: none; background: transparent; co
 .machine-autostart { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); }
 .machine-autostart label { color: var(--muted); font-size: 13px; }
 @media (max-width: 650px) { .machine-create { align-items: stretch; flex-direction: column; gap: 5px; } .machine-form-fields, .machine-facts { grid-template-columns: minmax(0,1fr); } .machine-form { padding: 17px; } }
+.service-summary { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 12px; color: var(--muted); }
+.service-summary strong { color: #e5eaf0; }.service-running { color: var(--accent); }.service-failed { color: var(--danger); }
+.service-layout { display: grid; grid-template-columns: minmax(0,1fr); gap: 20px; align-items: start; }
+.service-layout.has-selection { grid-template-columns: minmax(230px,.85fr) minmax(0,1.3fr); }
+.service-list { overflow: hidden; max-height: 780px; overflow-y: auto; }
+.service-list-row { display: flex; width: 100%; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; padding: 16px; justify-content: space-between; gap: 12px; text-align: left; }
+.service-list-row:last-child { border-bottom: 0; }.service-list-row.selected { background: #20362f; }
+.service-list-identity { display: grid; gap: 6px; min-width: 0; }
+.service-list-identity strong { font-size: 12px; overflow-wrap: anywhere; }
+.service-list-identity > span { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.5; }
+.service-list-state { display: grid; justify-items: end; align-content: start; gap: 8px; flex-shrink: 0; font-size: 10px; color: var(--muted); }
+.service-details { margin-top: 0; }.service-details h2 { overflow-wrap: anywhere; }
+@media (max-width: 1050px) { .service-layout.has-selection { grid-template-columns: minmax(0,1fr); }.has-selection .service-list { max-height: 350px; } }
+@media (max-width: 760px) { .engine-tabs { flex-wrap: wrap; }.engine-tabs button { flex: 1 1 80px; min-width: 0; padding-inline: 8px; }.engine-tabs button svg { flex-shrink: 0; } }

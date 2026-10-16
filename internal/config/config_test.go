@@ -35,6 +35,8 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		{"relative LXC path", `{"lxcPath":"containers"}`, false},
 		{"remote libvirt", `{"libvirtURI":"qemu+ssh://root@example/system"}`, false},
 		{"relative XML root", `{"libvirtXMLRoot":"xml"}`, false},
+		{"user services", `{"systemdScope":"user"}`, true},
+		{"invalid service scope", `{"systemdScope":"global"}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "config.json")

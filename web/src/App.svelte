@@ -7,6 +7,7 @@
   import AgentAccess from './pages/AgentAccess.svelte'
   import Containers from './pages/Containers.svelte'
   import Machines from './pages/Machines.svelte'
+  import Services from './pages/Services.svelte'
   import { ApiError, request, type Status } from './lib/api'
 
   const pages = [
@@ -92,6 +93,8 @@
         <Containers allowWrites={status.allowWrites} />
       {:else if selected === 'machines' && status}
         <Machines allowWrites={status.allowWrites} />
+      {:else if selected === 'services' && status}
+        <Services allowWrites={status.allowWrites} />
       {:else}
         <section class="panel empty-state"><span class="module-icon"><Icon name={selected} size={30} /></span><h2>{page.name}</h2><p>This module is next in the implementation plan. Controls will appear here when its backend is ready.</p><button onclick={() => { selected = 'overview' }}>Back to overview</button></section>
       {/if}

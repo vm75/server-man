@@ -10,6 +10,7 @@ Serverman is a Linux administration application built with Go, Svelte 5, TypeScr
 - `internal/modules/monitor/`: Linux collector, sampler, and tools; see [monitoring design](docs/design/monitoring.md) for units and bounds. `web/src/pages/Overview.svelte` renders the dashboard.
 - `internal/modules/compose/`: filesystem discovery, provider commands and metadata parsing; see [Compose design](docs/design/compose.md). `web/src/pages/Containers.svelte` renders project management.
 - `internal/modules/machines/`: LXD, classic LXC and libvirt; see [machine design](docs/design/machines.md). `web/src/pages/Machines.svelte` renders inventory/actions.
+- `internal/modules/services/`: fixed-scope systemd operations; see [service design](docs/design/services.md). `web/src/pages/Services.svelte` renders service inventory/details/logs.
 - `internal/mcp/`: MCP adapters; [MCP design](docs/design/mcp.md) describes connection/protocol rules. `tools/mcp/`: official SDK interoperability checks and an in-process HTTP bridge.
 - `web/src/`: Svelte UI; `web/vite.config.ts` sets its Go asset output and development proxy.
 - `make setup`: install Go and frontend dependencies from manifests/lockfile.

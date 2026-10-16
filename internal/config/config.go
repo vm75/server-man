@@ -25,6 +25,7 @@ type Config struct {
 	LXCPath               string `json:"lxcPath"`
 	LibvirtURI            string `json:"libvirtURI"`
 	LibvirtXMLRoot        string `json:"libvirtXMLRoot"`
+	SystemdScope          string `json:"systemdScope"`
 	StateDir              string `json:"stateDir"`
 	TokenFile             string `json:"tokenFile"`
 	PublicOrigin          string `json:"publicOrigin"`
@@ -45,7 +46,7 @@ func Defaults() (Config, error) {
 	if stateRoot == "" {
 		stateRoot = filepath.Join(home, ".local", "state")
 	}
-	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SampleIntervalSeconds: 2}, nil
+	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SystemdScope: "system", SampleIntervalSeconds: 2}, nil
 }
 
 func Load(path string) (Config, error) {
@@ -123,6 +124,9 @@ func (c Config) Validate() error {
 	}
 	if c.LibvirtURI != "qemu:///system" && c.LibvirtURI != "qemu:///session" {
 		return errors.New("libvirtURI must be qemu:///system or qemu:///session")
+	}
+	if c.SystemdScope != "system" && c.SystemdScope != "user" {
+		return errors.New("systemdScope must be system or user")
 	}
 	if c.PublicOrigin != "" {
 		origin, err := url.Parse(c.PublicOrigin)
