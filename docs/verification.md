@@ -6,8 +6,8 @@ This audit maps the requested features to implementation and evidence. Fixture t
 
 Checkout `/home/shasak/ws/server-man` on Ubuntu 26.10. The installed native
 binary reports revision `e4424dd`; user `serverman.service` is enabled/running,
-with user lingering enabled and management writes disabled. Its only listener
-is `127.0.0.1:8080`. See the [complete operations ledger](operations/host-setup.md)
+with user lingering enabled and management writes disabled. The backend listener
+is `127.0.0.1:8080`; the LAN follow-up below adds a restricted HTTPS proxy. See the [complete operations ledger](operations/host-setup.md)
 for packages, permissions, configs, services, commands and outcomes.
 
 | Requirement | Current evidence | Scope limit |
@@ -20,6 +20,18 @@ for packages, permissions, configs, services, commands and outcomes.
 | Native host inventory | LXD returns empty inventory; application lists 296 real system services without warnings and valid APT cached candidates (zero). Missing classic LXC/libvirt/Samba/NFS tools are explicit. | No guest pool/provisioning, existing-service action, share reload/mount or application package-update job. |
 | Browser behavior | Final headless Firefox fixture suite passes 1440×1000, 390×844, 320×740. Separate direct TCP browser checks pass sign-in/out, live samples, both native provider tabs, all three examples, branding and overflow at desktop/mobile sizes. Screenshots were inspected. | Mutation forms use fixtures and production denied-write checks. No real lifecycle operation is represented as tested. |
 | Host change accounting | 107 native packages installed, no upgrades/removals; LXD Snap plus core26 installed by Ubuntu's launcher; private examples/config, Compose v2 selection, rootless socket and user app service/linger recorded with exact paths and permissions. Existing handoff preserved. | TLS, hosted CI and privileged subsystem acceptance gates remain outstanding. |
+
+### Direct LAN HTTPS follow-up
+
+`https://192.168.192.78` now serves the app from the local `192.168.192.0/24`
+network. Caddy 2.11.4 is bound only to LAN TCP 443; the backend stays loopback.
+The app's publicOrigin accepts that exact HTTPS origin and sessions are Secure.
+Certificate-verified curl, Node HTTP, official MCP SDK (48 tool schemas and live
+discovery) and headless Firefox (CA imported into a temporary profile) all pass.
+Foreign origins, missing auth, a non-LAN source, and management writes are denied.
+No TLS bypass was used. Other physical clients are untested and need the exported
+public CA trusted first. External public-domain TLS, hosted CI and privileged
+mutation gates remain open. See the [full LAN ledger and client instructions](operations/host-setup.md#direct-lan-access-follow-up-2026-10-16).
 
 The remainder is the previous-host baseline, retained as historical evidence.
 Its sandbox-specific gaps and measurements are not current-host claims.

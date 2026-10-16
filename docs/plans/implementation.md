@@ -216,3 +216,22 @@ documentation-only; the deployed code is unchanged from `e4424dd`.
 
 Migration task status: complete. Earlier implementation-wide privileged/TLS/CI
 acceptance limits remain explicitly open and were not claimed as completed.
+
+## Direct LAN access follow-up (2026-10-16)
+
+The user requested access from another machine without an SSH tunnel.
+
+- [x] Configure HTTPS at `https://192.168.192.78` using a LAN-bound Caddy proxy, preserving loopback backend and token/origin policy.
+- [x] Verify TLS, browser login/session behavior, HTTP/MCP parity and denied writes through the proxy; record client trust requirements and every host change.
+
+Evidence: reviewed/validated Caddy configuration installed before package startup;
+LAN-only TCP 443, no plaintext/HTTP3 listener, source restriction rejects a
+non-LAN source. Four native packages and Caddy account/service/state are recorded
+in the operations ledger. App publicOrigin updated atomically with a private
+backup; existing token/write policy preserved. Real HTTPS curl, Node fetch and
+official SDK pass trusted chain/IP, 401/403 policy, Secure session lifecycle,
+48 schemas and native discovery. Headless Firefox imports the CA into a
+temporary profile and passes login/live samples/project rendering/logout without
+TLS bypass. Another physical client is untested and must import the exported
+public CA. No Go/frontend code changed, so relevant verification is the actual
+proxy/service/auth/browser path. Direct LAN follow-up complete.

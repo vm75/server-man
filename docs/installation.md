@@ -31,3 +31,22 @@ server.example.com {
 Set `publicOrigin` to the exact browser origin, for example `https://server.example.com`, in the server-man config. This enables Secure session cookies and origin validation. Keep the proxy's upstream on loopback, restrict who can reach the public site, and configure proxy logs to omit `Authorization`, `Cookie`, and request bodies. Do not expose the unauthenticated management socket publicly. MCP HTTP uses the same authenticated endpoint; remote agents should use HTTPS and a bearer token. See [MCP configuration](design/mcp.md).
 
 The example system unit expects `/usr/local/bin/serverman`. If installing under another prefix, adjust `ExecStart` before enabling it. Back up configuration and state before upgrading; package updates and service management remain explicit operations initiated through server-man.
+
+
+## Direct LAN HTTPS
+
+For an IP-only private LAN deployment, [Caddyfile.lan.example](../packaging/Caddyfile.lan.example)
+binds HTTPS only to this host's `192.168.192.78` address, restricts sources to
+`192.168.192.0/24`, and proxies to `127.0.0.1:8080`. It uses `tls internal` and
+serves no plaintext HTTP listener. Set `publicOrigin` to `https://192.168.192.78`
+in the app's config and restart the app so login uses Secure cookies and the
+external Host/origin is accepted. Adjust all address/subnet values together for
+another network. If creating a new Caddy installation, put the reviewed config
+in place before its package starts the default HTTP example server.
+
+Each client must trust the local CA; the deployment exports only its public
+certificate as `~/.config/serverman/lan-ca.crt`, readable over authenticated SSH.
+See the [host-specific trust steps and certificate fingerprint](operations/host-setup.md#trusting-the-certificate-from-another-machine).
+Never copy the CA private key to a client or repository. Caddy's state must persist
+for certificate renewal and client trust. A publicly trusted domain certificate
+can use the domain-based example above instead of this local CA arrangement.

@@ -8,6 +8,13 @@ and creation of `~/vms`; this supersedes the development-only prohibitions in
 AGENTS.md for this setup task. Verification of destructive module operations still
 uses fixtures. No credential values belong in this record.
 
+## Current access
+
+Open **https://192.168.192.78** from a machine on `192.168.192.0/24`.
+Trust the public CA at `~/.config/serverman/lan-ca.crt` on that client, then sign
+in with the existing private access token. The direct LAN follow-up at the end
+supersedes the original loopback-only access arrangement below.
+
 ## Initial inventory
 
 14 GiB RAM, about 97 GiB free on the root filesystem; `/dev/kvm` exists.
@@ -362,10 +369,11 @@ journalctl --user -u serverman.service
 systemctl --user restart serverman.service
 ```
 
-From another computer, use `ssh -N -L 8080:127.0.0.1:8080 shasak@<server-address>`,
-then open `http://127.0.0.1:8080` there. Read the token directly from the private
+From another computer on the LAN, open `https://192.168.192.78` after trusting
+the exported public CA. Read the token directly from the private
 `~/.config/serverman/token` file in your SSH session; never put it in a URL or
-commit it. No desktop session is needed on the server.
+commit it. No SSH tunnel or desktop session is needed. See the direct LAN
+follow-up below for certificate transfer and configuration details.
 
 The default deployment is read-only. To manage workloads, deliberately change
 `allowWrites` in `~/.config/serverman/config.json` and restart the user service;
@@ -389,3 +397,129 @@ external TLS proxy, reboot persistence or hosted CI was exercised. These are
 recorded limits of verification; the headless loopback deployment and examples
 are ready. The installed source revision is `e4424dd`; later commits update
 handoff documentation only.
+
+## Direct LAN access follow-up (2026-10-16)
+
+The user explicitly requested access from another machine. This supersedes the
+loopback-only access arrangement above. Inspection found LAN address
+`192.168.192.78/24` on `wlp2s0`, no proxy installed, ports 80/443 unused, and no
+ufw/nft/iptables utility installed. No firewall, router, DNS or hostname changes
+are planned. The backend stays on `127.0.0.1:8080`, with token auth and writes
+disabled. A Caddy proxy will bind only `192.168.192.78:443` and accept requests
+only from `192.168.192.0/24`. No plaintext listener or HTTP/3 UDP port is enabled.
+
+Reviewed simulation: `sudo apt-get install -y --no-install-recommends caddy` adds
+only caddy 2.11.4-1, libnspr4 2:4.39-1ubuntu1, libnss3 2:3.127-1 and
+libnss3-tools 2:3.127-1, with zero upgrades/removals. The package was downloaded
+with `apt-get download caddy` under ignored `.cache/caddy-package` and its service
+and install scripts inspected. Its default config would start a wildcard HTTP
+server, so the reviewed `packaging/Caddyfile.lan.example` is installed first and
+`--force-confold` preserves it during package installation. Caddy's package
+creates a system caddy account/group, adds it to www-data and creates
+`/var/lib/caddy` and `/var/log/caddy`. Its system unit is enabled and started.
+
+The proxy uses Caddy's local CA (`tls internal`) and disables automatic trust
+installation. Client machines must trust the exported public root certificate;
+private CA/leaf keys remain in Caddy-owned state and are never copied to the repo
+or logs. Access logs are not enabled. Caddy's normal admin endpoint stays
+loopback-only. Its certificate and configuration lifecycle follows the native
+service; no desktop environment is required.
+
+Commands applied and exact outcomes follow below.
+
+
+### LAN setup commands and outcomes
+
+All of the following completed successfully:
+
+```sh
+dpkg-deb --extract .cache/caddy-package/caddy_*.deb .cache/caddy-package/root
+.cache/caddy-package/root/usr/bin/caddy adapt --config packaging/Caddyfile.lan.example --adapter caddyfile
+sudo install -d -m 0755 /etc/caddy
+sudo install -m 0644 packaging/Caddyfile.lan.example /etc/caddy/Caddyfile
+sudo apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends caddy
+systemctl --user restart serverman.service
+sudo install -o shasak -g shasak -m 0644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt /home/shasak/.config/serverman/lan-ca.crt
+sudo -u caddy env HOME=/var/lib/caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+```
+
+The proxy package and adapter output are cached under ignored `.cache`; install
+and validation logs are `/tmp/server-man-caddy-*.log`. Before restarting the app,
+a read-only authenticated check confirmed no management jobs existed. A Python
+file operation saved its prior config as `~/.config/serverman/config.before-lan.json`
+(0600) using exclusive creation, then atomically added
+`publicOrigin: "https://192.168.192.78"` to `config.json` (0600).
+The token and write policy were preserved. Restart expires prior browser sessions.
+
+Newly installed packages (four; zero upgrades/removals; cumulative APT total 111):
+
+```text
+caddy 2.11.4-1
+libnspr4:amd64 2:4.39-1ubuntu1
+libnss3:amd64 2:3.127-1
+libnss3-tools 2:3.127-1
+```
+
+Caddy's package created account `caddy` (UID 980), group `caddy` (GID 982), and
+membership in existing `www-data`. `/etc/caddy` is root:root 0755, its reviewed
+Caddyfile 0644; the unused vendor example is retained as `Caddyfile.dpkg-dist`.
+`/var/lib/caddy` is caddy:caddy 0750, `/var/log/caddy` caddy:caddy 0755.
+Its normal private CA/leaf keys and certs are under
+`/var/lib/caddy/.local/share/caddy` (root key 0600, caddy:caddy). Caddy's runtime
+state/autosaved config is under its own home. The public CA was exported 0644,
+shasak:shasak, inside the existing private `~/.config/serverman` directory.
+No private key was exported; automatic machine trust installation was disabled.
+
+The native Caddy unit is enabled/active with zero restarts. Its `caddy-api` unit
+remains disabled/inactive. Package installation required no other service restart.
+The app was deliberately restarted once to load the origin configuration. Final
+listeners are LAN `192.168.192.78:443`, local backend `127.0.0.1:8080`, and Caddy's
+local admin `127.0.0.1:2019`. There is no port 80 or UDP 443 listener. The app
+remains write-disabled, and its token permissions remain unchanged.
+
+### LAN verification
+
+- Native `caddy adapt` and `caddy validate` accept the deployed config.
+- `curl --cacert ~/.config/serverman/lan-ca.crt https://192.168.192.78/healthz`
+  verifies the certificate chain and IP identity and returns 200/ok. A connection
+  bound to source `127.0.0.1` receives 403 from the proxy's LAN source restriction.
+- `NODE_EXTRA_CA_CERTS=/home/shasak/.config/serverman/lan-ca.crt node
+  .cache/lan-verification.mjs` passes with certificate verification enabled:
+  health, unauthenticated API/MCP 401, authenticated foreign-origin 403,
+  authenticated API discovery, secure/HttpOnly/SameSite Strict cookie login and
+  logout, denied Compose writes, 48 official SDK schemas, native three-project
+  discovery and MCP ping over HTTPS.
+- Headless Firefox imports the public CA into an isolated temporary NSS profile
+  using `certutil -N` and `certutil -A`. It loads the LAN HTTPS URL **without**
+  bypassing certificate checks, signs in, sees advancing live monitoring and the
+  real Podman examples, verifies no page errors/overflow, and signs out. The
+  temporary profile is removed. Screenshot: ignored `.cache/lan-containers.png`.
+- These checks connected from this server using its LAN address. Another physical
+  client has not been tested; its browser trust store and network reachability
+  are client-side prerequisites. No host firewall, router forwarding or DNS was
+  changed. No guest/container or application management job was launched.
+
+### Trusting the certificate from another machine
+
+Copy the **public certificate** over your authenticated SSH connection:
+
+```sh
+scp shasak@192.168.192.78:.config/serverman/lan-ca.crt ./server-man-lan-ca.crt
+openssl x509 -in server-man-lan-ca.crt -noout -fingerprint -sha256
+```
+
+Expected SHA-256 fingerprint:
+`5F:96:F8:CE:82:75:80:32:FB:C1:8E:16:0E:B1:20:EF:0B:F0:A5:12:2B:EE:49:36:D1:18:F1:0D:AB:84:93:75`.
+Import that certificate as a trusted certificate authority in your client OS or
+browser, then open **https://192.168.192.78** and sign in with the existing access
+token. [Caddy's local HTTPS documentation](https://caddyserver.com/docs/automatic-https#local-https)
+explains client trust for its internal CA. An HTTP URL is not served.
+
+The current address comes from DHCP. If it changes, update the proxy bind/site
+and the app's publicOrigin together, validate, then restart both services. A DHCP
+reservation can keep this address stable; none was changed by this task.
+
+To return to the prior access arrangement, disable/stop `caddy.service`, restore
+`config.before-lan.json` over `config.json` with mode 0600, and restart the user app.
+This rollback was documented but not executed. Do not delete Caddy CA state if
+clients still trust/use it. No setup change was reverted.

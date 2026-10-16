@@ -91,4 +91,4 @@ See [architecture](ARCHITECTURE.md) for shared operation boundaries, resource li
 
 This checkout is rooted at `/home/shasak/ws/server-man` with its own writable `.git` directory. See the [host setup record](docs/operations/host-setup.md) for this server’s deployment and example workloads.
 
-This headless host runs the user `serverman.service` on loopback with writes disabled. From another computer, forward port 8080 through SSH and use its browser; see [headless access and service commands](docs/operations/host-setup.md#operating-this-headless-host).
+This headless host is available on the LAN at **https://192.168.192.78**, with token authentication and writes disabled. Caddy serves HTTPS on the LAN and proxies to the loopback user service. Trust the exported public CA on your client first; see [LAN access and certificate setup](docs/operations/host-setup.md#trusting-the-certificate-from-another-machine).
