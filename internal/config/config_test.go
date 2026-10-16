@@ -28,6 +28,13 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		{"sample interval too large", `{"sampleIntervalSeconds":11}`, false},
 		{"custom Compose roots", `{"podmanRoot":"/srv/podman","dockerRoot":"/srv/docker"}`, true},
 		{"relative Compose root", `{"podmanRoot":"config/podman"}`, false},
+		{"machine contexts", `{"lxdRemote":"lab","lxdProject":"workloads","lxcPath":"/srv/lxc","libvirtURI":"qemu:///session","libvirtXMLRoot":"/srv/xml"}`, true},
+		{"unsafe LXD remote", `{"lxdRemote":"--debug"}`, false},
+		{"LXD target in context", `{"lxdRemote":"remote:guest"}`, false},
+		{"empty LXD project", `{"lxdProject":""}`, false},
+		{"relative LXC path", `{"lxcPath":"containers"}`, false},
+		{"remote libvirt", `{"libvirtURI":"qemu+ssh://root@example/system"}`, false},
+		{"relative XML root", `{"libvirtXMLRoot":"xml"}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "config.json")

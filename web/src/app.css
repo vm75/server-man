@@ -214,3 +214,17 @@ button.text-button { padding: 8px 0 0; border: none; background: transparent; co
 @media(max-width:760px) { .compose-toolbar { gap: 14px; }.engine-tabs { width: 100%; }.engine-tabs button { flex: 1; min-height: 40px; }.compose-search { width: 100%; }.compose-search input { flex: 1; width: auto; min-width: 0; }.project-grid { gap: 12px; }.project-card { padding: 16px; }.project-name { font-size: 13px; }.project-card-top { flex-wrap: wrap; }.project-state { font-size: 8px; }.project-card-footer { flex-wrap: wrap; }.project-card-footer button { min-height: 36px; }.project-details { padding: 20px; }.project-detail-heading h2 { font-size: 19px; }.project-actions button { flex: 1 0 29%; min-height: 40px; font-size: 10px; }.container-row { flex-direction: column; gap: 13px; }.container-runtime { align-items: flex-start; max-width: 100%; text-align: left; }.project-log-controls > div { width: 100%; }.project-log-controls select { flex: 1; min-width: 0; }.project-log-controls button { min-height: 38px; }.confirm-dialog { padding: 24px; }.dialog-actions button { min-height: 43px; } }
 @media(max-width:365px) { .project-grid { grid-template-columns: minmax(0,1fr); } }
 .job-feedback.failed { background: #352329; color: #e3acb4; border-color: #653e47; }
+.machine-create { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 0 22px; }
+.machine-create p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.machine-create button { flex-shrink: 0; }
+.machine-form { padding: 22px; margin-bottom: 22px; }
+.machine-form h2 { margin: 0 0 18px; font-size: 17px; }
+.machine-form label { display: grid; gap: 9px; color: var(--muted); font-size: 12px; min-width: 0; }
+.machine-form input, .machine-form select { width: 100%; min-width: 0; min-height: 42px; }
+.machine-form-fields { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 14px; }
+.machine-facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px 24px; padding: 18px 0; }
+.machine-facts dt { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.machine-facts dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.machine-autostart { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); }
+.machine-autostart label { color: var(--muted); font-size: 13px; }
+@media (max-width: 650px) { .machine-create { align-items: stretch; flex-direction: column; gap: 5px; } .machine-form-fields, .machine-facts { grid-template-columns: minmax(0,1fr); } .machine-form { padding: 17px; } }

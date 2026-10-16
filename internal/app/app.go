@@ -10,6 +10,7 @@ import (
 	"serverman/internal/config"
 	"serverman/internal/core"
 	"serverman/internal/modules/compose"
+	"serverman/internal/modules/machines"
 	"serverman/internal/modules/monitor"
 )
 
@@ -48,6 +49,9 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 	}
 	if err == nil {
 		err = compose.New(cfg.VMRoot, map[string]string{"podman": cfg.PodmanRoot, "docker": cfg.DockerRoot}, runner).Register(registry)
+	}
+	if err == nil {
+		err = machines.New(cfg, runner).Register(registry)
 	}
 	return registry, err
 }

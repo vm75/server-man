@@ -12,6 +12,7 @@ Serverman runs as one Linux process for the web UI, authenticated JSON APIs and 
 | `internal/core/` | Tool schemas, validation, write policy, process execution, jobs, audit |
 | `internal/modules/monitor/` | Shared Linux resource sampler, bounded history and read-only tools |
 | `internal/modules/compose/` | Project discovery, safe metadata parsing and fixed Compose/native-engine commands |
+| `internal/modules/machines/` | Independent LXD/classic LXC/libvirt capabilities, whitelisted inventory, lifecycle and XML import |
 | `internal/httpapi/` | HTTP transport, request limits, authentication, JSON responses |
 | `internal/mcp/` | MCP tools protocol, stdio and stateless Streamable HTTP adapters |
 | `internal/webui/` | Embed and serve production assets |
@@ -44,6 +45,8 @@ Reads run with a 20 second request deadline, at most four at once. Monitoring re
 The monitoring module samples Linux every one to ten seconds, keeping up to 60 aggregate history points and one current process list. Native SVG charts and CSS meters render the dashboard. Missing data, initial/reset counters, stale snapshots, process limits and namespace scope are explicit. See [monitoring design](docs/design/monitoring.md) for source mappings and calculation rules.
 
 Compose discovery reads file metadata without opening configuration or environment contents. Inventory runs at most one native container query per engine; selected project details and actions delegate project interpretation to its Compose provider. Only whitelisted container/pod metadata is returned. See [Compose design](docs/design/compose.md) for path checks, provider differences and command limits. The UI's shared `startJob` helper opens Activity; completion events refresh the selected project after its job finishes.
+
+Machine management fixes backend context in configuration and uses separate executables for LXD and classic LXC. Libvirt mutations resolve the selected domain to a UUID before execution. Deletion checks stopped/inactive state; no disk-removal flags are exposed for libvirt. XML import checks a configured directory boundary and passes a private validated snapshot to `virsh define --validate`. See [machine design](docs/design/machines.md) for CLI mappings and verification limits.
 
 ## Resource bounds and failure handling
 
