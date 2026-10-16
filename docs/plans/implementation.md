@@ -52,10 +52,10 @@ Acceptance: frontend type checking/build and Go build pass; the built executable
 
 ### 2. Shared management boundary
 
-- [ ] Implement module descriptors, tool schemas, capability discovery, and structured errors.
-- [ ] Implement authenticated JSON APIs and browser session login/logout.
-- [ ] Implement bounded process execution, write policy, cancellable jobs, and audit output.
-- [ ] Verify authentication, origin restrictions, validation, cancellation, output limits, and denied writes.
+- [x] Implement module descriptors, tool schemas, capability discovery, and structured errors.
+- [x] Implement authenticated JSON APIs and browser session login/logout.
+- [x] Implement bounded process execution, write policy, cancellable jobs, and audit output.
+- [x] Verify authentication, origin restrictions, validation, cancellation, output limits, and denied writes.
 
 Acceptance: HTTP operations share a validated registry; unauthenticated/invalid/disabled writes cannot launch commands; jobs report terminal state and useful errors.
 
@@ -146,7 +146,8 @@ Use narrow unit tests for parsing, policy, authentication, and file safety, and 
 | --- | --- | --- |
 | 0 | Initial commit `a20a0ef`; Go 1.26.5 and Node 24.18.0 installed; `~/vms/vms.sh` and Compose structure inspected without reading environment values. | Root `.git` is read-only; nested repository is fully writable. |
 | 1 | `make check` passes (Go vet, Svelte/TypeScript: zero errors/warnings); `make build` passes; `make test` passes with race detection, including embedded index/JS responses, asset boundaries, health, and strict config. Initial stripped binary: 6.2 MiB; UI JS: 42.33 kB (16.84 kB gzip). | TCP listen is blocked by sandbox (`socket: operation not permitted`), so live executable/browser acceptance remains outstanding. Registry DNS is unavailable; dependencies were installed from existing local cache using standard lockfile metadata. npm lifecycle scripts are disabled because the supplied toolchain packages build without them; the esbuild install script's synchronous spawn is blocked here. |
+| 2 | Shared registry and bounded runner/jobs implemented; private token/session login/logout and authenticated HTTP tool invocation are wired into the UI. Go race tests cover schema/policy, destructive acknowledgement, sessions/origins, job serialization/cancellation/retention, audit failure, separate stdout/stderr, capture limits and real helper-process timeouts. `make check test build` passes (zero frontend diagnostics). | Live listener/browser verification remains blocked by the sandbox. MCP transport parity remains scheduled for step 4, after monitoring. No actual host management changes were executed. |
 
 ## Next action
 
-Implement the shared management boundary in step 2, then monitoring. Retain step 1's live runtime/browser check for the final audit; the sandbox currently prevents listening on TCP.
+Implement live Linux monitoring and the dashboard in step 3, then MCP in step 4. Retain the live runtime/browser checks for the final audit; the sandbox currently prevents listening on TCP.

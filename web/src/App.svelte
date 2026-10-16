@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import Icon from './lib/Icon.svelte'
-  import { request, type Status } from './lib/api'
+  import Login from './lib/Login.svelte'
+  import Jobs from './lib/Jobs.svelte'
+  import { ApiError, request, type Status } from './lib/api'
 
   const pages = [
     { id: 'overview', name: 'Overview', subtitle: 'Your server, at a glance.' },
@@ -17,22 +19,36 @@
   let status = $state<Status | null>(null)
   let loading = $state(true)
   let error = $state('')
+  let needsAuth = $state(false)
   const page = $derived(pages.find(p => p.id === selected) ?? pages[0])
 
   async function connect() {
     loading = true
     error = ''
-    try { status = await request<Status>('/api/status') }
-    catch (e) { error = e instanceof Error ? e.message : 'Could not connect to the server' }
+    try { status = await request<Status>('/api/status'); needsAuth = false }
+    catch (e) { if (e instanceof ApiError && e.status === 401) { needsAuth = true; status = null } else { error = e instanceof Error ? e.message : 'Could not connect to the server' } }
     finally { loading = false }
   }
 
-  onMount(() => { void connect() })
+  async function signOut() {
+    try { await request('/api/session', { method: 'DELETE' }); needsAuth = true; status = null; menuOpen = false }
+    catch (e) { error = e instanceof Error ? e.message : 'Could not sign out' }
+  }
+
+  onMount(() => {
+    const expired = () => { needsAuth = true; status = null; menuOpen = false }
+    window.addEventListener('serverman:unauthorized', expired)
+    void connect()
+    return () => window.removeEventListener('serverman:unauthorized', expired)
+  })
 </script>
 
 <svelte:head><title>{page.name} · Serverman</title></svelte:head>
 
 <a class="skip-link" href="#main">Skip to content</a>
+{#if needsAuth}
+  <Login onSignedIn={async () => { needsAuth = false; await connect() }} />
+{:else}
 <div class="app-shell">
   <aside class:open={menuOpen} aria-label="Main navigation">
     <a class="brand" href="#overview" onclick={() => { selected = 'overview'; menuOpen = false }}>
@@ -56,10 +72,10 @@
   <div class="workspace">
     <header class="topbar">
       <div class="breadcrumb"><button class="icon-button mobile-menu" aria-label="Toggle navigation" aria-expanded={menuOpen} onclick={() => { menuOpen = !menuOpen }}><Icon name="menu" /></button><span class="muted">Workspace</span><span class="breadcrumb-divider">/</span><span>{page.name}</span></div>
-      <div class="host-pill"><span class="connection-dot" class:connected={status && !error}></span><span>{status?.hostname ?? 'Connecting'}</span></div>
+      <div class="topbar-actions">{#if status}<Jobs allowWrites={status.allowWrites} /><button class="small-button sign-out" onclick={signOut}>Sign out</button>{/if}<div class="host-pill"><span class="connection-dot" class:connected={status && !error}></span><span>{status?.hostname ?? 'Connecting'}</span></div></div>
     </header>
     <main id="main">
-      <div class="page-heading"><div><div class="eyebrow">SERVER WORKSPACE</div><h1>{page.name}</h1><p>{page.subtitle}</p></div><span class="badge">Development</span></div>
+      <div class="page-heading"><div><div class="eyebrow">SERVER WORKSPACE</div><h1>{page.name}</h1><p>{page.subtitle}</p></div><span class="badge">{status?.allowWrites ? 'Management enabled' : 'Read only'}</span></div>
       {#if error}
         <div class="notice error" role="alert"><div><strong>Could not connect</strong><p>{error}</p></div><button onclick={connect} disabled={loading}>Try again</button></div>
       {:else if loading}
@@ -78,3 +94,4 @@
     </main>
   </div>
 </div>
+{/if}

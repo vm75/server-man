@@ -6,6 +6,7 @@ Serverman is a Linux administration application built with Go, Svelte 5, TypeScr
 
 - `cmd/serverman/`: entry point and process lifecycle.
 - `internal/config/`, `internal/httpapi/`, `internal/webui/`: configuration, HTTP routes, and embedded assets.
+- `internal/core/`: shared schemas, registry, execution, jobs, and audit. `internal/auth/`: token/session authentication. `internal/app/`: module assembly.
 - `web/src/`: Svelte UI; `web/vite.config.ts` sets its Go asset output and development proxy.
 - `make setup`: install Go and frontend dependencies from manifests/lockfile.
 - `make api` and `make dev`: backend and frontend development servers, in separate terminals.
@@ -28,6 +29,7 @@ Serverman is a Linux administration application built with Go, Svelte 5, TypeScr
 - Do not modify `~/vms`; preserve its conventions through configurable discovery.
 - Keep monitoring, retained output, jobs, and process concurrency bounded.
 - Authentication, write policy, and validation apply equally to HTTP and MCP.
+- Register tools through core; keep transports out of domain modules. See [architecture](ARCHITECTURE.md) for execution/resource limits.
 
 ## Completion
 

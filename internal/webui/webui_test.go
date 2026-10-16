@@ -19,7 +19,9 @@ func TestEmbeddedProductionUI(t *testing.T) {
 		t.Fatalf("index: status=%d, body=%s", w.Code, w.Body)
 	}
 	script := regexp.MustCompile(`src="(/assets/[^\"]+\.js)"`).FindStringSubmatch(w.Body.String())
-	if len(script) != 2 { t.Fatal("production index has no bundled script") }
+	if len(script) != 2 {
+		t.Fatal("production index has no bundled script")
+	}
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest("GET", script[1], nil))
 	if w.Code != 200 || w.Body.Len() == 0 || !strings.Contains(w.Header().Get("Cache-Control"), "immutable") {
@@ -28,6 +30,8 @@ func TestEmbeddedProductionUI(t *testing.T) {
 	for _, path := range []string{"/missing", "/assets/missing.js", "/assets/../../go.mod"} {
 		w = httptest.NewRecorder()
 		handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
-		if w.Code == 200 { t.Errorf("unexpected successful asset response for %s", path) }
+		if w.Code == 200 {
+			t.Errorf("unexpected successful asset response for %s", path)
+		}
 	}
 }

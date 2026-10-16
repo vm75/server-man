@@ -11,7 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"serverman/internal/app"
+	"serverman/internal/auth"
 	"serverman/internal/config"
+	"serverman/internal/core"
 	"serverman/internal/httpapi"
 )
 
@@ -31,8 +34,21 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	authentication, err := auth.Load(cfg.TokenFile, cfg.PublicOrigin)
+	if err != nil {
+		return err
+	}
+	jobs, err := core.NewJobs(ctx, cfg.StateDir)
+	if err != nil {
+		return err
+	}
+	defer jobs.Close()
+	registry, err := app.Registry(cfg.AllowWrites, jobs)
+	if err != nil {
+		return err
+	}
 	server := &http.Server{
-		Addr: cfg.Listen, Handler: httpapi.Handler(),
+		Addr: cfg.Listen, Handler: httpapi.Handler(authentication, registry),
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
 		WriteTimeout: 30 * time.Second, IdleTimeout: time.Minute, MaxHeaderBytes: 32 << 10,
 	}
@@ -45,7 +61,7 @@ func run() error {
 			_ = server.Close()
 		}
 	}()
-	slog.Info("server listening", "address", cfg.Listen)
+	slog.Info("server listening", "address", cfg.Listen, "tokenFile", cfg.TokenFile, "allowWrites", cfg.AllowWrites)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

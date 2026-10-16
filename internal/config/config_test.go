@@ -17,6 +17,12 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		{"relative root", `{"vmRoot":"vms"}`, false},
 		{"remote without authentication", `{"listen":":8080"}`, false},
 		{"trailing object", `{} {}`, false},
+		{"null", `null`, false},
+		{"invalid port", `{"listen":"127.0.0.1:70000"}`, false},
+		{"relative state", `{"stateDir":"state"}`, false},
+		{"public origin", `{"publicOrigin":"https://server.example.com"}`, true},
+		{"insecure origin", `{"publicOrigin":"http://server.example.com"}`, false},
+		{"origin with path", `{"publicOrigin":"https://server.example.com/path"}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "config.json")
