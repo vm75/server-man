@@ -16,6 +16,97 @@ let nextID = 1
 const pending = new Map()
 const failures = []
 const sampleTimes = new Set()
+const managementCalls = []
+const deniedByServer = []
+let fixtureMode = false
+
+const project = { engine: 'podman', name: 'demo', directory: '/tmp/vms/config/podman/demo', file: '/tmp/vms/config/podman/demo/compose.yml', envFiles: [], disabled: false, state: 'running', containers: 1, running: 1 }
+const fixtures = {
+  compose_projects: () => ({ engines: [{ name: 'podman', root: '/tmp/vms/config/podman', available: true }, { name: 'docker', root: '/tmp/vms/config/docker', available: true }], projects: [project], warnings: [] }),
+  compose_status: () => ({ project, containers: [{ id: '1234567890abcdef', name: 'demo-web-1', service: 'web', image: 'example/web:latest', state: 'running', status: 'Up', health: '', ports: '', infra: false }], pods: [], warnings: [] }),
+  machines_list: args => ({ backends: [{ id: args.backend, title: args.backend, available: true, context: 'local', actions: args.backend === 'lxd' ? ['launch', 'start', 'stop', 'restart', 'delete'] : [] }], machines: [] }),
+  services_list: () => ({ scope: 'system', available: true, journalAvailable: true, services: [{ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled' }], warnings: [] }),
+  services_details: () => ({ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', canStart: false, canStop: true, canReload: true, mainPID: 1234 }),
+  shares_list: () => ({ backends: [{ protocol: 'samba', available: true, canManage: true, managedFile: '/tmp/serverman/samba.conf', revision: 'a'.repeat(64), setupRequired: false }, { protocol: 'nfs', available: true, canManage: true, managedFile: '/tmp/serverman/exports', revision: 'b'.repeat(64), setupRequired: false }], shares: [], warnings: [] }),
+  updates_status: () => ({ manager: { id: 'apt', title: 'APT', available: true, canRefresh: true }, distribution: 'Ubuntu 24.04', packages: [{ name: 'demo-package', architecture: 'amd64', installed: '1.0', candidate: '1.1', kind: 'upgrade' }], valid: true, notice: 'Fixture package candidates.', cacheSource: 'fixture cache', reboot: { required: false, reason: 'No marker' }, readAt: new Date().toISOString() }),
+}
+
+function fixtureFor(tool, args) {
+  const factory = fixtures[tool]
+  if (factory) return factory(args)
+  if (tool === 'machines_details') return { backend: args.backend, name: args.name, kind: 'container', state: 'running', manageable: true, ips: [] }
+  if (tool === 'compose_logs') return { text: 'fixture log', truncated: false }
+  if (tool === 'services_logs') return { text: 'fixture journal', truncated: false }
+  if (tool.startsWith('jobs_')) return null
+  managementCalls.push({ tool, args })
+  return { job: { id: `fixture-${managementCalls.length}`, tool, state: 'running', createdAt: new Date().toISOString(), output: '', truncated: false } }
+}
+
+async function exerciseManagement(page) {
+  fixtureMode = true
+  await page.reload()
+  await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
+  await page.getByText('Management enabled', { exact: true }).waitFor()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Containers' }).click()
+  await page.getByRole('button', { name: 'demo', exact: true }).click()
+  await page.getByRole('button', { name: 'Restart', exact: true }).click()
+  const composeDialog = page.getByRole('dialog')
+  await composeDialog.getByRole('heading', { name: 'Restart: demo' }).waitFor()
+  await composeDialog.getByRole('button', { name: 'Restart', exact: true }).click()
+  await page.getByText('Restart started for demo. Follow its output in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Virtual machines' }).click()
+  await page.getByRole('button', { name: 'Launch instance', exact: true }).click()
+  const launchForm = page.locator('form.machine-form')
+  await launchForm.getByLabel('Instance name').fill('fixture-vm')
+  await launchForm.getByLabel('Image alias or fingerprint').fill('ubuntu:24.04')
+  await launchForm.getByRole('button', { name: 'Launch instance' }).click()
+  await page.getByText('Management job started. Follow its output in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Services' }).click()
+  await page.getByRole('button', { name: /sshd\.service/ }).click()
+  await page.getByRole('button', { name: 'Stop', exact: true }).click()
+  const serviceDialog = page.getByRole('dialog')
+  await serviceDialog.getByRole('heading', { name: 'Stop: sshd.service' }).waitFor()
+  await serviceDialog.getByRole('button', { name: 'Stop', exact: true }).click()
+  await page.getByText('Service job started. Follow its output in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
+  await page.getByRole('button', { name: 'New share' }).click()
+  await page.getByLabel('Share name').fill('documents')
+  await page.getByLabel('Existing directory on server').fill('/srv/shares/documents')
+  await page.getByLabel('Allowed users or groups').fill('alice')
+  await page.getByRole('button', { name: 'Review and apply' }).click()
+  const shareDialog = page.getByRole('dialog')
+  await shareDialog.getByRole('heading', { name: 'Create Samba share: documents' }).waitFor()
+  await shareDialog.getByRole('button', { name: 'Save and apply' }).click()
+  await page.getByText('Share job started. Follow validation, apply and any rollback in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Updates' }).click()
+  await page.getByRole('button', { name: 'Install system updates' }).click()
+  const updateDialog = page.getByRole('dialog')
+  await updateDialog.getByRole('heading', { name: 'Install system package updates' }).waitFor()
+  await updateDialog.getByRole('button', { name: 'Install updates' }).click()
+  await page.getByText('System update started. Follow its progress in Activity.', { exact: true }).waitFor()
+  await page.locator('.activity-button').click()
+
+  const submitted = Object.fromEntries(managementCalls.map(call => [call.tool, call.args]))
+  assert.equal(submitted.compose_restart?.project, 'demo')
+  assert.equal(submitted.compose_restart?.confirm, true)
+  assert.equal(submitted.lxd_launch?.name, 'fixture-vm')
+  assert.equal(submitted.services_stop?.unit, 'sshd.service')
+  assert.equal(submitted.services_stop?.confirm, true)
+  assert.equal(submitted.samba_share_save?.revision, 'a'.repeat(64))
+  assert.equal(submitted.samba_share_save?.users, 'alice')
+  assert.equal(submitted.updates_install?.confirm, true)
+  assert.deepEqual(deniedByServer.sort(), ['compose_restart', 'lxd_launch', 'samba_share_save', 'services_stop', 'updates_install'].sort())
+  fixtureMode = false
+}
 
 try {
   bridge = spawn(path.join(repo, 'bin/mcp-http-bridge'), [root], { stdio: ['pipe', 'pipe', 'pipe'] })
@@ -48,7 +139,31 @@ try {
     page.on('console', message => { if (message.type() === 'error') failures.push(message.text()) })
     await page.route('http://127.0.0.1:8080/**', async route => {
       const request = route.request()
-      const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
+      const url = new URL(request.url())
+      if (fixtureMode && url.pathname.startsWith('/api/tools/') && request.method() === 'POST') {
+        const tool = decodeURIComponent(url.pathname.split('/').at(-1))
+        const args = JSON.parse(request.postData() ?? '{}')
+        if (tool.startsWith('jobs_')) {
+          const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
+          await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
+          return
+        }
+        if (['compose_restart', 'lxd_launch', 'services_stop', 'samba_share_save', 'updates_install'].includes(tool)) {
+          const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
+          const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
+          assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)
+          deniedByServer.push(tool)
+        }
+        const fixture = fixtureFor(tool, args)
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture ?? { items: [] }) })
+        return
+      }
+      let reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
+      if (fixtureMode && url.pathname === '/api/status' && reply.status === 200) {
+        const status = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
+        status.allowWrites = true
+        reply = { ...reply, body: Buffer.from(JSON.stringify(status)).toString('base64') }
+      }
       if (request.url().includes('/api/tools/monitor_snapshot') && reply.status === 200) {
         const snapshot = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
         sampleTimes.add(snapshot.at)
@@ -82,12 +197,13 @@ try {
     await page.waitForTimeout(2300)
     assert(sampleTimes.size >= 2, 'monitor snapshot did not advance across browser polls')
     await page.screenshot({ path: path.join(artifacts, `${viewport.name}.png`), fullPage: true })
+    if (viewport.name === 'desktop') await exerciseManagement(page)
     await page.getByRole('button', { name: 'Sign out' }).click()
     await page.getByLabel('Access token').waitFor()
     await context.close()
   }
   assert.deepEqual(failures, [], `browser errors: ${failures.join('; ')}`)
-  console.log('Rendered desktop and mobile navigation, authenticated production handler, live monitoring, sign-out and page overflow checks passed.')
+  console.log('Rendered desktop/mobile navigation, live monitoring, page overflow, management forms, confirmation dialogs, payloads and server-denied fixture writes passed.')
 } finally {
   if (browser) await browser.close()
   if (bridge && bridge.exitCode === null) { bridge.stdin.end(); bridge.kill('SIGTERM') }
