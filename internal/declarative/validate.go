@@ -59,6 +59,9 @@ func (c Config) validateFields() error {
 			if strings.HasPrefix(v.Image, "-") || strings.ContainsAny(v.Image, " \t\n\r\x00") || len(v.Image) > 512 {
 				return errors.New("invalid container image")
 			}
+			if v.CPUs > 1024 || v.MemoryMiB > 1<<30 {
+				return errors.New("container resource limit exceeded")
+			}
 			if len(v.Command) > 128 || len(v.Environment) > 128 || len(v.Ports) > 64 || len(v.Mounts) > 64 || len(v.EnvFiles) > 32 {
 				return errors.New("container field limit exceeded")
 			}

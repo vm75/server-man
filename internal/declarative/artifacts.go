@@ -31,23 +31,8 @@ func publishArtifacts(dir string, previous, desired map[string][]byte) error {
 		return err
 	}
 	defer root.Close()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
+	if err = checkArtifactOwnership(dir, previous, desired); err != nil {
 		return err
-	}
-	if len(entries) > 256 {
-		return errors.New("artifact file limit exceeded")
-	}
-	for _, entry := range entries {
-		actual, err := readArtifact(root, entry.Name())
-		if err != nil {
-			return err
-		}
-		old, was := previous[entry.Name()]
-		next, want := desired[entry.Name()]
-		if (!was || !bytes.Equal(old, actual)) && (!want || !bytes.Equal(next, actual)) {
-			return errors.New("generated artifacts were modified externally or contain foreign files")
-		}
 	}
 	for name, data := range desired {
 		if filepath.Base(name) != name || !bytes.HasPrefix(data, []byte(ownedHeader)) {
@@ -104,4 +89,42 @@ func readArtifact(root *os.Root, name string) ([]byte, error) {
 		return nil, errors.New("invalid artifact file")
 	}
 	return io.ReadAll(io.LimitReader(f, MaxConfigBytes+1))
+}
+
+// Check ownership before destructive backend calls as well as before publication.
+func checkArtifactOwnership(dir string, previous, desired map[string][]byte) error {
+	info, err := os.Lstat(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+		return errors.New("unsafe artifact directory")
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	if len(entries) > 256 {
+		return errors.New("artifact file limit exceeded")
+	}
+	for _, entry := range entries {
+		actual, err := readArtifact(root, entry.Name())
+		if err != nil {
+			return err
+		}
+		old, was := previous[entry.Name()]
+		next, want := desired[entry.Name()]
+		if (!was || !bytes.Equal(old, actual)) && (!want || !bytes.Equal(next, actual)) {
+			return errors.New("generated artifacts were modified externally or contain foreign files")
+		}
+	}
+	return nil
 }
