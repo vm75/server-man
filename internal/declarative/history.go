@@ -12,11 +12,8 @@ const HistoryLimit = 8
 
 // History is private and adjacent to the manifest so it follows relocation.
 // Entries are content-addressed and contain configuration, never secret files.
-func (s Store) remember(snapshot Snapshot) error {
-	data, err := Encode(snapshot.Config)
-	if err != nil {
-		return err
-	}
+func (s Store) rememberRaw(data []byte, revision string) error {
+	var err error
 	path := s.Path + ".history"
 	if err = os.Mkdir(path, 0700); err != nil && !os.IsExist(err) {
 		return err
@@ -33,7 +30,7 @@ func (s Store) remember(snapshot Snapshot) error {
 		return err
 	}
 	defer root.Close()
-	name := snapshot.Revision + ".yaml"
+	name := revision + ".yaml"
 	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err == nil {
 		_, err = f.Write(data)

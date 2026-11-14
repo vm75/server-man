@@ -17,6 +17,7 @@ import (
 )
 
 type Config struct {
+	ManifestPath          string `json:"manifestPath"`
 	Listen                string `json:"listen"`
 	VMRoot                string `json:"vmRoot"`
 	PodmanRoot            string `json:"podmanRoot"`
@@ -88,6 +89,9 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.ManifestPath != "" && !filepath.IsAbs(c.ManifestPath) {
+		return errors.New("manifestPath must be absolute")
+	}
 	if c.PrivilegedOperations && (c.SambaConfig != "/etc/samba/smb.conf" || c.SambaManagedFile != "/etc/samba/server-man.conf" || c.PackageManager != "auto") {
 		return errors.New("privilegedOperations uses fixed native Samba paths and automatic package-manager detection")
 	}

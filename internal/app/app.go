@@ -5,6 +5,8 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
+	"serverman/internal/declarative"
 	"time"
 
 	"serverman/internal/admin"
@@ -49,6 +51,13 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 				return map[string]string{"status": "cancellation requested"}, nil
 			}},
 	)
+	if err == nil {
+		path := cfg.ManifestPath
+		if path == "" {
+			path = filepath.Join(cfg.StateDir, "server-man.yaml")
+		}
+		err = declarative.RegisterInspection(registry, declarative.Store{Path: path})
+	}
 	if err == nil && monitoring != nil {
 		err = monitor.Register(registry, monitoring)
 	}

@@ -57,6 +57,8 @@ Use `./bin/server-man -config /absolute/path/config.json` to override defaults:
 
 For direct remote browser/API access, bind to `0.0.0.0:8080` and set `publicOrigin` to the server's non-loopback IP and matching HTTP port, such as `http://192.168.192.78:8080`. The application restricts accepted Host and Origin values to that origin. HTTP session cookies are not Secure; use this only on a trusted network. HTTPS deployments can still use a TLS reverse proxy. See [installation and remote access](docs/installation.md).
 
+The declarative configuration foundation exposes `managed_config_read`, `managed_config_validate`, and `managed_config_health` through the shared API/MCP registry. Set the absolute bootstrap `manifestPath` to select the workload YAML; it defaults to `stateDir/server-man.yaml`. Private editor reads require `allowWrites`. These operations validate and inspect files only; native apply and the Applications UI are still in development. See [current behavior and limits](docs/design/declarative.md).
+
 ## HTTP API
 
 All `/api/` routes require authentication except token sign-in. Send `Authorization: Bearer <token>` for an API client, or use the browser session cookie. Tokens in URL query parameters are not supported.

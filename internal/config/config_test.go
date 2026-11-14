@@ -22,6 +22,8 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		{"helper paths fixed", `{"privilegedOperations":true,"sambaConfig":"/tmp/smb.conf"}`, false},
 		{"helper native packages", `{"privilegedOperations":true,"packageManager":"apt"}`, false},
 		{"ipv6", `{"listen":"[::1]:8081","vmRoot":"/srv/vms"}`, true},
+		{"relative manifest", `{"manifestPath":"workloads.yaml"}`, false},
+		{"absolute manifest", `{"manifestPath":"/srv/workloads/server-man.yaml"}`, true},
 		{"unknown", `{"writse":true}`, false},
 		{"relative root", `{"vmRoot":"vms"}`, false},
 		{"remote without authentication", `{"listen":":8080"}`, false},

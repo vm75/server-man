@@ -21,41 +21,52 @@ type Snapshot struct {
 }
 
 func digest(data []byte) string { s := sha256.Sum256(data); return hex.EncodeToString(s[:]) }
-func (s Store) Read() (Snapshot, error) {
-	var result Snapshot
+
+// ReadRaw permits repair of syntactically invalid YAML without weakening file policy.
+func (s Store) ReadRaw() ([]byte, string, error) {
 	f, err := os.OpenFile(s.Path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return result, err
+		return nil, "", err
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return result, err
+		return nil, "", err
 	}
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return result, errors.New("configuration must be an owner-only regular file")
+		return nil, "", errors.New("configuration must be an owner-only regular file")
 	}
 	data, err := io.ReadAll(io.LimitReader(f, MaxConfigBytes+1))
 	if err != nil {
-		return result, err
+		return nil, "", err
 	}
-	result.Revision = digest(data)
-	result.Config, err = Parse(data)
-	return result, err
+	if len(data) > MaxConfigBytes {
+		return nil, "", errors.New("configuration exceeds 1 MiB")
+	}
+	return data, digest(data), nil
+}
+func (s Store) Read() (Snapshot, error) {
+	data, revision, err := s.ReadRaw()
+	if err != nil {
+		return Snapshot{}, err
+	}
+	c, err := Parse(data)
+	return Snapshot{Config: c, Revision: revision}, err
 }
 func (s Store) Save(c Config, expected string) (Snapshot, error) {
-	old, err := s.Read()
+	raw, revision, err := s.ReadRaw()
 	if err != nil && !os.IsNotExist(err) {
 		return Snapshot{}, err
 	}
 	current := "missing"
 	if err == nil {
-		current = old.Revision
+		current = revision
 	}
 	if expected != current {
 		return Snapshot{}, ErrConflict
 	}
-	c, err = PrepareIdentities(c, old.Config)
+	previous, _ := Parse(raw)
+	c, err = PrepareIdentities(c, previous)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -84,16 +95,16 @@ func (s Store) Save(c Config, expected string) (Snapshot, error) {
 		return Snapshot{}, closeErr
 	}
 	// Recheck immediately before replacement; this also detects external edits.
-	latest, readErr := s.Read()
+	_, latestRevision, readErr := s.ReadRaw()
 	if current == "missing" {
 		if !os.IsNotExist(readErr) {
 			return Snapshot{}, ErrConflict
 		}
-	} else if readErr != nil || latest.Revision != current {
+	} else if readErr != nil || latestRevision != current {
 		return Snapshot{}, ErrConflict
 	}
 	if current != "missing" {
-		if err = s.remember(old); err != nil {
+		if err = s.rememberRaw(raw, revision); err != nil {
 			return Snapshot{}, err
 		}
 	}
