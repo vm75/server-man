@@ -54,6 +54,10 @@ async function exercise(client, label) {
     const deniedService = await client.callTool({ name, arguments: { service: 'website', ...(action === 'start' ? {} : { confirm: true }) } })
     assert.equal(deniedService.structuredContent.error.code, 'writes_disabled')
   }
+  assert(names.includes('managed_services') && names.includes('managed_config_check'))
+  const managed = await client.callTool({ name: 'managed_services', arguments: {} })
+  assert.equal(managed.structuredContent.configured, false)
+  assert.deepEqual(managed.structuredContent.services, [])
   const deniedConfig = await client.callTool({ name: 'managed_config_read', arguments: {} })
   assert.equal(deniedConfig.structuredContent.error.code, 'writes_disabled')
   const configHealth = await client.callTool({ name: 'managed_config_health', arguments: {} })

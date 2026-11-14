@@ -22,6 +22,7 @@ let fixtureMode = false
 
 const project = { engine: 'podman', name: 'demo', directory: '/tmp/vms/config/podman/demo', file: '/tmp/vms/config/podman/demo/compose.yml', envFiles: ['/tmp/vms/data/demo/10-app.env'], disabled: false, state: 'running', containers: 1, running: 1 }
 const fixtures = {
+  managed_services: () => ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
   compose_projects: () => ({ engines: [{ name: 'podman', root: '/tmp/vms/config/podman', available: true }, { name: 'docker', root: '/tmp/vms/config/docker', available: true }], projects: [project], warnings: [] }),
   compose_status: () => ({ project, containers: [{ id: '1234567890abcdef', name: 'demo-web-1', service: 'web', image: 'example/web:latest', state: 'running', status: 'Up', health: '', ports: '', infra: false }], pods: [], warnings: [] }),
   compose_file_read: () => ({ content: 'services:\n  app:\n    image: alpine:latest\n', revision: 'a'.repeat(64) }),
@@ -49,6 +50,13 @@ async function exerciseManagement(page) {
   await page.reload()
   await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
   await page.getByText('Management enabled', { exact: true }).waitFor()
+
+  await page.getByRole('navigation').getByRole('button', { name: 'Applications', exact: true }).click()
+  await page.getByRole('heading', { name: 'Configuration needs attention', exact: true }).waitFor()
+  await page.getByText('Restore the data folder before starting.', { exact: true }).first().waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
+  assert.equal(await page.getByRole('button', { name: 'Disable boot startup', exact: true }).isDisabled(), false)
+  assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, 'application diagnostics overflow')
 
   await page.getByRole('navigation').getByRole('button', { name: 'Containers' }).click()
   await page.getByRole('button', { name: 'demo', exact: true }).click()
@@ -276,7 +284,7 @@ try {
     console.log(`${viewport.name}: signed in`)
     await page.getByText('Connected', { exact: true }).waitFor()
     assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, `${viewport.name} overview overflows horizontally`)
-    for (const name of ['Containers', 'Virtual machines', 'Services', 'File shares', 'Updates', 'Agent access']) {
+    for (const name of ['Applications', 'Containers', 'Virtual machines', 'Services', 'File shares', 'Updates', 'Agent access']) {
       if (viewport.width < 900) {
         await page.getByRole('button', { name: 'Toggle navigation' }).click()
         await page.getByRole('navigation').getByRole('button', { name }).click()

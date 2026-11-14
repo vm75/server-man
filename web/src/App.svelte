@@ -5,6 +5,7 @@
   import Jobs from './lib/Jobs.svelte'
   import Overview from './pages/Overview.svelte'
   import AgentAccess from './pages/AgentAccess.svelte'
+  import Applications from './pages/Applications.svelte'
   import Containers from './pages/Containers.svelte'
   import Machines from './pages/Machines.svelte'
   import Services from './pages/Services.svelte'
@@ -14,6 +15,7 @@
 
   const pages = [
     { id: 'overview', name: 'Overview', subtitle: 'Your server, at a glance.' },
+    { id: 'applications', name: 'Applications', subtitle: 'Managed workloads and configuration health.' },
     { id: 'containers', name: 'Containers', subtitle: 'Compose projects across Podman and Docker.' },
     { id: 'machines', name: 'Virtual machines', subtitle: 'LXC, LXD, and KVM workloads.' },
     { id: 'services', name: 'Services', subtitle: 'System services and their logs.' },
@@ -91,6 +93,8 @@
         <Overview />
       {:else if selected === 'agent' && status}
         <AgentAccess allowWrites={status.allowWrites} />
+      {:else if selected === 'applications' && status}
+        <Applications allowWrites={status.allowWrites} />
       {:else if selected === 'containers' && status}
         <Containers allowWrites={status.allowWrites} />
       {:else if selected === 'machines' && status}

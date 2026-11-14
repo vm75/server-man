@@ -31,6 +31,9 @@ func (c Coordinator) ServiceAction(ctx context.Context, id, action string) error
 		return errors.New("service backend does not support lifecycle operations")
 	}
 	if action != "stop" {
+		if err = c.readinessError(ctx, snapshot.Config, id, false); err != nil {
+			return err
+		}
 		needed := map[string]bool{}
 		var collect func(string)
 		collect = func(id string) {
@@ -80,6 +83,9 @@ func (c Coordinator) SetEnabled(ctx context.Context, id string, enabled bool) (J
 		return Journal{}, errors.New("managed service does not exist")
 	}
 	if enabled {
+		if err = c.readinessError(ctx, snapshot.Config, id, true); err != nil {
+			return Journal{}, err
+		}
 		for _, issue := range c.Store.CheckFiles(snapshot.Config).Issues {
 			if issue.Resource == "service/"+id {
 				return Journal{}, errors.New("repair service file and mount prerequisites before enabling boot startup")

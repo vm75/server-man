@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"syscall"
 	"time"
 )
 
@@ -17,8 +18,9 @@ type Issue struct {
 	Remedy   string `json:"remedy"`
 }
 type Health struct {
-	CheckedAt time.Time `json:"checkedAt"`
-	Issues    []Issue   `json:"issues"`
+	CheckedAt        time.Time `json:"checkedAt"`
+	RuntimeCheckedAt time.Time `json:"runtimeCheckedAt,omitempty"`
+	Issues           []Issue   `json:"issues"`
 }
 
 // CheckFiles is the static filesystem part of preflight. Runtime/backend checks
@@ -28,6 +30,12 @@ func (s Store) CheckFiles(c Config) Health {
 	h := Health{CheckedAt: time.Now().UTC(), Issues: []Issue{}}
 	add := func(resource, field, code, message, remedy string) {
 		h.Issues = append(h.Issues, Issue{"error", resource, field, code, message, remedy})
+	}
+	var mounts []MountInfo
+	mountFile, mountErr := os.Open("/proc/self/mountinfo")
+	if mountErr == nil {
+		mounts, mountErr = ParseMountInfo(mountFile)
+		_ = mountFile.Close()
 	}
 	check := func(resource, field, path, kind string, private bool) {
 		resolved := s.Resolve(path)
@@ -65,8 +73,35 @@ func (s Store) CheckFiles(c Config) Health {
 			add(resource, field, "wrong_type", "A required path has the wrong file type.", "Select the correct file or directory.")
 			return
 		}
+		mode := uint32(4)
+		if kind == "directory" {
+			mode |= 1
+		}
+		if err := syscall.Access(resolved, mode); err != nil {
+			add(resource, field, "path_permissions", "A required path cannot be read or traversed by the service account.", "Restore access permissions or select the correct service account.")
+		}
 		if private && info.Mode().Perm()&0077 != 0 {
 			add(resource, field, "secret_permissions", "A referenced private file allows group or other access.", "Restrict file permissions to the service account.")
+		}
+	}
+	writable := map[string]bool{}
+	for _, service := range c.Services {
+		for _, container := range service.Containers {
+			for _, mount := range container.Mounts {
+				if !mount.ReadOnly {
+					writable[mount.Storage] = true
+				}
+			}
+		}
+		if service.VM != nil {
+			for _, disk := range service.VM.Disks {
+				writable[disk] = true
+			}
+		}
+	}
+	for _, share := range c.Shares {
+		if !share.ReadOnly {
+			writable[share.Storage] = true
 		}
 	}
 	for id, st := range c.Storage {
@@ -75,8 +110,24 @@ func (s Store) CheckFiles(c Config) Health {
 			kind = "directory"
 		}
 		check("storage/"+id, "path", st.Path, kind, false)
+		if writable[id] {
+			if info, err := os.Stat(s.Resolve(st.Path)); err == nil && (info.IsDir() || info.Mode().IsRegular()) {
+				if err = syscall.Access(s.Resolve(st.Path), 2); err != nil {
+					add("storage/"+id, "path", "storage_not_writable", "The service account cannot write required persistent data.", "Restore ownership, ACLs and mount write access before starting the workload.")
+				}
+			}
+		}
 		if st.Mount != "" {
-			add("storage/"+id, "mount", "mount_check_pending", "The expected mounted filesystem has not been verified.", "Verify mount identity before starting dependent services.")
+			if mountErr != nil {
+				add("storage/"+id, "mount", "mount_inventory_unavailable", "Mounted filesystem identity could not be checked.", "Restore access to the host mount inventory and recheck.")
+			} else if !filepath.IsAbs(st.Mount) {
+				add("storage/"+id, "mount", "mount_check_pending", "The expected mounted filesystem requires an absolute device source.", "Set mount to the expected mount source, such as /dev/mapper/data.")
+			} else {
+				path, err := filepath.EvalSymlinks(s.Resolve(st.Path))
+				if err != nil || mountedSource(path, mounts) != st.Mount {
+					add("storage/"+id, "mount", "missing_mount", "The required filesystem is not mounted at the selected data path.", "Mount the expected source before starting services; an empty mountpoint is not restored data.")
+				}
+			}
 		}
 	}
 	for id, path := range c.Secrets {

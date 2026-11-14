@@ -52,8 +52,9 @@ type Journal struct {
 	Resources       map[string]ResourceResult `json:"resources"`
 }
 type Coordinator struct {
-	Store    Store
-	Adapters map[string]Adapter
+	HealthCache *HealthCache
+	Store       Store
+	Adapters    map[string]Adapter
 }
 
 func backend(c Config, key string) string {
