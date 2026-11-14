@@ -177,3 +177,30 @@ func (r *Registry) Invoke(ctx context.Context, name string, raw json.RawMessage,
 	}
 	return tool.Run(ctx, input, io.Discard)
 }
+
+// Execute runs a validated operation synchronously. The privileged one-shot
+// helper uses this after applying its operation allowlist and process lock.
+// Transport callers must use Invoke so writes retain job and audit semantics.
+func (r *Registry) Execute(ctx context.Context, name string, raw json.RawMessage, out io.Writer) (any, error) {
+	tool, ok := r.tools[name]
+	if !ok {
+		return nil, Invalid("unknown operation")
+	}
+	input, err := validate(raw, tool.Fields)
+	if err != nil {
+		return nil, err
+	}
+	if !r.modules[tool.Module].Available {
+		return nil, Unavailable(r.modules[tool.Module].Reason)
+	}
+	if tool.Destructive && !input.Bool("confirm") {
+		return nil, Invalid("confirm must be true for this operation")
+	}
+	if !tool.ReadOnly && !r.AllowWrites {
+		return nil, &Error{Code: "writes_disabled", Message: "Management writes are disabled", Status: 403}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return tool.Run(ctx, input, out)
+}
