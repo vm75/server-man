@@ -208,7 +208,7 @@ func (p *Compose) Inspect(ctx context.Context, c Config, key string) (Observatio
 		seen[container.Name] = true
 		if container.State == "running" {
 			obs.Active = true
-			if container.Fingerprint != containerRuntimeFingerprint(c, key) {
+			if container.Fingerprint != runtimeFingerprint(c, key) {
 				obs.ActiveMatches = false
 			}
 		}
@@ -329,9 +329,9 @@ func (p *Compose) Apply(ctx context.Context, previous, desired Config, key, mode
 				return errors.New("stop removed containers before applying their removal")
 			}
 		}
-		changed := !had || containerRuntimeFingerprint(previous, key) != containerRuntimeFingerprint(desired, key)
+		changed := !had || runtimeFingerprint(previous, key) != runtimeFingerprint(desired, key)
 		for _, container := range containers {
-			if container.State == "running" && container.Fingerprint != containerRuntimeFingerprint(desired, key) {
+			if container.State == "running" && container.Fingerprint != runtimeFingerprint(desired, key) {
 				changed = true
 			}
 		}

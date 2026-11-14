@@ -39,7 +39,7 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 	files := map[string][]byte{}
 	network := quadletNetwork(id)
 	files[network+".network"] = []byte(ownedHeader + "[Network]\nNetworkName=" + network + "\n")
-	fingerprint := containerRuntimeFingerprint(c, key)
+	fingerprint := runtimeFingerprint(c, key)
 	for _, name := range slices.Sorted(maps.Keys(s.Containers)) {
 		v := s.Containers[name]
 		var b strings.Builder
@@ -101,16 +101,4 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 		files[quadletBase(id, name)+".container"] = []byte(b.String())
 	}
 	return files, nil
-}
-
-// Boot policy and display metadata do not change container execution settings.
-func containerRuntimeFingerprint(c Config, key string) string {
-	_, id, _ := strings.Cut(key, "/")
-	s := c.Services[id]
-	s.Enabled = false
-	s.Name = ""
-	s.Description = ""
-	c.Services = maps.Clone(c.Services)
-	c.Services[id] = s
-	return resourceFingerprint(c, key)
 }

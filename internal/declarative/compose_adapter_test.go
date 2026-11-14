@@ -97,7 +97,7 @@ func TestComposeDefineDoesNotStartAndTogglePreservesExecution(t *testing.T) {
 		}
 	}
 	r.commands = nil
-	r.containers = []managedContainer{{"web", "running", containerRuntimeFingerprint(cfg, "service/website")}}
+	r.containers = []managedContainer{{"web", "running", runtimeFingerprint(cfg, "service/website")}}
 	nextData, _ := Encode(cfg)
 	next, _ := Parse(nextData)
 	s := next.Services["website"]
@@ -168,7 +168,7 @@ func TestComposeRemovalRejectsForeignFilesBeforeNativeDown(t *testing.T) {
 }
 func TestComposeRestartUsesRecreationToLoadSavedSettings(t *testing.T) {
 	p, cfg, r := composeFixture(t)
-	r.containers = []managedContainer{{"web", "running", containerRuntimeFingerprint(cfg, "service/website")}}
+	r.containers = []managedContainer{{"web", "running", runtimeFingerprint(cfg, "service/website")}}
 	if err := p.Action(context.Background(), cfg, "service/website", "restart"); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestComposeRemovesOnlyStoppedOwnedMembersWithoutVolumes(t *testing.T) {
 	delete(s.Containers, "old")
 	next.Services["website"] = s
 	r.commands = nil
-	r.containers = []managedContainer{{"old", "exited", containerRuntimeFingerprint(cfg, "service/website")}}
+	r.containers = []managedContainer{{"old", "exited", runtimeFingerprint(cfg, "service/website")}}
 	if err := p.Apply(context.Background(), cfg, next, "service/website", "now"); err != nil {
 		t.Fatal(err)
 	}

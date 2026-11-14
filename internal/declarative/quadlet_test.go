@@ -107,7 +107,7 @@ func (r *quadletRecorder) Capture(_ context.Context, c core.Command) (string, er
 }
 func TestQuadletToggleDoesNotRestartOrEnableGeneratedServices(t *testing.T) {
 	c, cfg, _ := coordinatorFixture(t)
-	r := &quadletRecorder{fingerprint: containerRuntimeFingerprint(cfg, "service/website")}
+	r := &quadletRecorder{fingerprint: runtimeFingerprint(cfg, "service/website")}
 	q := &Quadlet{Store: c.Store, Directory: t.TempDir(), Systemctl: "systemctl", Podman: "podman", Runner: r}
 	svc := cfg.Services["website"]
 	svc.Enabled = false

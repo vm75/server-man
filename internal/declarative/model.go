@@ -24,6 +24,7 @@ type Config struct {
 	Secrets  map[string]string  `yaml:"secrets,omitempty" json:"secrets"`
 }
 type Storage struct {
+	Format   string `yaml:"format,omitempty" json:"format,omitempty"`
 	Path     string `yaml:"path" json:"path"`
 	External bool   `yaml:"external,omitempty" json:"external"`
 	Kind     string `yaml:"kind,omitempty" json:"kind"`
@@ -60,15 +61,18 @@ type Mount struct {
 	ReadOnly bool   `yaml:"read_only,omitempty" json:"readOnly"`
 }
 type VM struct {
-	UUID      string   `yaml:"uuid,omitempty" json:"uuid,omitempty"`
-	MAC       string   `yaml:"mac,omitempty" json:"mac,omitempty"`
-	Image     string   `yaml:"image,omitempty" json:"image,omitempty"`
-	CPUs      int      `yaml:"cpus" json:"cpus"`
-	MemoryMiB int      `yaml:"memory_mib" json:"memoryMiB"`
-	Disks     []string `yaml:"disks,omitempty" json:"disks,omitempty"`
-	Network   string   `yaml:"network" json:"network"`
-	Pool      string   `yaml:"pool,omitempty" json:"pool,omitempty"`
-	Project   string   `yaml:"project,omitempty" json:"project,omitempty"`
+	Architecture string   `yaml:"architecture,omitempty" json:"architecture,omitempty"`
+	Machine      string   `yaml:"machine,omitempty" json:"machine,omitempty"`
+	Firmware     string   `yaml:"firmware,omitempty" json:"firmware,omitempty"`
+	UUID         string   `yaml:"uuid,omitempty" json:"uuid,omitempty"`
+	MAC          string   `yaml:"mac,omitempty" json:"mac,omitempty"`
+	Image        string   `yaml:"image,omitempty" json:"image,omitempty"`
+	CPUs         int      `yaml:"cpus" json:"cpus"`
+	MemoryMiB    int      `yaml:"memory_mib" json:"memoryMiB"`
+	Disks        []string `yaml:"disks,omitempty" json:"disks,omitempty"`
+	Network      string   `yaml:"network" json:"network"`
+	Pool         string   `yaml:"pool,omitempty" json:"pool,omitempty"`
+	Project      string   `yaml:"project,omitempty" json:"project,omitempty"`
 }
 type Share struct {
 	Protocol string   `yaml:"protocol" json:"protocol"`

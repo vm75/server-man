@@ -186,7 +186,7 @@ func (q *Quadlet) Inspect(ctx context.Context, c Config, key string) (Observatio
 			return obs, errors.New("unexpected containers share managed identity")
 		}
 		for _, v := range containers {
-			if v.Labels["io.server-man.fingerprint"] != containerRuntimeFingerprint(c, key) {
+			if v.Labels["io.server-man.fingerprint"] != runtimeFingerprint(c, key) {
 				obs.ActiveMatches = false
 			}
 		}
@@ -239,7 +239,7 @@ func (q *Quadlet) Apply(ctx context.Context, previous, desired Config, key, mode
 	if err = q.Runner.Run(ctx, q.command("daemon-reload"), io.Discard); err != nil {
 		return errors.New("user service manager reload failed")
 	}
-	runtimeChanged := exists && had && containerRuntimeFingerprint(previous, key) != containerRuntimeFingerprint(desired, key)
+	runtimeChanged := exists && had && runtimeFingerprint(previous, key) != runtimeFingerprint(desired, key)
 	if exists && had && mode == "now" && len(active) > 0 && !runtimeChanged {
 		observed, e := q.Inspect(ctx, desired, key)
 		if e != nil {

@@ -40,6 +40,9 @@ func (c Config) validateFields() error {
 		return errors.New("configuration reference limit exceeded")
 	}
 	for _, s := range c.Storage {
+		if s.Format != "" && (s.Kind != "file" || (s.Format != "qcow2" && s.Format != "raw")) {
+			return errors.New("disk format requires file storage and qcow2 or raw")
+		}
 		if !literal(s.Path) || !literal(s.Mount) {
 			return errors.New("invalid storage path characters")
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -324,7 +325,17 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 		err := a.Apply(ctx, previous, desired, change.Resource, j.Mode)
 		if err == nil {
 			var observed Observation
-			observed, err = a.Inspect(ctx, desired, change.Resource)
+			if change.Operation == "remove" {
+				if verifier, ok := a.(interface {
+					VerifyRemoved(context.Context, Config, string) (bool, error)
+				}); ok {
+					observed.Matches, err = verifier.VerifyRemoved(ctx, previous, change.Resource)
+				} else {
+					observed, err = a.Inspect(ctx, desired, change.Resource)
+				}
+			} else {
+				observed, err = a.Inspect(ctx, desired, change.Resource)
+			}
 			if err == nil && observed.Active && !observed.ActiveMatches {
 				state = "restart_required"
 				if j.Mode == "now" {
@@ -440,4 +451,16 @@ func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
 		j.Resources[key] = ResourceResult{Fingerprint: result.Fingerprint, State: "registered"}
 	}
 	return c.apply(ctx, previous, desired, changes, j)
+}
+
+// Boot policy and display metadata do not change container execution settings.
+func runtimeFingerprint(c Config, key string) string {
+	_, id, _ := strings.Cut(key, "/")
+	s := c.Services[id]
+	s.Enabled = false
+	s.Name = ""
+	s.Description = ""
+	c.Services = maps.Clone(c.Services)
+	c.Services[id] = s
+	return resourceFingerprint(c, key)
 }

@@ -47,7 +47,7 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 	services := map[string]composeContainer{}
 	for _, name := range slices.Sorted(maps.Keys(s.Containers)) {
 		v := s.Containers[name]
-		out := composeContainer{Image: literalCompose(v.Image), Ports: v.Ports, Restart: "no", CPUs: v.CPUs, SecurityOpt: []string{"no-new-privileges:true"}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": containerRuntimeFingerprint(c, key)}}
+		out := composeContainer{Image: literalCompose(v.Image), Ports: v.Ports, Restart: "no", CPUs: v.CPUs, SecurityOpt: []string{"no-new-privileges:true"}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": runtimeFingerprint(c, key)}}
 		for _, arg := range v.Command {
 			out.Command = append(out.Command, literalCompose(arg))
 		}
