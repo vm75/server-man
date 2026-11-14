@@ -97,3 +97,26 @@ func TestHistoryStoresExactBytesAndRejectsUnsafeDirectory(t *testing.T) {
 		t.Fatal("unsafe history accepted", err)
 	}
 }
+
+func TestCoordinatorRegistryPolicyAndPreview(t *testing.T) {
+	c, _, _ := coordinatorFixture(t)
+	r := core.NewRegistry(false, nil)
+	if err := RegisterCoordinator(r, c); err != nil {
+		t.Fatal(err)
+	}
+	input, _ := json.Marshal(map[string]any{"content": example, "revision": "missing"})
+	result, err := r.Invoke(context.Background(), "managed_config_plan", input, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.(map[string]any)["plan"].(Plan).Changes) != 1 {
+		t.Fatal(result)
+	}
+	input, _ = json.Marshal(map[string]any{"content": example, "revision": "missing", "mode": "now", "confirm": true})
+	if _, err = r.Invoke(context.Background(), "managed_config_save", input, "test"); err == nil {
+		t.Fatal("write disabled bypass")
+	}
+	if _, err = os.Stat(c.Store.Path); !os.IsNotExist(err) {
+		t.Fatal("preview wrote manifest")
+	}
+}

@@ -9,7 +9,7 @@ server-man runs as one Linux process for the web UI, authenticated JSON APIs and
 | `cmd/server-man/` | Configuration, module assembly, HTTP listener, shutdown |
 | `internal/app/` | Register the application's modules and tools |
 | `internal/auth/` | Private access token, browser sessions, host/origin restrictions |
-| `internal/declarative/` | Portable typed YAML model, private revision-checked store/history, VM identities, file preflight and configuration inspection tools (implementation in progress) |
+| `internal/declarative/` | Portable typed YAML model, private revision-checked store/history, VM identities, file preflight, configuration tools and journaled apply coordinator (implementation in progress) |
 | `internal/core/` | Tool schemas, validation, write policy, process execution, jobs, audit |
 | `internal/modules/monitor/` | Shared Linux resource sampler, bounded history and read-only tools |
 | `internal/modules/compose/` | Project discovery, safe metadata parsing and fixed Compose/native-engine commands |
@@ -27,7 +27,7 @@ Dependency direction is entry point → assembly/transports → core. Domain mod
 
 ## Declarative configuration foundation
 
-The application registers configuration read/validate/health tools through the same core registry. The absolute bootstrap `manifestPath` selects the portable workload YAML, defaulting to `stateDir/server-man.yaml`. The store validates, preserves guest identities, performs private atomic revision-checked saves and retains bounded exact-byte history. Static file preflight never creates missing data and explicitly does not claim runtime readiness. Native apply, full backend adapters and the UI are still being implemented; existing workload modules remain active. See [current foundation behavior](docs/design/declarative.md) and [remaining implementation work](docs/plans/declarative-management.md).
+The application registers configuration read/validate/health and preview/save/apply-status/retry tools through the same core registry. The absolute bootstrap `manifestPath` selects the portable workload YAML, defaulting to `stateDir/server-man.yaml`. The store validates, preserves guest identities, performs private atomic revision-checked saves and retains bounded exact-byte history. Static file preflight never creates missing data and explicitly does not claim runtime readiness. A file-based coordinator journals desired saves and per-resource publication/verification, with dependency ordering, drift inspection and refusal to blindly replay uncertain removals. No native adapters are wired to it yet; such configurations remain explicitly blocked. Full native apply, backend adapters and the UI are still being implemented; existing workload modules remain active. See [current foundation behavior](docs/design/declarative.md) and [remaining implementation work](docs/plans/declarative-management.md).
 
 Domain rules and workflows follow DRY, KISS and YAGNI: share validation and management functions across transports, keep interfaces explicit, and avoid speculative infrastructure.
 

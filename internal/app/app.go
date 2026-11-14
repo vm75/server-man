@@ -57,6 +57,9 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 			path = filepath.Join(cfg.StateDir, "server-man.yaml")
 		}
 		err = declarative.RegisterInspection(registry, declarative.Store{Path: path})
+		if err == nil {
+			err = declarative.RegisterCoordinator(registry, declarative.Coordinator{Store: declarative.Store{Path: path}})
+		}
 	}
 	if err == nil && monitoring != nil {
 		err = monitor.Register(registry, monitoring)

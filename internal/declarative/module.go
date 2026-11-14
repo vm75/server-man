@@ -2,6 +2,7 @@ package declarative
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 
@@ -51,4 +52,67 @@ func RegisterInspection(r *core.Registry, store Store) error {
 			}
 			return map[string]any{"configured": true, "valid": true, "files": store.CheckFiles(c), "runtimeChecked": false}, nil
 		}})
+}
+
+// RegisterCoordinator exposes revision-checked desired-state saves as jobs.
+// Native failures are job failures even when configuration persistence succeeded.
+func RegisterCoordinator(r *core.Registry, c Coordinator) error {
+	fields := func() map[string]core.Field {
+		return map[string]core.Field{"content": core.StringField("Workload YAML", true, MaxConfigBytes), "revision": core.StringField("Current configuration revision, or missing", true, 64)}
+	}
+	saveFields := fields()
+	saveFields["mode"] = core.EnumField("Apply now or publish changes for next start", true, "now", "next_start")
+	return r.AddModule(core.Module{ID: "managed_apply", Title: "Managed configuration apply", Available: true},
+		core.Tool{Name: "managed_config_plan", Title: "Preview configuration changes", Description: "Validate and preview affected resources without publishing or starting workloads. Backend availability is returned explicitly.", ReadOnly: true, Fields: fields(), Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			cfg, err := Parse([]byte(in.String("content")))
+			if err != nil {
+				return nil, core.Invalid("%s", err)
+			}
+			p, err := c.Preview(ctx, cfg, in.String("revision"))
+			if err != nil {
+				return nil, managedError(err)
+			}
+			unavailable := []string{}
+			for _, change := range p.Changes {
+				if c.Adapters[change.Backend] == nil {
+					unavailable = append(unavailable, change.Resource)
+				}
+			}
+			return map[string]any{"plan": p, "unavailable": unavailable}, nil
+		}},
+		core.Tool{Name: "managed_config_save", Title: "Save and apply configuration", Description: "Persist authoritative configuration and apply affected native definitions as a tracked job. Failed apply retains desired configuration and reports failure; no data is deleted implicitly.", Destructive: true, Fields: saveFields, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			cfg, err := Parse([]byte(in.String("content")))
+			if err != nil {
+				return nil, core.Invalid("%s", err)
+			}
+			j, err := c.SaveApply(ctx, cfg, in.String("revision"), in.String("mode"))
+			if err != nil {
+				return nil, managedError(err)
+			}
+			return j, nil
+		}},
+		core.Tool{Name: "managed_apply_status", Title: "Inspect apply progress", Description: "Read durable per-resource application status without retrying or starting resources.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			j, err := c.ReadJournal()
+			if os.IsNotExist(err) {
+				return map[string]any{"stage": "none"}, nil
+			}
+			if err != nil {
+				return nil, core.Unavailable("Apply journal is unreadable or invalid; inspect private state files")
+			}
+			return j, nil
+		}},
+		core.Tool{Name: "managed_apply_retry", Title: "Retry configuration apply", Description: "Inspect incomplete application and retry non-destructive publication as a job. Uncertain interrupted removals require explicit inspection and are not replayed.", Destructive: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			j, err := c.Retry(ctx)
+			if err != nil {
+				return nil, managedError(err)
+			}
+			return j, nil
+		}},
+	)
+}
+func managedError(err error) error {
+	if errors.Is(err, ErrConflict) {
+		return &core.Error{Code: "conflict", Message: ErrConflict.Error(), Status: 409}
+	}
+	return core.Unavailable(err.Error())
 }

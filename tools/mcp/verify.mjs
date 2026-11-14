@@ -41,6 +41,13 @@ async function exercise(client, label) {
     assert(names.includes(name))
     assert.equal(tools.find(t => t.name === name).annotations.readOnlyHint, true)
   }
+  for (const name of ['managed_config_plan', 'managed_config_save', 'managed_apply_status', 'managed_apply_retry']) assert(names.includes(name))
+  const applyStatus = await client.callTool({ name: 'managed_apply_status', arguments: {} })
+  assert.equal(applyStatus.structuredContent.stage, 'none')
+  const deniedSave = await client.callTool({ name: 'managed_config_save', arguments: { content: 'version: 1\n', revision: 'missing', mode: 'now', confirm: true } })
+  assert.equal(deniedSave.structuredContent.error.code, 'writes_disabled')
+  const deniedRetry = await client.callTool({ name: 'managed_apply_retry', arguments: { confirm: true } })
+  assert.equal(deniedRetry.structuredContent.error.code, 'writes_disabled')
   const deniedConfig = await client.callTool({ name: 'managed_config_read', arguments: {} })
   assert.equal(deniedConfig.structuredContent.error.code, 'writes_disabled')
   const configHealth = await client.callTool({ name: 'managed_config_health', arguments: {} })
