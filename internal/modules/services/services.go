@@ -70,7 +70,7 @@ func validUnit(name string) bool {
 	return len(name) <= 255 && !strings.HasPrefix(name, "-") && unitName.MatchString(name)
 }
 func (b *Backend) command(action string, args ...string) core.Command {
-	return core.Command{Program: b.systemctl, Args: append([]string{"--" + b.scope, "--no-pager", "--no-ask-password", action}, args...), Env: []string{"SYSTEMD_COLORS=0", "SYSTEMD_URLIFY=0"}, Timeout: 5 * time.Second}
+	return core.Command{Program: b.systemctl, Args: append([]string{"--" + b.scope, "--no-pager", "--no-ask-password", action}, args...), Env: []string{"SYSTEMD_COLORS=0", "SYSTEMD_URLIFY=0"}, Timeout: 12 * time.Second}
 }
 
 func (b *Backend) List(ctx context.Context) (Inventory, error) {

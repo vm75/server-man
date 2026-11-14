@@ -66,7 +66,7 @@ func TestInventoryMergeContextsAndWhitelistedDetails(t *testing.T) {
 				t.Fatal(inv.Services)
 			}
 			for _, c := range r.commands {
-				if c.Program != "systemctl" || c.Args[0] != "--"+scope || c.Args[1] != "--no-pager" || c.Args[2] != "--no-ask-password" || c.Timeout != 5*time.Second {
+				if c.Program != "systemctl" || c.Args[0] != "--"+scope || c.Args[1] != "--no-pager" || c.Args[2] != "--no-ask-password" || c.Timeout != 12*time.Second {
 					t.Fatal(c)
 				}
 			}

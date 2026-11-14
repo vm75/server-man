@@ -49,6 +49,7 @@ type Snapshot struct {
 }
 type Backend struct {
 	manager                                                   Manager
+	distributionID                                            string
 	program, checkupdates, stateDir, distribution, rebootFile string
 	runner                                                    core.Executor
 	mu                                                        sync.Mutex
@@ -90,7 +91,7 @@ func parseRelease(text string) map[string]string {
 	return result
 }
 func detect(requested string, programs, release map[string]string, ostree bool) *Backend {
-	b := &Backend{distribution: release["PRETTY_NAME"], checkupdates: programs["checkupdates"]}
+	b := &Backend{distributionID: release["ID"], distribution: release["PRETTY_NAME"], checkupdates: programs["checkupdates"]}
 	native := func(id string) string {
 		switch id {
 		case "debian", "ubuntu", "linuxmint", "pop":

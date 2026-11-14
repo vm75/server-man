@@ -65,3 +65,18 @@ func TestRouteRetainsValidationAndUserScope(t *testing.T) {
 		t.Fatal(err, f.calls)
 	}
 }
+
+func TestRouteWritePolicyPreventsElevation(t *testing.T) {
+	f := &clientFixture{t: t}
+	r := core.NewRegistry(false, nil)
+	err := r.AddModule(core.Module{ID: "updates", Available: true}, core.Tool{Name: "packages_install", Destructive: true, Run: func(context.Context, core.Input, io.Writer) (any, error) { t.Fatal("local write ran"); return nil, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	Route(r, Client{Runner: f}, "system")
+	_, err = r.Invoke(context.Background(), "packages_install", json.RawMessage(`{"confirm":true}`), "test")
+	var typed *core.Error
+	if !errors.As(err, &typed) || typed.Code != "writes_disabled" || f.calls != 0 {
+		t.Fatal(err, f.calls)
+	}
+}

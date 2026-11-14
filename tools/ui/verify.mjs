@@ -27,7 +27,7 @@ const fixtures = {
   compose_file_read: () => ({ content: 'services:\n  app:\n    image: alpine:latest\n', revision: 'a'.repeat(64) }),
   compose_env_read: () => ({ content: 'SECRET=fixture-value\n', revision: 'b'.repeat(64) }),
   machines_list: args => ({ backends: [{ id: args.backend, title: args.backend, available: true, context: 'local', actions: args.backend === 'lxd' ? ['launch', 'start', 'stop', 'restart', 'delete'] : [] }], machines: [] }),
-  services_list: () => ({ scope: 'system', available: true, journalAvailable: true, services: [{ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled' }], warnings: [] }),
+  services_list: args => ({ scope: args.scope ?? 'system', available: true, journalAvailable: true, services: [{ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled' }], warnings: [] }),
   services_details: () => ({ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', canStart: false, canStop: true, canReload: true, mainPID: 1234 }),
   shares_list: () => ({ backends: [{ protocol: 'samba', available: true, canManage: true, managedFile: '/tmp/serverman/samba.conf', revision: 'a'.repeat(64), setupRequired: false }, { protocol: 'nfs', available: true, canManage: true, managedFile: '/tmp/serverman/exports', revision: 'b'.repeat(64), setupRequired: false }], shares: [], warnings: [] }),
   updates_status: () => ({ manager: { id: 'apt', title: 'APT', available: true, canRefresh: true }, distribution: 'Ubuntu 24.04', packages: [{ name: 'demo-package', architecture: 'amd64', installed: '1.0', candidate: '1.1', kind: 'upgrade' }], valid: true, notice: 'Fixture package candidates.', cacheSource: 'fixture cache', reboot: { required: false, reason: 'No marker' }, readAt: new Date().toISOString() }),
@@ -110,6 +110,10 @@ async function exerciseManagement(page) {
   await page.locator('.activity-button').click()
 
   await page.getByRole('navigation').getByRole('button', { name: 'Services' }).click()
+  await page.getByLabel('Service manager').selectOption('user')
+  await page.getByText('Current account’s user manager', { exact: true }).waitFor()
+  await page.getByLabel('Service manager').selectOption('system')
+  await page.getByText('System manager', { exact: true }).waitFor()
   await page.getByRole('button', { name: /sshd\.service/ }).click()
   await page.getByRole('button', { name: 'Stop', exact: true }).click()
   const serviceDialog = page.getByRole('dialog')
@@ -120,8 +124,23 @@ async function exerciseManagement(page) {
 
   await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
   await exerciseShareCreation(page, 'documents')
+  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('serverman:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'samba_share_save' })
+  await page.getByRole('button', { name: 'Set up server…', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Set up server', exact: true }).click()
+  await page.locator('.activity-button').click()
+
 
   await page.getByRole('navigation').getByRole('button', { name: 'Updates' }).click()
+  await page.getByRole('textbox', { name: 'Install repository packages' }).fill('samba nfs-utils')
+  await page.getByRole('button', { name: 'Install packages…', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Install packages', exact: true }).click()
+  await page.locator('.activity-button').click()
+  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('serverman:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'packages_install' })
+  await page.getByLabel('Module dependencies', { exact: true }).selectOption('podman')
+  await page.getByRole('button', { name: 'Install dependencies…', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Install dependencies', exact: true }).click()
+  await page.locator('.activity-button').click()
+  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('serverman:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'dependencies_install' })
   await page.getByRole('button', { name: 'Install system updates' }).click()
   const updateDialog = page.getByRole('dialog')
   await updateDialog.getByRole('heading', { name: 'Install system package updates' }).waitFor()
@@ -148,7 +167,14 @@ async function exerciseManagement(page) {
   assert.equal(submitted.samba_share_save?.revision, 'a'.repeat(64))
   assert.equal(submitted.samba_share_save?.users, 'alice')
   assert.equal(submitted.updates_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'samba_share_save', 'services_stop', 'updates_install'].sort())
+  assert.equal(submitted.services_stop?.scope, 'system')
+  assert.equal(submitted.packages_install?.packages, 'samba nfs-utils')
+  assert.equal(submitted.packages_install?.confirm, true)
+  assert.equal(submitted.shares_setup?.protocol, 'samba')
+  assert.equal(submitted.shares_setup?.confirm, true)
+  assert.equal(submitted.dependencies_install?.target, 'podman')
+  assert.equal(submitted.dependencies_install?.confirm, true)
+  assert.deepEqual(deniedByServer.sort(), ['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'samba_share_save', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
   fixtureMode = false
 }
 
@@ -216,7 +242,7 @@ try {
           await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
           return
         }
-        if (['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'services_stop', 'samba_share_save', 'updates_install'].includes(tool)) {
+        if (['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'services_stop', 'samba_share_save', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
           assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)

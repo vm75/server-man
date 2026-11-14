@@ -15,6 +15,9 @@ var installPackageName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9+_.-]{0,127}$
 // InstallPackages accepts repository package names, never paths, URLs, options,
 // repository selectors or package-manager configuration overrides.
 func (b *Backend) InstallPackages(ctx context.Context, names string, out io.Writer) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	packages := strings.Fields(names)
 	if len(packages) == 0 || len(packages) > 32 {
 		return nil, core.Invalid("provide between 1 and 32 package names")
@@ -37,7 +40,7 @@ func (b *Backend) InstallPackages(ctx context.Context, names string, out io.Writ
 	c := core.Command{Program: b.program, Timeout: 20 * time.Minute, CancelGrace: 30 * time.Second, Env: []string{"DEBIAN_FRONTEND=noninteractive", "NEEDRESTART_MODE=l", "NO_COLOR=1"}}
 	switch b.manager.ID {
 	case "apt":
-		c.Args = []string{"--assume-yes", "--no-remove", "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold", "install", "--"}
+		c.Args = []string{"--assume-yes", "--no-remove", "--no-install-recommends", "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold", "install", "--"}
 	case "dnf":
 		c.Args = []string{"--assumeyes", "install", "--"}
 	case "pacman":

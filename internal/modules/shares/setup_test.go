@@ -63,3 +63,21 @@ func TestPrepareNFSPreservesNativeExports(t *testing.T) {
 		t.Fatal("native exports changed")
 	}
 }
+
+func TestPrepareRefusesToActivateUnownedFragment(t *testing.T) {
+	b, _, _ := fixture(t)
+	original := []byte("[global]\n workgroup = OFFICE\n")
+	if err := os.WriteFile(b.sambaConfig, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(b.sambaManaged, []byte("[unmanaged]\n path = /private\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.prepare(context.Background(), "samba"); err == nil {
+		t.Fatal("activated an unowned fragment")
+	}
+	got, _ := os.ReadFile(b.sambaConfig)
+	if string(got) != string(original) {
+		t.Fatal("main config changed")
+	}
+}

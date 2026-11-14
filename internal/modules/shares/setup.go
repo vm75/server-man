@@ -55,6 +55,13 @@ func (b *Backend) prepare(ctx context.Context, protocol string) error {
 	if protocol != "samba" {
 		return core.Invalid("unsupported share protocol")
 	}
+	managed, err := readFile(b.sambaManaged, true)
+	if err != nil {
+		return err
+	}
+	if _, err = load("samba", managed); err != nil {
+		return errors.New("Samba managed filename already contains unowned or invalid configuration")
+	}
 	original, err := readFile(b.sambaConfig, true)
 	if err != nil {
 		return err

@@ -29,7 +29,7 @@ type Response struct {
 
 func allowed(name string) bool {
 	switch name {
-	case "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list",
+	case "dependencies_install", "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list",
 		"samba_share_save", "samba_share_remove", "nfs_share_save", "nfs_share_remove",
 		"services_list", "services_details", "services_logs", "services_start",
 		"services_stop", "services_restart", "services_reload", "services_enable", "services_disable":

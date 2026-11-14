@@ -10,7 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 const repo = fileURLToPath(new URL('../../', import.meta.url))
-const root = await mkdtemp(path.join(tmpdir(), 'serverman-mcp-'))
+const root = await mkdtemp(path.join(tmpdir(), 'server-man-mcp-'))
 const clients = []
 const protocolErrors = []
 let bridge
@@ -98,6 +98,19 @@ async function exercise(client, label) {
     const deniedUpdate = await client.callTool({ name, arguments: name === 'updates_install' ? { confirm: true } : {} })
     assert.equal(deniedUpdate.structuredContent.error.code, 'writes_disabled')
   }
+  for (const [name, args] of [
+    ['packages_install', { packages: 'samba', confirm: true }],
+    ['dependencies_install', { target: 'podman', confirm: true }],
+    ['shares_setup', { protocol: 'nfs', confirm: true }],
+    ['services_restart', { scope: 'user', unit: 'demo.service', confirm: true }],
+  ]) {
+    assert(names.includes(name))
+    const result = await client.callTool({ name, arguments: args })
+    assert.equal(result.structuredContent.error.code, 'writes_disabled')
+  }
+  const badScope = await client.callTool({ name: 'services_list', arguments: { scope: 'other' } })
+  assert.equal(badScope.structuredContent.error.code, 'invalid_arguments')
+  assert.deepEqual(tools.find(t => t.name === 'services_list').inputSchema.properties.scope.enum, ['system', 'user'])
   await client.ping()
   console.log(`${label}: initialize, ${tools.length} tools, live monitoring, schemas, error results and denied writes passed`)
   return tools
@@ -106,10 +119,10 @@ async function exercise(client, label) {
 try {
   const config = path.join(root, 'stdio.json')
   await writeFile(config, JSON.stringify({ vmRoot: path.join(root, 'empty-vms'), stateDir: path.join(root, 'stdio-state'), tokenFile: path.join(root, 'unused-token'), allowWrites: false }), { mode: 0o600 })
-  const stdioClient = new Client({ name: 'serverman-verifier', version: '1.0.0' })
+  const stdioClient = new Client({ name: 'server-man-verifier', version: '1.0.0' })
   stdioClient.onerror = error => protocolErrors.push(error)
   clients.push(stdioClient)
-  const stdio = new StdioClientTransport({ command: path.join(repo, 'bin/serverman'), args: ['-transport', 'stdio', '-config', config], stderr: 'pipe' })
+  const stdio = new StdioClientTransport({ command: path.join(repo, 'bin/server-man'), args: ['-transport', 'stdio', '-config', config], stderr: 'pipe' })
   await stdioClient.connect(stdio)
   const stdioTools = await exercise(stdioClient, 'Official SDK / stdio')
 
@@ -144,7 +157,7 @@ try {
     const body = Buffer.from(response.body ?? '', 'base64')
     return new Response(body.length ? body : null, { status: response.status, headers })
   }
-  const httpClient = new Client({ name: 'serverman-http-verifier', version: '1.0.0' })
+  const httpClient = new Client({ name: 'server-man-http-verifier', version: '1.0.0' })
   httpClient.onerror = error => protocolErrors.push(error)
   clients.push(httpClient)
   await httpClient.connect(new StreamableHTTPClientTransport(new URL('http://127.0.0.1:8080/mcp'), { fetch: fetchInProcess, requestInit: { headers: { Authorization: `Bearer ${token}` } } }))

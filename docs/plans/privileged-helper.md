@@ -70,3 +70,15 @@ discovery took eight seconds. Raised the individual command deadline to twelve
 seconds while retaining the overall API deadline, then verified both inventories.
 The standalone guest verifier is `tools/mcp/verify-vm.mjs`; it requires an explicitly
 provisioned disposable guest and `SERVER_MAN_VM_DIR` with its temporary SSH key.
+
+2026-11-14 dependency implementation: the native package selector, confirmation,
+shared HTTP/MCP tool (`dependencies_install`), fixed distribution package groups,
+and rejection fixtures are implemented. `make check test mcp-test ui-test` passes
+with 57 tools and zero frontend diagnostics; the browser exercises the dependency
+confirmation and the production write-disabled handler rejects it. APT package
+installation omits optional recommendations and explicitly includes the rootless
+UID/network helpers for Podman. Focused race checks also pass after increasing the
+service deadline and adding the unowned-Samba-fragment preservation test. In the
+disposable guest, real `packages_install` and `updates_install` have succeeded;
+the real Podman dependency-group installation also passed. Share integration is
+still running.
