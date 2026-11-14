@@ -58,7 +58,7 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 		}
 		err = declarative.RegisterInspection(registry, declarative.Store{Path: path})
 		if err == nil {
-			coordinator := declarative.Coordinator{HealthCache: &declarative.HealthCache{}, Store: declarative.Store{Path: path}, Adapters: map[string]declarative.Adapter{"podman/quadlet": declarative.NewQuadlet(declarative.Store{Path: path}, runner), "podman/compose": declarative.NewCompose(declarative.Store{Path: path}, "podman", runner), "docker/compose": declarative.NewCompose(declarative.Store{Path: path}, "docker", runner), "libvirt": declarative.NewLibvirt(declarative.Store{Path: path}, cfg.LibvirtURI, runner)}}
+			coordinator := declarative.Coordinator{HealthCache: &declarative.HealthCache{}, Store: declarative.Store{Path: path}, Adapters: map[string]declarative.Adapter{"podman/quadlet": declarative.NewQuadlet(declarative.Store{Path: path}, runner), "podman/compose": declarative.NewCompose(declarative.Store{Path: path}, "podman", runner), "docker/compose": declarative.NewCompose(declarative.Store{Path: path}, "docker", runner), "libvirt": declarative.NewLibvirt(declarative.Store{Path: path}, cfg.LibvirtURI, runner), "incus": declarative.NewIncus(declarative.Store{Path: path}, runner)}}
 			err = declarative.RegisterCoordinator(registry, coordinator)
 			if err == nil {
 				err = declarative.RegisterLifecycle(registry, coordinator)

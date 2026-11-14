@@ -107,6 +107,9 @@ func RenderLibvirt(store Store, c Config, key string) ([]byte, error) {
 	if v.UUID == "" || v.MAC == "" {
 		return nil, errors.New("persistent VM identity is required")
 	}
+	if v.RootSizeGiB != 0 {
+		return nil, errors.New("libvirt root size requires an explicit disk provisioning workflow")
+	}
 	if v.Pool != "" || v.Project != "" {
 		return nil, errors.New("libvirt existing-disk definitions do not use Incus pool/project bindings")
 	}

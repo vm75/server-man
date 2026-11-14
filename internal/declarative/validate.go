@@ -92,6 +92,9 @@ func (c Config) validateFields() error {
 			}
 		}
 		if v := s.VM; v != nil {
+			if v.RootSizeGiB < 0 || v.RootSizeGiB > 1<<20 {
+				return errors.New("invalid VM root disk size")
+			}
 			if v.CPUs > 1024 || v.MemoryMiB > 1<<30 {
 				return errors.New("VM resource limit exceeded")
 			}

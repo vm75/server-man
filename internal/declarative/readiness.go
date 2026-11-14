@@ -12,6 +12,9 @@ import (
 // PrerequisiteAdapter checks native requirements once per backend, independently
 // of per-resource definition syntax and without activating resources.
 type PrerequisiteAdapter interface{ Prerequisites(context.Context) []Issue }
+type ResourcePrerequisiteAdapter interface {
+	ResourcePrerequisites(context.Context, Config, string) []Issue
+}
 type HealthCache struct {
 	mu     sync.Mutex
 	key    string
@@ -60,6 +63,15 @@ func (c Coordinator) Preflight(ctx context.Context, cfg Config, refresh bool) He
 			native = append(native, probe.Prerequisites(ctx)...)
 		} else {
 			native = append(native, Issue{"unknown", "backend/" + target, "runtime", "check_unavailable", "Backend prerequisite checks are not implemented.", "Verify backend access before activating services."})
+		}
+	}
+	for _, resource := range orderedResources(cfg) {
+		if probe, ok := c.Adapters[backend(cfg, resource)].(ResourcePrerequisiteAdapter); ok {
+			if ctx.Err() != nil {
+				native = append(native, Issue{"unknown", resource, "runtime", "check_cancelled", "Resource prerequisites were not checked.", "Recheck configuration when backend access is available."})
+			} else {
+				native = append(native, probe.ResourcePrerequisites(ctx, cfg, resource)...)
+			}
 		}
 	}
 	h.RuntimeCheckedAt = time.Now().UTC()

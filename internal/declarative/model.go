@@ -61,6 +61,7 @@ type Mount struct {
 	ReadOnly bool   `yaml:"read_only,omitempty" json:"readOnly"`
 }
 type VM struct {
+	RootSizeGiB  int      `yaml:"root_size_gib,omitempty" json:"rootSizeGiB,omitempty"`
 	Architecture string   `yaml:"architecture,omitempty" json:"architecture,omitempty"`
 	Machine      string   `yaml:"machine,omitempty" json:"machine,omitempty"`
 	Firmware     string   `yaml:"firmware,omitempty" json:"firmware,omitempty"`
