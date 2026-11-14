@@ -20,9 +20,10 @@ type Adapter interface {
 	Apply(context.Context, Config, Config, string, string) error
 }
 type Observation struct {
-	Registered bool `json:"registered"`
-	Active     bool `json:"active"`
-	Matches    bool `json:"matches"`
+	Registered    bool `json:"registered"`
+	ActiveMatches bool `json:"activeMatches"`
+	Active        bool `json:"active"`
+	Matches       bool `json:"matches"`
 }
 type Change struct {
 	Resource    string `json:"resource"`
@@ -237,7 +238,7 @@ func (c Coordinator) SaveApply(ctx context.Context, candidate Config, expected, 
 		matches := false
 		if a != nil {
 			obs, e := a.Inspect(ctx, desired, key)
-			matches = e == nil && obs.Matches
+			matches = e == nil && obs.Matches && (mode == "next_start" || !obs.Active || obs.ActiveMatches)
 		}
 		if !matches {
 			plan.Changes = append(plan.Changes, Change{key, backend(desired, key), "update", resourceFingerprint(desired, key)})
@@ -318,10 +319,17 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 		if err := c.writeJournal(&j); err != nil {
 			return j, err
 		}
+		state := "registered"
 		err := a.Apply(ctx, previous, desired, change.Resource, j.Mode)
 		if err == nil {
 			var observed Observation
 			observed, err = a.Inspect(ctx, desired, change.Resource)
+			if err == nil && observed.Active && !observed.ActiveMatches {
+				state = "restart_required"
+				if j.Mode == "now" {
+					err = errors.New("running workload has not loaded desired settings")
+				}
+			}
 			if err == nil && !observed.Matches {
 				err = errors.New("native definition does not match desired state")
 			}
@@ -334,7 +342,7 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 			}
 			return j, fmt.Errorf("%s: application failed", change.Resource)
 		}
-		j.Resources[change.Resource] = ResourceResult{Fingerprint: change.Fingerprint, State: "registered"}
+		j.Resources[change.Resource] = ResourceResult{Fingerprint: change.Fingerprint, State: state}
 		if err = c.writeJournal(&j); err != nil {
 			return j, err
 		}
@@ -393,8 +401,12 @@ func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
 		a := c.Adapters[backend(desired, key)]
 		if a != nil {
 			obs, e := a.Inspect(ctx, desired, key)
-			if e == nil && obs.Matches {
-				j.Resources[key] = ResourceResult{result.Fingerprint, "registered", ""}
+			if e == nil && obs.Matches && (j.Mode == "next_start" || !obs.Active || obs.ActiveMatches) {
+				state := "registered"
+				if obs.Active && !obs.ActiveMatches {
+					state = "restart_required"
+				}
+				j.Resources[key] = ResourceResult{result.Fingerprint, state, ""}
 				continue
 			}
 			if err = a.Validate(ctx, desired, key); err != nil {

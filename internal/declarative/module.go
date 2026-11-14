@@ -116,3 +116,23 @@ func managedError(err error) error {
 	}
 	return core.Unavailable(err.Error())
 }
+
+func RegisterLifecycle(r *core.Registry, c Coordinator) error {
+	tools := []core.Tool{}
+	for _, action := range []string{"start", "stop", "restart", "enable", "disable"} {
+		tools = append(tools, core.Tool{Name: "managed_service_" + action, Title: "Managed service " + action, Description: "Manage the authoritative service as a tracked job. Start/stop/restart affect execution; enable/disable affect boot policy only.", Destructive: action != "start", Fields: map[string]core.Field{"service": core.StringField("Managed service ID", true, 63)}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			if action == "enable" || action == "disable" {
+				j, err := c.SetEnabled(ctx, in.String("service"), action == "enable")
+				if err != nil {
+					return nil, managedError(err)
+				}
+				return j, nil
+			}
+			if err := c.ServiceAction(ctx, in.String("service"), action); err != nil {
+				return nil, managedError(err)
+			}
+			return map[string]string{"service": in.String("service"), "action": action}, nil
+		}})
+	}
+	return r.AddModule(core.Module{ID: "managed_lifecycle", Title: "Managed service lifecycle", Available: true}, tools...)
+}

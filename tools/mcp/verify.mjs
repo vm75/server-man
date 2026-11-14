@@ -48,6 +48,12 @@ async function exercise(client, label) {
   assert.equal(deniedSave.structuredContent.error.code, 'writes_disabled')
   const deniedRetry = await client.callTool({ name: 'managed_apply_retry', arguments: { confirm: true } })
   assert.equal(deniedRetry.structuredContent.error.code, 'writes_disabled')
+  for (const action of ['start', 'stop', 'restart', 'enable', 'disable']) {
+    const name = `managed_service_${action}`
+    assert(names.includes(name))
+    const deniedService = await client.callTool({ name, arguments: { service: 'website', ...(action === 'start' ? {} : { confirm: true }) } })
+    assert.equal(deniedService.structuredContent.error.code, 'writes_disabled')
+  }
   const deniedConfig = await client.callTool({ name: 'managed_config_read', arguments: {} })
   assert.equal(deniedConfig.structuredContent.error.code, 'writes_disabled')
   const configHealth = await client.callTool({ name: 'managed_config_health', arguments: {} })

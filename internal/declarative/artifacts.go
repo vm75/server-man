@@ -1,0 +1,107 @@
+package declarative
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"syscall"
+)
+
+// publishArtifacts owns a dedicated resource directory. Existing outputs must
+// match either the prior definition or the desired definition (interrupted apply).
+// It rejects foreign files and symlinks and never touches workload data.
+func publishArtifacts(dir string, previous, desired map[string][]byte) error {
+	if !filepath.IsAbs(dir) {
+		return errors.New("artifact directory must be absolute")
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+		return errors.New("artifact directory must be private and not a symlink")
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	if len(entries) > 256 {
+		return errors.New("artifact file limit exceeded")
+	}
+	for _, entry := range entries {
+		actual, err := readArtifact(root, entry.Name())
+		if err != nil {
+			return err
+		}
+		old, was := previous[entry.Name()]
+		next, want := desired[entry.Name()]
+		if (!was || !bytes.Equal(old, actual)) && (!want || !bytes.Equal(next, actual)) {
+			return errors.New("generated artifacts were modified externally or contain foreign files")
+		}
+	}
+	for name, data := range desired {
+		if filepath.Base(name) != name || !bytes.HasPrefix(data, []byte(ownedHeader)) {
+			return errors.New("invalid owned artifact")
+		}
+		// Create temporary files via the directory handle, preventing path escape.
+		temp := "." + name + ".new"
+		f, err := root.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			return err
+		}
+		_, err = f.Write(data)
+		if err == nil {
+			err = f.Sync()
+		}
+		e := f.Close()
+		if err == nil {
+			err = e
+		}
+		if err == nil {
+			err = root.Rename(temp, name)
+		}
+		if err != nil {
+			_ = root.Remove(temp)
+			return err
+		}
+	}
+	for name := range previous {
+		if _, ok := desired[name]; ok {
+			continue
+		}
+		if err = root.Remove(name); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	d, err := root.Open(".")
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
+}
+func readArtifact(root *os.Root, name string) ([]byte, error) {
+	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > MaxConfigBytes {
+		return nil, errors.New("invalid artifact file")
+	}
+	return io.ReadAll(io.LimitReader(f, MaxConfigBytes+1))
+}
