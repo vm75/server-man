@@ -9,7 +9,8 @@
   import Containers from './pages/Containers.svelte'
   import Machines from './pages/Machines.svelte'
   import Services from './pages/Services.svelte'
-  import Shares from './pages/Shares.svelte'
+  import Shares from './pages/ConfiguredShares.svelte'
+  import Configuration from './pages/Configuration.svelte'
   import Updates from './pages/Updates.svelte'
   import { ApiError, request, type Status } from './lib/api'
 
@@ -19,6 +20,7 @@
     { id: 'containers', name: 'Containers', subtitle: 'Compose projects across Podman and Docker.' },
     { id: 'machines', name: 'Virtual machines', subtitle: 'LXC, LXD, and KVM workloads.' },
     { id: 'services', name: 'Services', subtitle: 'System services and their logs.' },
+    { id: 'configuration', name: 'Configuration', subtitle: 'Storage, bindings, private references and recovery.' },
     { id: 'shares', name: 'File shares', subtitle: 'Samba and NFS exports.' },
     { id: 'updates', name: 'Updates', subtitle: 'Keep your Linux system up to date.' },
     { id: 'agent', name: 'Agent access', subtitle: 'Manage your server through MCP.' },
@@ -101,6 +103,8 @@
         <Machines allowWrites={status.allowWrites} />
       {:else if selected === 'services' && status}
         <Services allowWrites={status.allowWrites} />
+      {:else if selected === 'configuration' && status}
+        <Configuration allowWrites={status.allowWrites} />
       {:else if selected === 'shares' && status}
         <Shares allowWrites={status.allowWrites} />
       {:else if selected === 'updates' && status}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const example = `version: 1
@@ -266,5 +267,41 @@ func TestPortableSymlinkEscapeAndUnverifiedMountBlock(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("unverified mount treated as ready")
+	}
+}
+
+func TestHistoryProtectsReusedBaseAndRejectsTamperedEntries(t *testing.T) {
+	store := Store{Path: filepath.Join(t.TempDir(), "config.yaml")}
+	base := []byte("version: 1\n")
+	rev := digest(base)
+	if err := store.rememberRaw(base, rev); err != nil {
+		t.Fatal(err)
+	}
+	history := filepath.Join(store.Path+".history", rev+".yaml")
+	for n := 0; n < HistoryLimit-1; n++ {
+		data := []byte(strings.Repeat("# note\n", n+1) + "version: 1\n")
+		if err := store.rememberRaw(data, digest(data)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := time.Unix(1, 0)
+	if err := os.Chtimes(history, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.rememberRaw(base, rev); err != nil {
+		t.Fatal(err)
+	}
+	more := []byte("# latest\nversion: 1\n")
+	if err := store.rememberRaw(more, digest(more)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(history); err != nil {
+		t.Fatal("recent reused base was pruned", err)
+	}
+	if err := os.WriteFile(history, []byte("tampered"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.rememberRaw(base, rev); err == nil {
+		t.Fatal("tampered history reused")
 	}
 }

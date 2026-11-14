@@ -111,6 +111,10 @@ func RegisterCoordinator(r *core.Registry, c Coordinator) error {
 	)
 }
 func managedError(err error) error {
+	var structured *core.Error
+	if errors.As(err, &structured) {
+		return structured
+	}
 	if errors.Is(err, ErrConflict) {
 		return &core.Error{Code: "conflict", Message: ErrConflict.Error(), Status: 409}
 	}

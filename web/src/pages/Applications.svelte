@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import DefinitionEditor from '../lib/DefinitionEditor.svelte'
   import ConfirmDialog from '../lib/ConfirmDialog.svelte'
   import { invokeTool, startJob, type Job } from '../lib/api'
   let { allowWrites }: { allowWrites: boolean } = $props()
@@ -10,6 +11,7 @@
   let error = $state('')
   let loading = $state(false)
   let query = $state('')
+  let editor = $state<{id:string} | null>(null)
   let feedback = $state('')
   let activeJob = $state<string | null>(null)
   let pending = $state<{ service: Service; action: string } | null>(null)
@@ -40,14 +42,15 @@
   })
 </script>
 
-<div class="toolbar"><label>Find an application <input type="search" bind:value={query} placeholder="Name or backend" /></label><button disabled={loading} onclick={() => load(true)}>{loading ? 'Checking…' : 'Check configuration'}</button></div>
+<div class="toolbar"><button disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id: ''} }}>Define application</button><label>Find an application <input type="search" bind:value={query} placeholder="Name or backend" /></label><button disabled={loading} onclick={() => load(true)}>{loading ? 'Checking…' : 'Check configuration'}</button></div>
+{#if editor}{#key editor.id}<DefinitionEditor kind="service" resourceID={editor.id} onClose={() => { editor = null }} onSaved={(id) => { activeJob = id; editor = null; feedback = 'Definition save started. Follow its validation and apply progress in Activity.' }} />{/key}{/if}
 {#if error}<p class="form-error" role="alert">{error}</p>{/if}
 {#if feedback}<p role="status">{feedback}</p>{/if}
 {#if inventory?.error}<section class="panel" role="alert"><h2>Configuration needs attention</h2><p>{inventory.error}</p></section>{/if}
 {#if blocked.length}<section class="panel health-alert" role="alert"><h2>Configuration needs attention</h2><p>Some applications have startup requirements to resolve. Restore missing data and repair host dependencies before starting them.</p></section>{/if}
 {#if inventory?.health}<p class="resource-hint">Files checked {new Date(inventory.health.checkedAt).toLocaleString()}. {#if inventory.health.runtimeCheckedAt}Native requirements checked {new Date(inventory.health.runtimeCheckedAt).toLocaleString()}.{/if}</p>{/if}
 {#if !allowWrites}<p class="resource-hint">Management writes are disabled. Status and configuration checks remain available.</p>{/if}
-{#if inventory && !inventory.configured}<section class="panel empty-state"><h2>No managed applications yet</h2><p>No workload configuration has been saved. Application definition forms are being added to this workspace.</p></section>
+{#if inventory && !inventory.configured}<section class="panel empty-state"><h2>No managed applications yet</h2><p>No workload configuration has been saved. Use Define application to create a stopped container application or virtual machine. Configure storage and host bindings in Configuration first.</p></section>
 {:else if inventory && !filtered.length}<section class="panel empty-state"><h2>No matching applications</h2><p>Try a different search.</p></section>{/if}
 <div class="applications">
 {#each filtered as service (service.id)}
@@ -56,6 +59,7 @@
     <dl><div><dt>Start at boot</dt><dd>{service.enabled ? 'Enabled' : 'Disabled'}</dd></div><div><dt>Configuration</dt><dd>{service.configuration.replaceAll('_', ' ')}</dd></div></dl>
     {#if service.issues.length}<ul class="issues">{#each service.issues as issue}<li><strong>{issue.message}</strong><p>{issue.remedy}</p></li>{/each}</ul>{/if}
     <div class="actions">
+      <button disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id:service.id} }}>Edit definition</button>
       {#each ['start', 'stop', 'restart', service.enabled ? 'disable' : 'enable'] as action}
         <button disabled={!allowWrites || activeJob !== null || loading || ((action === 'start' || action === 'restart' || action === 'enable') && service.issues.some(i => i.severity !== 'warning' && (action === 'enable' || i.field !== 'autostart')))} onclick={() => { if (action === 'start') void perform(service, action); else pending = { service, action } }}>{action === 'enable' ? 'Enable boot startup' : action === 'disable' ? 'Disable boot startup' : action.charAt(0).toUpperCase() + action.slice(1)}</button>
       {/each}

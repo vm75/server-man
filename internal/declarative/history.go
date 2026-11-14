@@ -1,11 +1,13 @@
 package declarative
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 const HistoryLimit = 8
@@ -47,6 +49,19 @@ func (s Store) rememberRaw(data []byte, revision string) error {
 		}
 	} else if !os.IsExist(err) {
 		return err
+	} else {
+		existing, e := readArtifact(root, name)
+		if e != nil || !bytes.Equal(existing, data) {
+			return errors.New("existing configuration history is damaged or unsafe")
+		}
+		info, e := root.Lstat(name)
+		if e != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+			return errors.New("configuration history entry must be a private regular file")
+		}
+		// Reusing an older revision makes it recent history again.
+		if e = root.Chtimes(name, time.Now(), time.Now()); e != nil {
+			return e
+		}
 	}
 	entries, err := os.ReadDir(path)
 	if err != nil {
@@ -58,7 +73,7 @@ func (s Store) rememberRaw(data []byte, revision string) error {
 	}
 	var items []item
 	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), ".yaml") || len(e.Name()) != 69 {
+		if e.Name() == name || !strings.HasSuffix(e.Name(), ".yaml") || len(e.Name()) != 69 {
 			continue
 		}
 		i, err := e.Info()
@@ -73,7 +88,7 @@ func (s Store) rememberRaw(data []byte, revision string) error {
 		}
 		return items[i].time > items[j].time
 	})
-	for _, entry := range items[min(len(items), HistoryLimit):] {
+	for _, entry := range items[min(len(items), HistoryLimit-1):] {
 		if err = root.Remove(entry.name); err != nil {
 			return err
 		}

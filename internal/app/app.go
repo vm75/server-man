@@ -74,6 +74,9 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 					err = declarative.RegisterStatus(registry, coordinator)
 					if err == nil {
 						err = declarative.RegisterShareStatus(registry, coordinator)
+						if err == nil {
+							err = declarative.RegisterEditing(registry, coordinator)
+						}
 					}
 				}
 			}

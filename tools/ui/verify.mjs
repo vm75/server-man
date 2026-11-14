@@ -22,6 +22,11 @@ let fixtureMode = false
 
 const project = { engine: 'podman', name: 'demo', directory: '/tmp/vms/config/podman/demo', file: '/tmp/vms/config/podman/demo/compose.yml', envFiles: ['/tmp/vms/data/demo/10-app.env'], disabled: false, state: 'running', containers: 1, running: 1 }
 const fixtures = {
+  managed_config_model: () => ({ revision: 'a'.repeat(64), config: { version: 1, services: {}, shares: {}, storage: { documents: {path:'data/documents',kind:'directory'} }, bindings: { lan:{kind:'network',name:'default'}, pool:{kind:'pool',name:'default'}, project:{kind:'project',name:'default'} }, secrets: {} } }),
+  managed_config_read: () => ({ content: 'version: 1\n', revision: 'a'.repeat(64), valid: true }),
+  managed_apply_status: () => ({ stage: 'complete' }),
+  managed_shares: () => ({ configured: true, revision: 'a'.repeat(64), shares: [] }),
+  managed_resource_plan: args => ({ baseRevision: args.revision, desiredRevision: 'b'.repeat(64), changes: [{resource: `${args.kind}/${args.id}`,backend:'fixture',operation:args.operation}], files: {issues:[]} }),
   managed_services: () => ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
   compose_projects: () => ({ engines: [{ name: 'podman', root: '/tmp/vms/config/podman', available: true }, { name: 'docker', root: '/tmp/vms/config/docker', available: true }], projects: [project], warnings: [] }),
   compose_status: () => ({ project, containers: [{ id: '1234567890abcdef', name: 'demo-web-1', service: 'web', image: 'example/web:latest', state: 'running', status: 'Up', health: '', ports: '', infra: false }], pods: [], warnings: [] }),
@@ -57,6 +62,27 @@ async function exerciseManagement(page) {
   assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
   assert.equal(await page.getByRole('button', { name: 'Disable boot startup', exact: true }).isDisabled(), false)
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, 'application diagnostics overflow')
+  await page.getByRole('button',{name:'Define application',exact:true}).click()
+  const applicationEditor = page.getByRole('region',{name:'Definition editor'})
+  await applicationEditor.getByLabel('Resource ID',{exact:true}).fill('fixture-app')
+  await applicationEditor.getByLabel('Display name',{exact:true}).fill('Fixture application')
+  await applicationEditor.getByLabel('Container engine',{exact:true}).selectOption('docker')
+  assert.equal(await applicationEditor.getByLabel('Container backend',{exact:true}).inputValue(),'compose')
+  assert.equal(await applicationEditor.getByLabel('Container backend',{exact:true}).isDisabled(),true)
+  await applicationEditor.getByLabel('Container image',{exact:true}).fill('docker.io/library/nginx:stable')
+  await applicationEditor.getByRole('button',{name:'Review change',exact:true}).click()
+  await applicationEditor.getByRole('heading',{name:'Review changes',exact:true}).waitFor()
+  await applicationEditor.getByRole('button',{name:'Confirm and save',exact:true}).click()
+  await page.getByText('Definition save started. Follow its validation and apply progress in Activity.',{exact:true}).waitFor()
+  await page.locator('.activity-button').click()
+  const applicationCall = managementCalls.find(call => call.tool === 'managed_resource_save' && call.args.kind === 'service')
+  assert.equal(applicationCall.args.id,'fixture-app')
+  const applicationDefinition = JSON.parse(applicationCall.args.definition)
+  assert.equal(applicationDefinition.engine,'docker')
+  assert.equal(applicationDefinition.backend,'compose')
+  assert.equal(applicationDefinition.enabled,false)
+  assert.equal(applicationDefinition.containers.app.image,'docker.io/library/nginx:stable')
+
 
   await page.getByRole('navigation').getByRole('button', { name: 'Containers' }).click()
   await page.getByRole('button', { name: 'demo', exact: true }).click()
@@ -132,7 +158,7 @@ async function exerciseManagement(page) {
 
   await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
   await exerciseShareCreation(page, 'documents')
-  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('serverman:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'samba_share_save' })
+  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('serverman:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'managed_resource_save' })
   await page.getByRole('button', { name: 'Set up server…', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Set up server', exact: true }).click()
   await page.locator('.activity-button').click()
@@ -172,8 +198,8 @@ async function exerciseManagement(page) {
   assert.equal(submitted.lxd_launch?.name, 'fixture-vm')
   assert.equal(submitted.services_stop?.unit, 'sshd.service')
   assert.equal(submitted.services_stop?.confirm, true)
-  assert.equal(submitted.samba_share_save?.revision, 'a'.repeat(64))
-  assert.equal(submitted.samba_share_save?.users, 'alice')
+  assert.equal(submitted.managed_resource_save?.revision, 'a'.repeat(64))
+  assert.deepEqual(JSON.parse(submitted.managed_resource_save.definition).users, ['alice'])
   assert.equal(submitted.updates_install?.confirm, true)
   assert.equal(submitted.services_stop?.scope, 'system')
   assert.equal(submitted.packages_install?.packages, 'samba nfs-utils')
@@ -182,32 +208,36 @@ async function exerciseManagement(page) {
   assert.equal(submitted.shares_setup?.confirm, true)
   assert.equal(submitted.dependencies_install?.target, 'podman')
   assert.equal(submitted.dependencies_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'samba_share_save', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
+  assert.deepEqual(deniedByServer.sort(), ['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'managed_resource_save', 'managed_resource_save', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
   fixtureMode = false
 }
 
 async function exerciseShareCreation(page, name) {
   const callCount = managementCalls.length
   const denialCount = deniedByServer.length
-  await page.getByRole('button', { name: 'New share' }).click()
-  await page.getByLabel('Share name').fill(name)
-  await page.getByLabel('Existing directory on server').fill(`/srv/shares/${name}`)
-  await page.getByLabel('Allowed users or groups').fill('alice')
-  await page.getByRole('button', { name: 'Review and apply' }).click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByRole('heading', { name: `Create Samba share: ${name}` }).waitFor()
-  assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, 'share review dialog overflows horizontally')
-  if (name === 'mobile-documents') await page.screenshot({ path: path.join(artifacts, 'mobile-share-review.png') })
-  await dialog.getByRole('button', { name: 'Save and apply' }).click()
-  await page.getByText('Share job started. Follow validation, apply and any rollback in Activity.', { exact: true }).waitFor()
+  await page.getByRole('button', {name:'Define file share',exact:true}).click()
+  const editor = page.getByRole('region', {name:'Definition editor'})
+  await editor.getByLabel('Resource ID',{exact:true}).fill(name)
+  await editor.getByLabel('Shared storage',{exact:true}).selectOption('documents')
+  await editor.getByLabel('Local users and @groups',{exact:true}).fill('alice')
+  await editor.getByLabel('Publish this share',{exact:true}).check()
+  await editor.getByRole('button',{name:'Review change',exact:true}).click()
+  await editor.getByRole('heading',{name:'Review changes',exact:true}).waitFor()
+  assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'central share editor overflows')
+  if (name === 'mobile-documents') await page.screenshot({path:path.join(artifacts,'mobile-share-review.png')})
+  await editor.getByRole('button',{name:'Confirm and save',exact:true}).click()
+  await page.getByText('Share definition save started. Follow Activity for validation and publication.',{exact:true}).waitFor()
   await page.locator('.activity-button').click()
-  const submitted = managementCalls.slice(callCount).find(call => call.tool === 'samba_share_save')
-  assert.equal(submitted?.args.name, name)
-  assert.equal(submitted?.args.path, `/srv/shares/${name}`)
-  assert.equal(submitted?.args.revision, 'a'.repeat(64))
-  assert.equal(submitted?.args.users, 'alice')
-  assert.equal(submitted?.args.confirm, true)
-  assert.equal(deniedByServer.length, denialCount + 1)
+  const submitted = managementCalls.slice(callCount).find(call => call.tool === 'managed_resource_save')
+  assert.equal(submitted?.args.kind,'share')
+  assert.equal(submitted?.args.id,name)
+  assert.equal(submitted?.args.revision,'a'.repeat(64))
+  assert.equal(submitted?.args.confirm,true)
+  const definition = JSON.parse(submitted.args.definition)
+  assert.deepEqual(definition.users,['alice'])
+  assert.equal(definition.storage,'documents')
+  assert.equal(definition.enabled,true)
+  assert.equal(deniedByServer.length,denialCount+1)
 }
 
 try {
@@ -250,7 +280,7 @@ try {
           await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
           return
         }
-        if (['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'services_stop', 'samba_share_save', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
+        if (['compose_project_create', 'compose_file_save', 'compose_env_save', 'compose_data_mkdir', 'compose_restart', 'lxd_launch', 'services_stop', 'managed_resource_save', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
           assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)
@@ -284,7 +314,7 @@ try {
     console.log(`${viewport.name}: signed in`)
     await page.getByText('Connected', { exact: true }).waitFor()
     assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, `${viewport.name} overview overflows horizontally`)
-    for (const name of ['Applications', 'Containers', 'Virtual machines', 'Services', 'File shares', 'Updates', 'Agent access']) {
+    for (const name of ['Applications', 'Configuration', 'Containers', 'Virtual machines', 'Services', 'File shares', 'Updates', 'Agent access']) {
       if (viewport.width < 900) {
         await page.getByRole('button', { name: 'Toggle navigation' }).click()
         await page.getByRole('navigation').getByRole('button', { name }).click()
