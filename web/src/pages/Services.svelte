@@ -7,6 +7,7 @@
 
   let { allowWrites }: { allowWrites: boolean } = $props()
   let inventory = $state<ServiceInventory | null>(null), loading = $state(true), error = $state('')
+  let scope = $state('system')
   let filter = $state(''), stateFilter = $state('all'), selectedName = $state('')
   let details = $state<ServiceDetails | null>(null), detailLoading = $state(false), detailError = $state('')
   let logs = $state<ServiceLogs | null>(null), logLoading = $state(false), logError = $state(''), tail = $state(200)
@@ -24,9 +25,17 @@
     listController?.abort(); listController = new AbortController()
     const controller = listController
     loading = true; error = ''
-    try { const result = await invokeTool<ServiceInventory>('services_list', {}, controller.signal); if (stopped || controller.signal.aborted) return; inventory = result; if (selectedName && !result.services.some(s => s.name === selectedName) && !result.warnings.length) { selectedName = ''; details = null } }
+    try { const result = await invokeTool<ServiceInventory>('services_list', { scope }, controller.signal); if (stopped || controller.signal.aborted) return; inventory = result; if (selectedName && !result.services.some(s => s.name === selectedName) && !result.warnings.length) { selectedName = ''; details = null } }
     catch (e) { if (!controller.signal.aborted) error = e instanceof Error ? e.message : 'Could not list services' }
     finally { if (!controller.signal.aborted) loading = false }
+  }
+
+  function changeScope() {
+    detailController?.abort(); logController?.abort()
+    selectedName = ''; details = null; logs = null; pending = null
+    detailError = ''; logError = ''; feedback = ''; inventory = null
+    detailLoading = false; logLoading = false
+    void load()
   }
 
   async function inspect(service: Service) {
@@ -36,7 +45,7 @@
     if (selectedName !== service.name) { details = null; logs = null; logError = ''; logController?.abort(); logLoading = false }
     selectedName = service.name; detailLoading = true; detailError = ''
     try {
-      const result = await invokeTool<ServiceDetails>('services_details', { unit: service.name }, controller.signal)
+      const result = await invokeTool<ServiceDetails>('services_details', { unit: service.name, scope }, controller.signal)
       if (stopped || controller.signal.aborted || selectedName !== service.name) return
       details = result
       // Keep the selected alias as the request identity; the backend can return its canonical Id.
@@ -51,14 +60,14 @@
     logController?.abort(); logController = new AbortController()
     const controller = logController
     logLoading = true; logError = ''; logs = null
-    try { const result = await invokeTool<ServiceLogs>('services_logs', { unit: name, tail }, controller.signal); if (!stopped && !controller.signal.aborted && selectedName === name) logs = result }
+    try { const result = await invokeTool<ServiceLogs>('services_logs', { unit: name, tail, scope }, controller.signal); if (!stopped && !controller.signal.aborted && selectedName === name) logs = result }
     catch (e) { if (!controller.signal.aborted) logError = e instanceof Error ? e.message : 'Could not read journal' }
     finally { if (!controller.signal.aborted) logLoading = false }
   }
 
   async function perform(unit: string, action: string) {
     submitting = true; error = ''; feedback = ''; failed = false
-    try { const args: Record<string, unknown> = { unit }; if (!['start', 'enable'].includes(action)) args.confirm = true; const job = await startJob(`services_${action}`, args); activeJob = job.id; feedback = 'Service job started. Follow its output in Activity.' }
+    try { const args: Record<string, unknown> = { unit, scope }; if (!['start', 'enable'].includes(action)) args.confirm = true; const job = await startJob(`services_${action}`, args); activeJob = job.id; feedback = 'Service job started. Follow its output in Activity.' }
     catch (e) { error = e instanceof Error ? e.message : 'Could not start service job' }
     finally { submitting = false; pending = null }
   }
@@ -80,7 +89,7 @@
   })
 </script>
 
-<div class="compose-toolbar"><div class="service-summary"><strong>{inventory?.services.length ?? '—'} services</strong><span class="service-running">{activeCount} active</span><span class:service-failed={failedCount > 0}>{failedCount} failed</span></div><div class="compose-search"><label class="sr-only" for="service-filter">Filter services</label><input id="service-filter" type="search" placeholder="Find a service…" bind:value={filter} /><label class="sr-only" for="service-state">Service state</label><select id="service-state" bind:value={stateFilter}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="failed">Failed</option><option value="activating">Activating</option><option value="unknown">Unknown</option></select><button onclick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button></div></div>
+<div class="compose-toolbar"><div class="service-summary"><strong>{inventory?.services.length ?? '—'} services</strong><span class="service-running">{activeCount} active</span><span class:service-failed={failedCount > 0}>{failedCount} failed</span></div><div class="compose-search"><label class="sr-only" for="service-scope">Service manager</label><select id="service-scope" bind:value={scope} onchange={changeScope} disabled={submitting || activeJob !== null}><option value="system">System services</option><option value="user">My services</option></select><label class="sr-only" for="service-filter">Filter services</label><input id="service-filter" type="search" placeholder="Find a service…" bind:value={filter} /><label class="sr-only" for="service-state">Service state</label><select id="service-state" bind:value={stateFilter}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="failed">Failed</option><option value="activating">Activating</option><option value="unknown">Unknown</option></select><button onclick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button></div></div>
 {#if !allowWrites}<div class="policy-note"><span class="connection-dot"></span>Read only. Management writes can be enabled in the server configuration.</div>{/if}
 {#if error}<div class="notice error compose-notice" role="alert"><p>{error}</p><button onclick={load}>Retry</button></div>{/if}
 {#if feedback}<div class="job-feedback" class:failed role="status">{feedback}</div>{/if}

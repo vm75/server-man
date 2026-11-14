@@ -15,6 +15,7 @@ import (
 )
 
 type Command struct {
+	Stdin   io.Reader
 	Program string
 	Args    []string
 	Dir     string
@@ -61,6 +62,7 @@ func run(ctx context.Context, command Command, stdout, stderr io.Writer) error {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, command.Program, command.Args...)
 	cmd.Dir = command.Dir
+	cmd.Stdin = command.Stdin
 	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C", "SYSTEMD_PAGER=cat", "PAGER=cat", "TERM=dumb")
 	cmd.Env = append(cmd.Env, command.Env...)
 	cmd.Stdout, cmd.Stderr = stdout, stderr

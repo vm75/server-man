@@ -7,7 +7,7 @@ import (
 )
 
 func TestPackagedExampleConfig(t *testing.T) {
-	if _, err := Load("../../packaging/serverman.example.json"); err != nil {
+	if _, err := Load("../../packaging/server-man.example.json"); err != nil {
 		t.Fatalf("packaged example config is invalid: %v", err)
 	}
 }
@@ -18,6 +18,9 @@ func TestLoadStrictConfiguration(t *testing.T) {
 		valid      bool
 	}{
 		{"defaults", `{}`, true},
+		{"privileged mode", `{"privilegedOperations":true}`, true},
+		{"helper paths fixed", `{"privilegedOperations":true,"sambaConfig":"/tmp/smb.conf"}`, false},
+		{"helper native packages", `{"privilegedOperations":true,"packageManager":"apt"}`, false},
 		{"ipv6", `{"listen":"[::1]:8081","vmRoot":"/srv/vms"}`, true},
 		{"unknown", `{"writse":true}`, false},
 		{"relative root", `{"vmRoot":"vms"}`, false},

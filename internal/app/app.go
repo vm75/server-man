@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"serverman/internal/admin"
 	"serverman/internal/buildinfo"
 	"serverman/internal/config"
 	"serverman/internal/core"
@@ -65,6 +66,12 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 	}
 	if err == nil {
 		err = updates.New(cfg, runner).Register(registry)
+	}
+	if err == nil {
+		err = shares.RegisterSetup(registry, cfg, runner)
+	}
+	if err == nil && cfg.PrivilegedOperations {
+		admin.Route(registry, admin.Client{Runner: runner}, cfg.SystemdScope)
 	}
 	return registry, err
 }

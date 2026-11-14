@@ -33,6 +33,7 @@ type Config struct {
 	StateDir              string `json:"stateDir"`
 	TokenFile             string `json:"tokenFile"`
 	PublicOrigin          string `json:"publicOrigin"`
+	PrivilegedOperations  bool   `json:"privilegedOperations"`
 	AllowWrites           bool   `json:"allowWrites"`
 	SampleIntervalSeconds int    `json:"sampleIntervalSeconds"`
 }
@@ -50,7 +51,7 @@ func Defaults() (Config, error) {
 	if stateRoot == "" {
 		stateRoot = filepath.Join(home, ".local", "state")
 	}
-	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "serverman"), TokenFile: filepath.Join(configDir, "serverman", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/serverman.conf", PackageManager: "auto", SampleIntervalSeconds: 2}, nil
+	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "server-man"), TokenFile: filepath.Join(configDir, "server-man", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/server-man.conf", PackageManager: "auto", SampleIntervalSeconds: 2}, nil
 }
 
 func Load(path string) (Config, error) {
@@ -87,6 +88,10 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.PrivilegedOperations && (c.SambaConfig != "/etc/samba/smb.conf" || c.SambaManagedFile != "/etc/samba/server-man.conf" || c.PackageManager != "auto") {
+		return errors.New("privilegedOperations uses fixed native Samba paths and automatic package-manager detection")
+	}
+
 	if c.PackageManager != "auto" && c.PackageManager != "apt" && c.PackageManager != "dnf" && c.PackageManager != "pacman" && c.PackageManager != "zypper" {
 		return errors.New("packageManager must be auto, apt, dnf, pacman or zypper")
 	}
@@ -147,7 +152,7 @@ func (c Config) Validate() error {
 		if !filepath.IsAbs(path) || strings.ContainsAny(path, "\\%") || strings.ContainsFunc(path, unicode.IsControl) || strings.TrimSpace(path) != path || filepath.Clean(path) != path {
 			return errors.New("Samba config paths must be clean absolute literal paths")
 		}
-		if path == "/etc/exports" || path == "/etc/exports.d/serverman.exports" {
+		if path == "/etc/exports" || (path == "/etc/exports.d/server-man.exports" || path == "/etc/exports.d/serverman.exports") {
 			return errors.New("Samba config paths must not overlap native NFS configuration")
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"serverman/internal/modules/services"
 	"serverman/internal/modules/shares"
 	"serverman/internal/modules/updates"
+	"strings"
 )
 
 type Request struct {
@@ -22,11 +23,13 @@ type Response struct {
 	Result any    `json:"result,omitempty"`
 	Output string `json:"output,omitempty"`
 	Error  string `json:"error,omitempty"`
+	Code   string `json:"code,omitempty"`
+	Status int    `json:"status,omitempty"`
 }
 
 func allowed(name string) bool {
 	switch name {
-	case "updates_status", "updates_refresh", "updates_install", "shares_list",
+	case "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list",
 		"samba_share_save", "samba_share_remove", "nfs_share_save", "nfs_share_remove",
 		"services_list", "services_details", "services_logs", "services_start",
 		"services_stop", "services_restart", "services_reload", "services_enable", "services_disable":
@@ -57,6 +60,12 @@ func Serve(ctx context.Context, cfg config.Config, runner core.Executor, in io.R
 	if !allowed(req.Operation) {
 		return errors.New("operation is not allowed")
 	}
+	if strings.HasPrefix(req.Operation, "services_") {
+		var args core.Input
+		if err := json.Unmarshal(req.Arguments, &args); err == nil && args.String("scope") != "" && args.String("scope") != "system" {
+			return errors.New("helper manages system services only")
+		}
+	}
 	registry := core.NewRegistry(true, nil)
 	if err = services.New("system", runner).Register(registry); err != nil {
 		return err
@@ -67,6 +76,9 @@ func Serve(ctx context.Context, cfg config.Config, runner core.Executor, in io.R
 	if err = updates.New(cfg, runner).Register(registry); err != nil {
 		return err
 	}
+	if err = shares.RegisterSetup(registry, cfg, runner); err != nil {
+		return err
+	}
 	output := core.NewTail(128 << 10)
 	result, runErr := registry.Execute(ctx, req.Operation, req.Arguments, output)
 	text, _ := output.Snapshot()
@@ -74,6 +86,13 @@ func Serve(ctx context.Context, cfg config.Config, runner core.Executor, in io.R
 	if runErr != nil {
 		response.Result = nil
 		response.Error = runErr.Error()
+		response.Code = "operation_failed"
+		response.Status = 500
+		var typed *core.Error
+		if errors.As(runErr, &typed) {
+			response.Code = typed.Code
+			response.Status = typed.Status
+		}
 	}
 	return json.NewEncoder(out).Encode(response)
 }

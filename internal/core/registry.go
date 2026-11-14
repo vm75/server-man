@@ -204,3 +204,12 @@ func (r *Registry) Execute(ctx context.Context, name string, raw json.RawMessage
 	}
 	return tool.Run(ctx, input, out)
 }
+
+// Transform configures tool execution before the registry is published. Schemas,
+// write policy, job scheduling and audit remain owned by the registry.
+func (r *Registry) Transform(wrap func(Tool) func(context.Context, Input, io.Writer) (any, error)) {
+	for name, tool := range r.tools {
+		tool.Run = wrap(tool)
+		r.tools[name] = tool
+	}
+}

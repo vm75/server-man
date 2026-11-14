@@ -6,10 +6,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"serverman/internal/admin"
 	"serverman/internal/config"
 	"serverman/internal/core"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -58,5 +60,9 @@ func run() error {
 	}
 	cfg.StateDir = "/var/lib/server-man-admin"
 	// Privileged configuration paths are fixed, independently of X's app config.
-	return admin.Serve(context.Background(), cfg, core.Runner{}, os.Stdin, os.Stdout)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Minute)
+	defer cancel()
+	return admin.Serve(ctx, cfg, core.Runner{}, os.Stdin, os.Stdout)
 }
