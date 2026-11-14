@@ -1,0 +1,4 @@
+# Replace X with the Linux account running server-man. Install with visudo.
+# The executable and its parent directories must be root-owned and not writable
+# by X. Requests are validated JSON on stdin; command arguments are forbidden.
+X ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/server-man-admin ""

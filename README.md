@@ -10,13 +10,13 @@ The overview has CPU/network histories, per-core CPU meters, memory/swap, local 
 
 **Virtual machines** separates LXD, classic LXC and KVM/libvirt inventory and controls. Launch LXD containers/VMs, manage existing classic containers, and manage libvirt lifecycle/autostart or define an existing KVM XML file. See [machine setup and behavior](docs/design/machines.md) for backend contexts, supported actions and retained storage.
 
-**Services** combines installed systemd units with runtime state, selected properties and bounded journal output. Start/stop/restart/reload and startup enablement run as jobs. `systemdScope` defaults to `system`; set it to `user` for the server account's user manager. See [service management](docs/design/services.md) for permissions and action semantics.
+**Services** combines installed systemd units with runtime state, selected properties and bounded journal output. Start/stop/restart/reload and startup enablement run as jobs. The Services selector switches between system and current-user managers. `systemdScope` supplies the API/MCP default. See [service management](docs/design/services.md) for permissions and action semantics.
 
 **File shares** inspects existing Samba/NFS shares and creates, edits, removes or reapplies application-owned shares. Saves validate a candidate, publish an atomic fragment and apply native changes, with rollback on failure. Existing host configuration and shared directory data are preserved. See [share setup and behavior](docs/design/shares.md) for the required Samba include, NFS server setup, access fields and runtime-state limits.
 
 **Updates** inspects cached candidates, refreshes metadata and installs normal system updates through APT, DNF/DNF5, Pacman or Zypper. It reports reboot requirements where detectable and never requests reboot or a distribution migration. `packageManager` defaults to `auto`; an explicit supported family can be configured. Arch metadata refresh uses an isolated `checkupdates` database. See [update behavior](docs/design/updates.md) for commands, capabilities, cancellation and repository limits.
 
-The canonical product name is **server-man**. Compatibility identifiers remain `serverman`: the Go module and entry point, executable, systemd unit names, default config/state paths, session cookie, internal browser events, share ownership format and native fragment filenames, and `SERVERMAN_*` environment variables. Existing installations need no path migration. MCP advertises `server-man`; tool names and schemas are unchanged.
+The canonical product name is **server-man**. Compatibility identifiers remain `server-man`: the Go module and entry point, executable, systemd unit names, default config/state paths, session cookie, internal browser events, share ownership format and native fragment filenames, and `SERVERMAN_*` environment variables. Existing installations need no path migration. MCP advertises `server-man`; tool names and schemas are unchanged.
 
 ## Build and run
 
@@ -29,18 +29,18 @@ make test
 make mcp-test
 make ui-test
 make build
-./bin/serverman
+./bin/server-man
 ```
 
-Open `http://127.0.0.1:8080`. Sign in with the access token from the private file created on first start. The startup log shows its path; the default is `~/.config/serverman/token` (or under `XDG_CONFIG_HOME`). The server binds to loopback. `GET /healthz` provides a small unauthenticated JSON health response.
+Open `http://127.0.0.1:8080`. Sign in with the access token from the private file created on first start. The startup log shows its path; the default is `~/.config/server-man/token` (or under `XDG_CONFIG_HOME`). The server binds to loopback. `GET /healthz` provides a small unauthenticated JSON health response.
 
-Management writes are disabled by default. When enabled, jobs run one at a time and appear in **Activity**. Instances using the same state directory also serialize writes through a file lock. Cancelling a job stops its remaining work; it does not undo completed changes. Package commands first receive an interrupt and have up to 30 seconds before forced termination; interrupted package transactions can require native recovery. Each process retains 64 recent jobs in memory and records audit metadata under `~/.local/state/serverman` (or `XDG_STATE_HOME`).
+Management writes are disabled by default. When enabled, jobs run one at a time and appear in **Activity**. Instances using the same state directory also serialize writes through a file lock. Cancelling a job stops its remaining work; it does not undo completed changes. Package commands first receive an interrupt and have up to 30 seconds before forced termination; interrupted package transactions can require native recovery. Each process retains 64 recent jobs in memory and records audit metadata under `~/.local/state/server-man` (or `XDG_STATE_HOME`).
 
 ## Development
 
 Run `make api` in one terminal and `make dev` in another. Open the Vite address (`http://127.0.0.1:5173`); Vite proxies API requests to Go. Rebuild with `make build` to embed updated frontend assets in the executable. A Go-only build without generated UI assets serves APIs and an explanatory 503 response for the UI.
 
-Use `./bin/serverman -config /absolute/path/config.json` to override defaults:
+Use `./bin/server-man -config /absolute/path/config.json` to override defaults:
 
 ```json
 {
@@ -82,7 +82,7 @@ Updates expose `updates_status`, `updates_refresh` and destructive `updates_inst
 Open **Agent access** in the UI for discovery and connection details. The running server provides Streamable HTTP at `/mcp`, authenticated with the same server access token. Local agents can launch a separate stdio process:
 
 ```sh
-/absolute/path/to/serverman -transport stdio -config /absolute/path/to/config.json
+/absolute/path/to/server-man -transport stdio -config /absolute/path/to/config.json
 ```
 
 Use HTTP to share the web server's jobs and history. A local stdio process has its own history and cancels unfinished work when it exits. See [MCP connection details and Hermes/OpenClaw examples](docs/design/mcp.md) for setup, schemas, protocol limits, and the verification scope. `make mcp-test` checks both transports with the official SDK; Node and its SDK are only verification dependencies.
@@ -92,3 +92,15 @@ See [architecture](ARCHITECTURE.md) for shared operation boundaries, resource li
 This checkout is rooted at `/home/shasak/ws/server-man` with its own writable `.git` directory. See the [host setup record](docs/operations/host-setup.md) for this server’s deployment and example workloads.
 
 This headless host is available on the LAN at **http://192.168.192.78:8080**, with token authentication and writes disabled. See the [host setup record](docs/operations/host-setup.md#direct-lan-http-follow-up-2026-10-16).
+
+Run the application as your workload account with `privilegedOperations: true`
+and the restricted sudo helper to administer packages, system services, and
+Samba/NFS while retaining your own user services and rootless containers. See
+[installation](docs/installation.md#run-as-your-workload-account). The Updates page
+also installs named repository packages (`packages_install`), and Shares offers
+explicit native server setup (`shares_setup`); both require confirmation and
+`allowWrites`.
+
+Updates also offers **Install dependencies** (`dependencies_install`) for
+Podman/Compose, Docker/Compose, Samba, NFS, x86 QEMU/libvirt and classic LXC using
+native repositories. Restart the app afterward to refresh provider discovery.

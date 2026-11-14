@@ -6,7 +6,7 @@ server-man runs as one Linux process for the web UI, authenticated JSON APIs and
 
 | Path | Responsibility |
 | --- | --- |
-| `cmd/serverman/` | Configuration, module assembly, HTTP listener, shutdown |
+| `cmd/server-man/` | Configuration, module assembly, HTTP listener, shutdown |
 | `internal/app/` | Register the application's modules and tools |
 | `internal/auth/` | Private access token, browser sessions, host/origin restrictions |
 | `internal/core/` | Tool schemas, validation, write policy, process execution, jobs, audit |
@@ -51,7 +51,7 @@ Compose discovery reads file metadata without opening configuration or environme
 
 Machine management fixes backend context in configuration and uses separate executables for LXD and classic LXC. Libvirt mutations resolve the selected domain to a UUID before execution. Deletion checks stopped/inactive state; no disk-removal flags are exposed for libvirt. XML import checks a configured directory boundary and passes a private validated snapshot to `virsh define --validate`. See [machine design](docs/design/machines.md) for CLI mappings and verification limits.
 
-Service management fixes system/user scope in configuration, merges installed unit files with loaded runtime state and reports partial reads explicitly. Only exact validated `.service` names reach lifecycle or journal commands. Details select an explicit property allowlist; enablement does not imply a runtime start/stop. See [service design](docs/design/services.md) for parser compatibility, limits and permissions.
+Service management accepts an explicit system/user scope, defaulted by configuration, merges installed unit files with loaded runtime state and reports partial reads explicitly. Only exact validated `.service` names reach lifecycle or journal commands. Details select an explicit property allowlist; enablement does not imply a runtime start/stop. See [service design](docs/design/services.md) for parser compatibility, limits and permissions.
 
 Shares store typed definitions as comments beside their generated native fragment. Ownership markers and deterministic rendering reject foreign/externally edited files. Mutations require a current revision, validate a temporary candidate, check for concurrent edits, then rename/sync the owned file. Samba validates an include-substituted shadow with testparm and requests reload; NFS changes only the selected export pairs through targeted exportfs commands. Failure restores the prior file and attempts native rollback. Cleanup has an independent 30-second deadline so cancellation can restore state; job cancellation preserves rollback diagnostics. See [share design](docs/design/shares.md) for exact guarantees and limits.
 
@@ -74,7 +74,19 @@ The server creates a 32 byte random access token in an owner-only file, and keep
 
 HTTP clients can send a bearer token instead of a cookie. API bodies are limited to 1 MiB, login bodies to 4 KiB, and management requests use JSON. Reject unexpected Host headers and foreign Origin headers, including on requests with bearer tokens. A configured HTTPS `publicOrigin` permits a reverse proxy's external hostname; otherwise the HTTP listener and allowed hosts are local. The health endpoint reveals only whether the process responds.
 
-The process has the permissions of its operating-system account. Read/write policy is an application gate, not privilege escalation. Future backend modules must report unavailable binaries and denied permissions rather than silently invoke `sudo`. Rootless Podman belongs to the invoking account; running as root does not access another user's rootless inventory.
+The main process has the permissions of its operating-system account. With
+`privilegedOperations` enabled, a registry execution wrapper routes package/share
+operations and system-service operations through the fixed root-owned
+`server-man-admin` helper using noninteractive sudo. User services execute as the
+main account. The existing registry still owns schema validation, write policy,
+jobs and audit for both HTTP and MCP. The helper revalidates schemas and domain
+inputs, restricts operation names, rejects user-service scope, fixes privileged
+paths, clears inherited environment, and locks across invocations before running
+complete domain transactions. It has no transport listener. Root commands retain
+bounded execution/output; signals cancel their process groups with package grace
+periods. Helper output is bounded and returned when the operation finishes.
+Missing helpers, sudo policy, and denied permissions fail explicitly. Future
+modules must not add arbitrary privileged command execution. Rootless Podman belongs to the invoking account; running as root does not access another user's rootless inventory.
 
 MCP HTTP reuses this authentication/origin boundary. Stdio is accessed by launching a process under the workload's operating-system account; it does not require a browser token. Each process owns its recent in-memory jobs. See [MCP design and connection examples](docs/design/mcp.md) for lifecycle, result shapes, cancellation, shared-state locking and protocol compatibility.
 

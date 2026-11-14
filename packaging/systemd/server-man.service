@@ -7,14 +7,14 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/
-ExecStart=/usr/local/bin/serverman -config /etc/serverman/config.json
+ExecStart=/usr/local/bin/server-man -config /etc/server-man/config.json
 Restart=on-failure
 RestartSec=3s
 TimeoutStopSec=60s
 KillMode=mixed
-StateDirectory=serverman
+StateDirectory=server-man
 StateDirectoryMode=0700
-ConfigurationDirectory=serverman
+ConfigurationDirectory=server-man
 ConfigurationDirectoryMode=0700
 
 [Install]

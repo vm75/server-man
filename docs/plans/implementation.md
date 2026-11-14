@@ -211,7 +211,7 @@ engine, classic LXC, libvirt, LXD pools and guests were not provisioned. The
 [operations ledger](../operations/host-setup.md) lists all packages and changes,
 including the Ubuntu LXD launcher installation side effect.
 
-Deployment evidence: `/usr/local/bin/serverman -version` is `e4424dd`; its hash
+Deployment evidence: `/usr/local/bin/server-man -version` is `e4424dd`; its hash
 matches the built binary. User unit enabled/active, zero restarts, private token
 0600 and state 0700, linger enabled, root unit disabled/inactive. Both systemd
 units verify. Real TCP `/healthz`, authenticated HTTP inventory, 401/403 policy,
@@ -264,3 +264,9 @@ remains false. Official SDK MCP over HTTP lists 48 tools and passes ping.
 Purging Caddy and its three dependencies removed exactly four packages. Other
 physical clients are untested. No Go test suites were run for this
 deployment-only change. See the [HTTP host ledger](../operations/host-setup.md#direct-lan-http-follow-up-2026-10-16).
+
+## Run as X with explicit administrative operations
+
+The active follow-up and its verification evidence are tracked in
+[privileged helper implementation](privileged-helper.md). This supersedes the
+original single-account privilege assumption without replacing earlier evidence.

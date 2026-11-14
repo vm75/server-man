@@ -2,21 +2,83 @@
 
 server-man is a native Linux binary. Node is needed only to build or run the verification tools. Build with `make setup build`, then install the built binary and examples with `sudo make install`. Installation copies files beneath `/usr/local` (or `PREFIX`) and honors `DESTDIR`; it does not enable or start a service, create accounts, or replace an active configuration. For packaging checks, use a temporary staging root such as `make install DESTDIR="$PWD/.cache/install-root"`.
 
-Copy `/usr/local/share/serverman/config.example.json` (or `packaging/serverman.example.json` from the source tree) to `/etc/serverman/config.json`, then set ownership to root and mode 0600. Adjust `vmRoot` to the directory containing your VM/Compose conventions. Create the token file as a random private secret, for example:
+Copy `/usr/local/share/server-man/config.example.json` (or `packaging/server-man.example.json` from the source tree) to `/etc/server-man/config.json`, then set ownership to root and mode 0600. Adjust `vmRoot` to the directory containing your VM/Compose conventions. Create the token file as a random private secret, for example:
 
 ```sh
-sudo install -d -m 0700 /etc/serverman
-sudo sh -c 'umask 077; openssl rand -base64 32 > /etc/serverman/token'
-sudo chmod 0600 /etc/serverman/token
+sudo install -d -m 0700 /etc/server-man
+sudo sh -c 'umask 077; openssl rand -base64 32 > /etc/server-man/token'
+sudo chmod 0600 /etc/server-man/token
 ```
 
-The system unit runs as root because system package updates, system services, host shares, and some virtualization operations need host administration rights. That grants the authenticated manager broad host authority. Restrict access to the token and network endpoint. Root does not manage another user's rootless Podman engine. For rootless Podman, use the user unit under the account that owns those containers, with a separate config, state directory, and token. User-scope systemd management controls that user's units; it does not gain system administration rights. Create `~/.config/serverman/config.json` with private permissions; `{"allowWrites":false}` uses that user's default `~/vms`, token, and state paths.
+## Run as your workload account
 
-Install the unit file with `sudo make install`, review `/usr/local/lib/systemd/system/serverman.service`, then enable it using your normal systemd administration process. The user unit is installed under `/usr/local/lib/systemd/user`; user lingering may be needed if it must run without an active login. The config defaults to loopback and writes disabled. Set `allowWrites` to true only after reviewing the configured account and network boundary.
+Recommended: run the user unit as account X so rootless containers and user
+services belong to that account. Install the application and helper once using
+`sudo make install`. Both executables and their parent directories must be
+root-owned and not writable by X. The helper is an ordinary executable, not a
+setuid binary; sudo supplies elevation for explicit operations.
+
+Create X's private `~/.config/server-man/config.json`:
+
+```json
+{
+  "allowWrites": true,
+  "privilegedOperations": true
+}
+```
+
+Use `sudo visudo -f /etc/sudoers.d/server-man` to install this rule after replacing
+X with the actual account name:
+
+```sudoers
+X ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/server-man-admin ""
+```
+
+Validate with `sudo visudo -c`. The example is also installed under
+`/usr/local/share/server-man/sudoers.example`; installation never activates it.
+The helper accepts no command arguments. It validates bounded structured requests
+on stdin, fixes native paths and executable discovery, and serializes operations
+with a root-owned lock. It starts no listener and exits after each operation.
+
+As X, enable the user service with
+`systemctl --user enable --now server-man.service`. For operation without a login,
+an administrator can enable lingering with `sudo loginctl enable-linger X`.
+The user service uses X's normal runtime directory/session bus. The Services page
+selects system or current-user units; HTTP/MCP service tools accept an optional
+`scope` of `system` or `user`, defaulting to `systemdScope`.
+
+Keep `privilegedOperations` false for a read-only/unprivileged deployment.
+`allowWrites` remains the shared HTTP/MCP write gate. When privilege routing is
+enabled, package and share operations and system service operations use the
+helper; user services run directly as X. Privileged operations use automatic
+native package-manager detection, `/etc/samba/smb.conf`, the owned Samba fragment
+`/etc/samba/server-man.conf`, and the compatible NFS fragment
+`/etc/exports.d/serverman.exports`. Conflicting app overrides are rejected.
+Root-owned helper state is separate at `/var/lib/server-man-admin`.
+
+The Updates page also offers module dependency installation for Podman/Compose,
+Docker/Compose, Samba, NFS, x86 QEMU/libvirt and classic LXC. These are native
+repository packages; missing repository packages fail explicitly. Restart the
+app after installing a provider to refresh discovery. Dependency installation
+does not change group memberships or container ownership. Use the separate share
+setup action to configure and enable Samba/NFS. LXD still requires the host's
+normal LXD installation procedure.
+
+The helper requires the default `/usr/local` installation prefix. For custom
+prefixes, update the compiled helper path and sudoers rule together. Do not enable
+`NoNewPrivileges` or service sandbox options that imply it on this sudo-based
+user service: that prevents elevation. Retain loopback/TLS and authentication
+protections. X is trusted to administer the allowed capabilities, including
+package scripts that run as root; the helper does not make package administration
+low privilege.
+
+The legacy system unit remains available for deployments deliberately running
+server-man as root. Root does not manage X's rootless Podman inventory or X's
+user manager. Do not enable both deployments on the same listener.
 
 ## Naming compatibility
 
-The product is named **server-man**. Keep the installed executable and unit as `serverman` and `serverman.service`, and keep `/etc/serverman`, `/var/lib/serverman` and the user XDG `serverman` directories. This preserves existing scripts, service enablement, tokens and audit history. Packaging descriptions and MCP identity use `server-man`. Share format markers and filenames remain compatible with existing owned fragments. No second service or automatic path migration is installed.
+The product is named **server-man**. Keep the installed executable and unit as `server-man` and `server-man.service`, and keep `/etc/server-man`, `/var/lib/server-man` and the user XDG `server-man` directories. This preserves existing scripts, service enablement, tokens and audit history. Packaging descriptions and MCP identity use `server-man`. Share format markers and filenames remain compatible with existing owned fragments. No second service or automatic path migration is installed.
 
 ## TLS reverse proxy
 
@@ -30,7 +92,7 @@ server.example.com {
 
 Set `publicOrigin` to the exact browser origin, for example `https://server.example.com`, in the server-man config. This enables Secure session cookies and origin validation. Keep the proxy's upstream on loopback, restrict who can reach the public site, and configure proxy logs to omit `Authorization`, `Cookie`, and request bodies. Do not expose the unauthenticated management socket publicly. MCP HTTP uses the same authenticated endpoint; remote agents should use HTTPS and a bearer token. See [MCP configuration](design/mcp.md).
 
-The example system unit expects `/usr/local/bin/serverman`. If installing under another prefix, adjust `ExecStart` before enabling it. Back up configuration and state before upgrading; package updates and service management remain explicit operations initiated through server-man.
+The example system unit expects `/usr/local/bin/server-man`. If installing under another prefix, adjust `ExecStart` before enabling it. Back up configuration and state before upgrading; package updates and service management remain explicit operations initiated through server-man.
 
 
 ## Direct LAN HTTP

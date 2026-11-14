@@ -11,7 +11,7 @@ setup:
 	npm --prefix tools/ui ci --ignore-scripts
 
 api:
-	go run ./cmd/serverman
+	go run ./cmd/server-man
 
 dev:
 	npm --prefix web run dev
@@ -33,16 +33,20 @@ ui-test: build
 
 build:
 	npm --prefix web run build
-	./tools/build.sh bin/serverman
+	./tools/build.sh bin/server-man
+	go build -trimpath -o bin/server-man-admin ./cmd/server-man-admin
 
 PREFIX ?= /usr/local
 DESTDIR ?=
 install:
-	test -x bin/serverman || { echo "run make build first" >&2; exit 1; }
-	install -D -m 0755 bin/serverman "$(DESTDIR)$(PREFIX)/bin/serverman"
-	install -D -m 0644 packaging/serverman.example.json "$(DESTDIR)$(PREFIX)/share/serverman/config.example.json"
-	install -D -m 0644 packaging/systemd/serverman.service "$(DESTDIR)$(PREFIX)/lib/systemd/system/serverman.service"
-	install -D -m 0644 packaging/systemd/user/serverman.service "$(DESTDIR)$(PREFIX)/lib/systemd/user/serverman.service"
+	test -x bin/server-man-admin
+	test -x bin/server-man || { echo "run make build first" >&2; exit 1; }
+	install -D -m 0755 bin/server-man "$(DESTDIR)$(PREFIX)/bin/server-man"
+	install -D -m 0755 bin/server-man-admin "$(DESTDIR)$(PREFIX)/libexec/server-man-admin"
+	install -D -m 0644 packaging/server-man.sudoers.example "$(DESTDIR)$(PREFIX)/share/server-man/sudoers.example"
+	install -D -m 0644 packaging/server-man.example.json "$(DESTDIR)$(PREFIX)/share/server-man/config.example.json"
+	install -D -m 0644 packaging/systemd/server-man.service "$(DESTDIR)$(PREFIX)/lib/systemd/system/server-man.service"
+	install -D -m 0644 packaging/systemd/user/server-man.service "$(DESTDIR)$(PREFIX)/lib/systemd/user/server-man.service"
 
 clean:
 	rm -rf bin web/dist internal/webui/assets/dist

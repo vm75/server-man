@@ -5,7 +5,7 @@ After=default.target
 [Service]
 Type=simple
 WorkingDirectory=%h
-ExecStart=/usr/local/bin/serverman -config %h/.config/serverman/config.json
+ExecStart=/usr/local/bin/server-man -config %h/.config/server-man/config.json
 Restart=on-failure
 RestartSec=3s
 TimeoutStopSec=60s

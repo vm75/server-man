@@ -4,9 +4,9 @@ The Services page and nine `services_*` tools manage existing systemd service un
 
 ## Scope and permissions
 
-`systemdScope` is `system` by default; set it to `user` to manage the server account's user manager. All systemctl and journalctl commands use the configured scope. It cannot be changed per request. A user manager also requires that account's normal runtime directory/session bus. System management and journal access require the account's normal operating-system permissions; server-man never invokes `sudo` or an interactive authorization prompt.
+`systemdScope` is `system` by default; set it to `user` to manage the server account's user manager. All service tools accept an optional `scope: "system" | "user"` override; the UI exposes both managers. A user manager also requires that account's normal runtime directory/session bus. System management and journal access require the account's normal operating-system permissions; with `privilegedOperations` enabled, system operations use the restricted root helper while current-user operations execute directly. There are no interactive authorization prompts.
 
-`systemctl` and `journalctl` are detected independently at startup. The systemd capability reports the control utility's availability; service inventory also reports whether journalctl is installed. Installed binaries do not prove bus access. A non-systemd host, missing session bus or denied D-Bus connection produces an explicit notice/error while other server-man modules remain usable. See the upstream [systemctl manual](https://github.com/systemd/systemd/blob/main/man/systemctl.xml) for command behavior.
+`systemctl` and `journalctl` are detected independently at startup. Individual systemctl read commands have a twelve-second deadline; the shared API read deadline still bounds the complete request. The systemd capability reports the control utility's availability; service inventory also reports whether journalctl is installed. Installed binaries do not prove bus access. A non-systemd host, missing session bus or denied D-Bus connection produces an explicit notice/error while other server-man modules remain usable. See the upstream [systemctl manual](https://github.com/systemd/systemd/blob/main/man/systemctl.xml) for command behavior.
 
 ## Inventory and details
 
@@ -40,7 +40,7 @@ All actions require `allowWrites: true` and return tracked jobs under the shared
 | `services_enable` | Create startup enablement links | No |
 | `services_disable` | Remove startup enablement links | Yes |
 
-Enable/disable do not pass `--now`; current runtime state is unchanged by that command. Dependencies, socket/timer activation and administrator actions may still start a disabled unit. Reload is the service's own reload operation and does not run daemon-reload. Unsupported reloads, protected units and denied permissions fail through systemd. No privilege escalation or service-specific override is attempted.
+Enable/disable do not pass `--now`; current runtime state is unchanged by that command. Dependencies, socket/timer activation and administrator actions may still start a disabled unit. Reload is the service's own reload operation and does not run daemon-reload. Unsupported reloads, protected units and denied permissions fail through systemd. The configured helper policy applies to system operations.
 
 ## Verification
 

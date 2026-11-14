@@ -6,7 +6,7 @@ The Updates page and three `updates_*` tools inspect cached package candidates, 
 
 `packageManager` defaults to `auto`; supported explicit values are `apt`, `dnf`, `pacman`, `zypper`. Automatic detection reads bounded os-release metadata and selects the native family from ID/ID_LIKE. A known distribution missing its native CLI reports that absence; it does not switch to a foreign installed manager. Unknown distributions can use a single unambiguous installed family or an explicit override. Multiple candidates require configuration. OSTree/image-based Fedora variants are unavailable in automatic mode.
 
-APT uses `apt-get`. DNF uses the native `dnf` command, which can be DNF4 or a DNF5 alias; `dnf5` is a fallback when `dnf` is absent. Pacman and Zypper use their installed commands. Detection happens at startup. server-man uses the account's native package configuration and permissions, without sudo or interactive privilege prompts.
+APT uses `apt-get`. DNF uses the native `dnf` command, which can be DNF4 or a DNF5 alias; `dnf5` is a fallback when `dnf` is absent. Pacman and Zypper use their installed commands. Detection happens at startup. With `privilegedOperations` enabled, the fixed helper uses native root package configuration and permissions. Otherwise operations use the main account. No interactive privilege prompts are used.
 
 Arch's separate refresh capability requires `checkupdates` from pacman-contrib. Without it, cached system inventory and full installation remain available, and the UI explains why metadata refresh is unavailable. No helper is installed automatically.
 
@@ -61,3 +61,24 @@ A present `/run/reboot-required` marker reports a declared requirement. For APT,
 Race-tested command fixtures cover all four manager families, DNF4/DNF5 selection, native-family/ambiguous/immutable detection, exact read/refresh/install commands, held/dependency rows, parser/size failures, diagnostic-sensitive empty results, informational versus fatal exit codes, stopped phase progression, shared job serialization, destructive acknowledgement and cancellation. Real helper processes prove SIGINT delivery, grace-period forced cleanup, separate capture diagnostics and preserved exit status.
 
 The previous host verified read-only APT 3.2.0 simulation parsing. The migrated host verifies native APT 3.3.3 cached status through the deployed API, without refresh or installation by the app. The official MCP SDK checks status, invalid arguments, destructive annotations, denied refresh/install and full HTTP/MCP schema parity. No application package refresh/install, native DNF/Pacman/Zypper mutation or reboot was executed. Desktop/mobile confirmation flows pass fixture checks, and loopback HTTP/MCP is verified. Separately authorized prerequisite installs and service setup are fully recorded in the [host setup record](../operations/host-setup.md).
+
+## Named installation
+
+`packages_install` accepts whitespace-separated repository package names (1–32),
+plus `confirm: true`. Paths, URLs, flags, repository selectors, version overrides,
+and duplicates are rejected before commands execute. It installs dependencies
+using the native package manager, retaining signature checks and locks. Pacman
+also refreshes and upgrades the system to avoid a partial upgrade. It never
+requests a reboot or distribution migration.
+
+## Optional module dependencies
+
+`dependencies_install` takes a confirmed `target` of `podman`, `docker`, `samba`,
+`nfs`, `virtualization` (x86 QEMU/libvirt), or `lxc`. Updates exposes the same
+selection in the web UI. Fixed native package groups include Compose for Podman
+and Docker. Package availability depends on enabled distribution repositories;
+errors remain explicit and server-man never adds repositories or downloads
+installer scripts. Restart server-man after installation to refresh provider
+discovery. Server-man does not add users to privileged groups or enable daemons
+as part of dependency installation; native package scripts may start services.
+Use `shares_setup` for deliberate Samba/NFS configuration and enablement.
