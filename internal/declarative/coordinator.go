@@ -165,6 +165,11 @@ func (c Coordinator) prepare(candidate Config, expected string) (Config, Config,
 			return Config{}, Config{}, Plan{}, errors.New("changing an existing workload kind or backend requires a new definition")
 		}
 	}
+	for id, old := range previous.Shares {
+		if next, ok := desired.Shares[id]; ok && old.Protocol != next.Protocol {
+			return Config{}, Config{}, Plan{}, errors.New("changing a share protocol requires an explicit new definition")
+		}
+	}
 	bytes, err := Encode(desired)
 	if err != nil {
 		return Config{}, Config{}, Plan{}, err
@@ -293,7 +298,7 @@ func (c Coordinator) SaveApply(ctx context.Context, candidate Config, expected, 
 	if err = c.writeJournal(&j); err != nil {
 		return j, err
 	}
-	if mode == "now" && len(plan.Files.Issues) > 0 {
+	if mode == "now" && affectedFileIssues(desired, plan.Changes, plan.Files) {
 		j.Stage = "blocked"
 		if err = c.writeJournal(&j); err != nil {
 			return j, err
@@ -315,6 +320,20 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 				return j, err
 			}
 			return j, errors.New("configuration saved; backend unavailable")
+		}
+		if change.Operation != "remove" {
+			observed, e := a.Inspect(ctx, desired, change.Resource)
+			if e == nil && observed.Matches && (j.Mode == "next_start" || !observed.Active || observed.ActiveMatches) {
+				state := "registered"
+				if observed.Active && !observed.ActiveMatches {
+					state = "restart_required"
+				}
+				j.Resources[change.Resource] = ResourceResult{Fingerprint: change.Fingerprint, State: state}
+				if err := c.writeJournal(&j); err != nil {
+					return j, err
+				}
+				continue
+			}
 		}
 		j.Stage = "applying"
 		j.Resources[change.Resource] = ResourceResult{Fingerprint: change.Fingerprint, State: "applying"}
@@ -401,7 +420,15 @@ func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
 		}
 		previous, _ = Parse(bytes)
 	}
-	if j.Mode == "now" && len(c.Store.CheckFiles(desired).Issues) > 0 {
+	pendingChanges := []Change{}
+	for resource := range j.Resources {
+		op := "update"
+		if resourceFingerprint(desired, resource) == "" {
+			op = "remove"
+		}
+		pendingChanges = append(pendingChanges, Change{Resource: resource, Operation: op})
+	}
+	if j.Mode == "now" && affectedFileIssues(desired, pendingChanges, c.Store.CheckFiles(desired)) {
 		return j, errors.New("required files or mounts still block apply")
 	}
 	changes := []Change{}
@@ -463,4 +490,26 @@ func runtimeFingerprint(c Config, key string) string {
 	c.Services = maps.Clone(c.Services)
 	c.Services[id] = s
 	return resourceFingerprint(c, key)
+}
+
+// Unused storage still appears in health but does not block unrelated apply or
+// unpublishing a share whose data is missing. Only affected live definitions need it.
+func affectedFileIssues(c Config, changes []Change, health Health) bool {
+	required := map[string]bool{}
+	for _, change := range changes {
+		if change.Operation == "remove" {
+			continue
+		}
+		kind, id, _ := strings.Cut(change.Resource, "/")
+		if kind == "share" && !c.Shares[id].Enabled {
+			continue
+		}
+		required[change.Resource] = true
+	}
+	for _, issue := range health.Issues {
+		if required[issue.Resource] && issue.Severity != "warning" {
+			return true
+		}
+	}
+	return false
 }

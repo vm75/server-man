@@ -252,3 +252,15 @@ func TestJournalSymlinkAndPublicStateRejected(t *testing.T) {
 		t.Fatal("foreign state modified")
 	}
 }
+
+func TestUnusedMissingStorageDoesNotBlockUnrelatedApply(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	cfg.Storage["unused"] = Storage{Path: "data/not-restored"}
+	j, err := c.SaveApply(context.Background(), cfg, "missing", "now")
+	if err != nil || j.Stage != "complete" {
+		t.Fatal("unrelated data blocked healthy resource", j, err)
+	}
+	if len(c.Store.CheckFiles(cfg).Issues) == 0 {
+		t.Fatal("unused missing storage disappeared from health")
+	}
+}

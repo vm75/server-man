@@ -30,7 +30,7 @@ type Response struct {
 
 func allowed(name string) bool {
 	switch name {
-	case "dependencies_install", "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list",
+	case "shares_definitions_validate", "shares_definitions_inspect", "shares_definitions_apply", "dependencies_install", "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list",
 		"samba_share_save", "samba_share_remove", "nfs_share_save", "nfs_share_remove",
 		"services_list", "services_details", "services_logs", "services_start",
 		"services_stop", "services_restart", "services_reload", "services_enable", "services_disable":
@@ -87,7 +87,11 @@ func Serve(ctx context.Context, cfg config.Config, runner core.Executor, in io.R
 	if err = services.New("system", runner).Register(registry); err != nil {
 		return err
 	}
-	if err = shares.New(cfg, runner).Register(registry); err != nil {
+	shareBackend := shares.New(cfg, runner)
+	if err = shareBackend.Register(registry); err != nil {
+		return err
+	}
+	if err = shareBackend.RegisterDefinitions(registry); err != nil {
 		return err
 	}
 	if err = updates.New(cfg, runner).Register(registry); err != nil {

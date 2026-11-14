@@ -233,6 +233,24 @@ func (b *Backend) Change(ctx context.Context, protocol, revision, name string, r
 	} else if len(before) == 0 {
 		return nil, &core.Error{Code: "not_found", Message: "Managed share not found", Status: 404}
 	}
+	result, err := b.publishDefinitions(ctx, protocol, old, defs, next, before, after, out)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"protocol": protocol, "name": name, "removed": replacement == nil, "revision": result}, nil
+}
+
+// publishDefinitions is shared by direct host share operations and authoritative
+// replacement. defs are observed outputs for integrity/rollback, never desired input.
+func (b *Backend) publishDefinitions(ctx context.Context, protocol string, old snapshot, defs, next, before, after []Definition, out io.Writer) (any, error) {
+	return b.definitionsTransaction(ctx, protocol, old, defs, next, before, after, out, true)
+}
+func (b *Backend) definitionsTransaction(ctx context.Context, protocol string, old snapshot, defs, next, before, after []Definition, out io.Writer, activate bool) (any, error) {
+	file := b.file(protocol)
+	desiredNames := map[string]bool{}
+	for _, d := range after {
+		desiredNames[d.Name] = true
+	}
 	data, err := render(protocol, next)
 	if err != nil {
 		return nil, err
@@ -254,7 +272,7 @@ func (b *Backend) Change(ctx context.Context, protocol, revision, name string, r
 			owned[d.Name] = true
 		}
 		for _, d := range effective {
-			if shareKey(d.Name) == name && !owned[name] {
+			if desiredNames[shareKey(d.Name)] && !owned[shareKey(d.Name)] {
 				return nil, core.Invalid("An unmanaged Samba share already uses this name")
 			}
 		}
@@ -318,6 +336,9 @@ func (b *Backend) Change(ctx context.Context, protocol, revision, name string, r
 	if !sameFile(file, old) {
 		return nil, errors.New("Managed fragment changed during validation; refresh and retry")
 	}
+	if !activate {
+		return old.revision(), nil
+	}
 	if err := publish(file, candidate); err != nil {
 		// A failed directory sync can follow a successful rename.
 		if current, readErr := readFile(file, true); readErr == nil && current.exists && string(current.data) == string(data) {
@@ -354,5 +375,5 @@ func (b *Backend) Change(ctx context.Context, protocol, revision, name string, r
 		return nil, errors.New("Share apply failed; previous configuration and runtime entries were restored")
 	}
 	_, _ = io.WriteString(out, "Managed share configuration applied. Shared directory data was not changed.\n")
-	return map[string]any{"protocol": protocol, "name": name, "removed": replacement == nil, "revision": snapshot{data: data, exists: true}.revision()}, nil
+	return snapshot{data: data, exists: true}.revision(), nil
 }

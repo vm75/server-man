@@ -76,12 +76,16 @@ type VM struct {
 	Project      string   `yaml:"project,omitempty" json:"project,omitempty"`
 }
 type Share struct {
-	Protocol string   `yaml:"protocol" json:"protocol"`
-	Storage  string   `yaml:"storage" json:"storage"`
-	Enabled  bool     `yaml:"enabled" json:"enabled"`
-	ReadOnly bool     `yaml:"read_only" json:"readOnly"`
-	Users    []string `yaml:"users,omitempty" json:"users,omitempty"`
-	Clients  []string `yaml:"clients,omitempty" json:"clients,omitempty"`
+	Guest      bool     `yaml:"guest,omitempty" json:"guest"`
+	Browseable bool     `yaml:"browseable,omitempty" json:"browseable"`
+	RootSquash *bool    `yaml:"root_squash,omitempty" json:"rootSquash,omitempty"`
+	Security   string   `yaml:"security,omitempty" json:"security,omitempty"`
+	Protocol   string   `yaml:"protocol" json:"protocol"`
+	Storage    string   `yaml:"storage" json:"storage"`
+	Enabled    bool     `yaml:"enabled" json:"enabled"`
+	ReadOnly   bool     `yaml:"read_only" json:"readOnly"`
+	Users      []string `yaml:"users,omitempty" json:"users,omitempty"`
+	Clients    []string `yaml:"clients,omitempty" json:"clients,omitempty"`
 }
 
 // Parse deliberately rejects aliases, custom tags and duplicate keys before typed
@@ -277,7 +281,7 @@ func (c *Config) Validate() error {
 		if !ok || st.Kind == "file" {
 			return errors.New("share requires directory storage")
 		}
-		if s.Protocol == "samba" && len(s.Users) == 0 {
+		if s.Protocol == "samba" && !s.Guest && len(s.Users) == 0 {
 			return errors.New("Samba share requires access users")
 		}
 		if s.Protocol == "nfs" && len(s.Clients) == 0 {

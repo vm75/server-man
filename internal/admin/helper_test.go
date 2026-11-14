@@ -65,3 +65,19 @@ func TestStalledRequestReleasesOnCancellation(t *testing.T) {
 		t.Fatal("stalled input ignored cancellation")
 	}
 }
+
+func TestAuthoritativeSharesRejectUnvalidatedDefinitions(t *testing.T) {
+	for _, arguments := range []string{
+		`{"protocol":"samba","definitions":"[{\"name\":\"global\",\"path\":\"/tmp\",\"users\":[\"alice\"]}]"}`,
+		`{"protocol":"nfs","definitions":"[{\"name\":\"data\",\"path\":\"/tmp\",\"clients\":[\"*\"],\"command\":\"bad\"}]"}`,
+	} {
+		var output bytes.Buffer
+		request := `{"operation":"shares_definitions_inspect","arguments":` + arguments + `}`
+		if err := Serve(context.Background(), config.Config{}, noCommands{t}, strings.NewReader(request), &output); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(output.String(), `"error"`) {
+			t.Fatal("invalid authoritative definitions accepted", output.String())
+		}
+	}
+}

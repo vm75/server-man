@@ -127,6 +127,9 @@ func (c Config) validateFields() error {
 	}
 	for _, s := range c.Shares {
 		if s.Protocol == "samba" {
+			if s.RootSquash != nil || s.Security != "" || s.Guest && len(s.Users) > 0 {
+				return errors.New("invalid Samba access fields")
+			}
 			if len(s.Clients) > 0 || len(s.Users) > 32 {
 				return errors.New("invalid Samba access fields")
 			}
@@ -136,6 +139,12 @@ func (c Config) validateFields() error {
 				}
 			}
 		} else {
+			if s.Guest || s.Browseable {
+				return errors.New("Samba options cannot be used for NFS")
+			}
+			if s.Security != "" && s.Security != "sys" && s.Security != "krb5" && s.Security != "krb5i" && s.Security != "krb5p" {
+				return errors.New("invalid NFS security flavor")
+			}
 			if len(s.Users) > 0 || len(s.Clients) > 16 {
 				return errors.New("invalid NFS access fields")
 			}

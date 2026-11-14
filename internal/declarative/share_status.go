@@ -1,0 +1,93 @@
+package declarative
+
+import (
+	"context"
+	"io"
+	"maps"
+	"os"
+	"slices"
+
+	"serverman/internal/core"
+)
+
+type ShareStatus struct {
+	ID            string  `json:"id"`
+	Definition    Share   `json:"definition"`
+	Configuration string  `json:"configuration"`
+	Issues        []Issue `json:"issues"`
+}
+
+func (c Coordinator) ShareStatuses(ctx context.Context) (any, error) {
+	snapshot, err := c.Store.Read()
+	if os.IsNotExist(err) {
+		return map[string]any{"configured": false, "shares": []ShareStatus{}}, nil
+	}
+	if err != nil {
+		return nil, core.Unavailable("Configuration is unavailable or invalid")
+	}
+	health := c.Preflight(ctx, snapshot.Config, false)
+	states := map[string]Observation{}
+	failures := map[string]bool{}
+	items := []ShareStatus{}
+	// Native fragments are per protocol; inspect once rather than once per share.
+	for _, id := range slices.Sorted(maps.Keys(snapshot.Config.Shares)) {
+		definition := snapshot.Config.Shares[id]
+		item := ShareStatus{ID: id, Definition: definition, Configuration: "unknown", Issues: []Issue{}}
+		for _, issue := range health.Issues {
+			if issue.Resource == "share/"+id {
+				item.Issues = append(item.Issues, issue)
+			}
+		}
+		obs, checked := states[definition.Protocol]
+		if !checked && !failures[definition.Protocol] {
+			if adapter := c.Adapters[definition.Protocol]; adapter != nil {
+				var err error
+				obs, err = adapter.Inspect(ctx, snapshot.Config, "share/"+id)
+				if err != nil {
+					failures[definition.Protocol] = true
+				} else {
+					states[definition.Protocol] = obs
+					checked = true
+				}
+			}
+		}
+		if checked {
+			item.Configuration = "pending"
+			if obs.Matches {
+				item.Configuration = "published"
+				if !definition.Enabled {
+					item.Configuration = "unpublished"
+				}
+			}
+		}
+		items = append(items, item)
+	}
+	return map[string]any{"configured": true, "revision": snapshot.Revision, "shares": items, "health": health}, nil
+}
+func (c Coordinator) SetSharePublished(ctx context.Context, id string, published bool) (Journal, error) {
+	if !validID(id) {
+		return Journal{}, core.Invalid("invalid share ID")
+	}
+	snapshot, err := c.Store.Read()
+	if err != nil {
+		return Journal{}, core.Unavailable("Configuration is unavailable or invalid")
+	}
+	definition, ok := snapshot.Config.Shares[id]
+	if !ok {
+		return Journal{}, core.Invalid("share does not exist")
+	}
+	definition.Enabled = published
+	snapshot.Config.Shares[id] = definition
+	return c.SaveApply(ctx, snapshot.Config, snapshot.Revision, "now")
+}
+func RegisterShareStatus(r *core.Registry, c Coordinator) error {
+	return r.AddModule(core.Module{ID: "managed_shares", Title: "Configured file shares", Available: true},
+		core.Tool{Name: "managed_shares", Title: "Configured file shares", Description: "Read authoritative share definitions and protocol publication state without changing host daemons.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) { return c.ShareStatuses(ctx) }},
+		core.Tool{Name: "managed_share_publish", Title: "Publish or unpublish share", Description: "Persist the share's publication toggle and apply the authoritative protocol set. Does not change shared data, accounts or host daemon enablement.", Destructive: true, Fields: map[string]core.Field{"share": core.StringField("Share ID", true, 63), "published": {Type: "boolean", Required: true}}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			j, err := c.SetSharePublished(ctx, in.String("share"), in.Bool("published"))
+			if err != nil {
+				return nil, managedError(err)
+			}
+			return j, nil
+		}})
+}

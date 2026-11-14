@@ -12,6 +12,10 @@ import (
 // PrerequisiteAdapter checks native requirements once per backend, independently
 // of per-resource definition syntax and without activating resources.
 type PrerequisiteAdapter interface{ Prerequisites(context.Context) []Issue }
+type ConfigurationPrerequisiteAdapter interface {
+	ConfigurationPrerequisites(context.Context, Config) []Issue
+}
+
 type ResourcePrerequisiteAdapter interface {
 	ResourcePrerequisites(context.Context, Config, string) []Issue
 }
@@ -65,7 +69,19 @@ func (c Coordinator) Preflight(ctx context.Context, cfg Config, refresh bool) He
 			native = append(native, Issue{"unknown", "backend/" + target, "runtime", "check_unavailable", "Backend prerequisite checks are not implemented.", "Verify backend access before activating services."})
 		}
 	}
+	for _, target := range slices.Sorted(maps.Keys(targets)) {
+		if probe, ok := c.Adapters[target].(ConfigurationPrerequisiteAdapter); ok {
+			if ctx.Err() != nil {
+				native = append(native, Issue{"unknown", "backend/" + target, "runtime", "check_cancelled", "Configuration prerequisites were not checked.", "Recheck when backend access is available."})
+				continue
+			}
+			native = append(native, probe.ConfigurationPrerequisites(ctx, cfg)...)
+		}
+	}
 	for _, resource := range orderedResources(cfg) {
+		if _, batch := c.Adapters[backend(cfg, resource)].(ConfigurationPrerequisiteAdapter); batch {
+			continue
+		}
 		if probe, ok := c.Adapters[backend(cfg, resource)].(ResourcePrerequisiteAdapter); ok {
 			if ctx.Err() != nil {
 				native = append(native, Issue{"unknown", resource, "runtime", "check_cancelled", "Resource prerequisites were not checked.", "Recheck configuration when backend access is available."})
