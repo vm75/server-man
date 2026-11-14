@@ -279,7 +279,7 @@ func (c *Config) Validate() error {
 			return errors.New("NFS share requires clients")
 		}
 	}
-	return nil
+	return c.validateFields()
 }
 func Encode(c Config) ([]byte, error) {
 	if err := c.Validate(); err != nil {

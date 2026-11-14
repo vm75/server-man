@@ -267,8 +267,9 @@ The full phase is complete only when all selected backends and shares pass their
 | Step | Status | Evidence | Remaining limits |
 | --- | --- | --- | --- |
 | Planning | Prepared | Repository boundaries and feasibility decisions reviewed; detailed plan and project tenets documented | No implementation, native mutations or runtime acceptance tests performed |
-| 1 | In progress | Initial `internal/declarative` typed model, strict YAML parsing, deterministic serialization and private atomic revision-checked store. `GOCACHE=$PWD/.cache/go-build go test -race ./internal/declarative` passes. | History, stable identities, expanded field validation and registry integration remain; step acceptance is not complete. |
-| 2–11 | Not started | None | All implementation and acceptance gates remain open |
+| 1 | In progress | Initial `internal/declarative` typed model, strict YAML parsing, deterministic serialization and private atomic revision-checked store. `GOCACHE=$PWD/.cache/go-build go test -race ./internal/declarative` passes. | Stable VM identity generation/preservation, bounded private history and additional native-field validation now have race-tested coverage. Registry integration, complete schema coverage, recoverable malformed-config editing and final step acceptance remain open. |
+| 2 | In progress | Static file preflight reports missing/wrong-type paths, private-file modes and portable symlink escapes, propagates blockers to services/shares, never creates data, and fails closed for unverified expected mounts. Race tests pass. | Runtime dependency/permission/mount identity checks, provisioning, UI and registry integration remain open. |
+| 3–11 | Not started | None | All implementation and acceptance gates remain open |
 
 ## Reference material
 
@@ -283,3 +284,5 @@ Use installed capability checks and verify upstream behavior during implementati
 ### Step 1 implementation notes
 
 The initial parser uses `go.yaml.in/yaml/v3` v3.0.4, a maintained YAML implementation under the YAML organization. One parser supplies strict typed field decoding and a node pass for duplicate keys, aliases/anchors and explicit tags. YAML errors are sanitized to avoid echoing scalar values; precise location reporting is implemented for rejected node constructs and remains to be expanded for syntax/type errors. No host/backend command runs during parse/store tests. Store writers currently require the shared management lock; coordinator integration remains open.
+
+Continuation evidence: `GOCACHE=$PWD/.cache/go-build go test -race ./internal/config ./internal/core ./internal/declarative` and focused Go vet pass. New fixtures verify identity preservation across omitted editor fields, refusal of identity changes, bounded eight-entry history, native-field rejection and relocated filesystem blockers without data creation. No daemon or host workload mutations were performed. Static preflight does not establish runtime readiness; unverified expected mounts remain blocking issues until native mount checks are added.

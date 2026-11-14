@@ -44,13 +44,6 @@ func (s Store) Read() (Snapshot, error) {
 	return result, err
 }
 func (s Store) Save(c Config, expected string) (Snapshot, error) {
-	data, err := Encode(c)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	if len(data) > MaxConfigBytes {
-		return Snapshot{}, errors.New("configuration exceeds 1 MiB")
-	}
 	old, err := s.Read()
 	if err != nil && !os.IsNotExist(err) {
 		return Snapshot{}, err
@@ -61,6 +54,17 @@ func (s Store) Save(c Config, expected string) (Snapshot, error) {
 	}
 	if expected != current {
 		return Snapshot{}, ErrConflict
+	}
+	c, err = PrepareIdentities(c, old.Config)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	data, err := Encode(c)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if len(data) > MaxConfigBytes {
+		return Snapshot{}, errors.New("configuration exceeds 1 MiB")
 	}
 	// The management job lock serializes writers across application processes.
 	dir := filepath.Dir(s.Path)
@@ -87,6 +91,11 @@ func (s Store) Save(c Config, expected string) (Snapshot, error) {
 		}
 	} else if readErr != nil || latest.Revision != current {
 		return Snapshot{}, ErrConflict
+	}
+	if current != "missing" {
+		if err = s.remember(old); err != nil {
+			return Snapshot{}, err
+		}
 	}
 	if err = os.Rename(f.Name(), s.Path); err != nil {
 		return Snapshot{}, err
