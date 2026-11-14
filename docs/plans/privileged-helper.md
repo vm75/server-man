@@ -17,7 +17,7 @@ explicit administrative operations through a narrow sudoers rule.
 - [x] Support named package installation and explicit Samba/NFS setup, alongside
   existing updates and share transactions.
 - [x] Package both executables and sudoers setup; document deployment as X.
-- [ ] Verify fixtures, Go race tests, frontend checks/build and MCP compatibility;
+- [x] Verify fixtures, Go race tests, frontend checks/build and MCP compatibility;
   record whether disposable-VM integration is available.
 
 ## Evidence
@@ -82,3 +82,13 @@ service deadline and adding the unowned-Samba-fragment preservation test. In the
 disposable guest, real `packages_install` and `updates_install` have succeeded;
 the real Podman dependency-group installation also passed. Share integration is
 still running.
+
+2026-11-14 completion: the entire real guest verifier passed, including Samba and
+NFS setup plus share save/remove. QEMU exited after graceful guest shutdown;
+all temporary guest artifacts and keys were removed. Final full Go race/vet and
+frontend checks pass. Rebuilt both binaries; final official SDK verification
+passes all 57 tools. The last helper boundary checks confirm cancellation of a
+stalled request reader and visible output truncation without exceeding job
+retention. See [the verification record](../operations/privileged-helper-verification.md)
+for exact evidence, host installation effects, reproduction and limits. This
+follow-up is complete; earlier unrelated TLS/provider/CI gaps remain separate.

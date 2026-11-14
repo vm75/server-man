@@ -46,6 +46,11 @@ func (c Client) Call(ctx context.Context, operation string, input core.Input, ou
 	if _, err = io.WriteString(out, reply.Output); err != nil {
 		return nil, err
 	}
+	if reply.Truncated {
+		if _, err = io.WriteString(out, "\n[Earlier privileged output was discarded.]\n"); err != nil {
+			return nil, err
+		}
+	}
 	if reply.Error != "" {
 		return nil, &core.Error{Code: reply.Code, Status: reply.Status, Message: reply.Error}
 	}

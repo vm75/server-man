@@ -20,11 +20,12 @@ type Request struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 type Response struct {
-	Result any    `json:"result,omitempty"`
-	Output string `json:"output,omitempty"`
-	Error  string `json:"error,omitempty"`
-	Code   string `json:"code,omitempty"`
-	Status int    `json:"status,omitempty"`
+	Result    any    `json:"result,omitempty"`
+	Output    string `json:"output,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Code      string `json:"code,omitempty"`
+	Status    int    `json:"status,omitempty"`
 }
 
 func allowed(name string) bool {
@@ -41,7 +42,23 @@ func allowed(name string) bool {
 // Serve accepts exactly one bounded request. Configuration is supplied by the
 // privileged entry point, never by the unprivileged request.
 func Serve(ctx context.Context, cfg config.Config, runner core.Executor, in io.Reader, out io.Writer) error {
-	data, err := io.ReadAll(io.LimitReader(in, (1<<20)+1))
+	// One read goroutine is bounded by the one-shot process lifetime. Selecting
+	// cancellation ensures a stalled caller cannot hold the privileged lock after
+	// the helper's deadline. The entry point exits after Serve returns.
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	reads := make(chan readResult, 1)
+	go func() { data, err := io.ReadAll(io.LimitReader(in, (1<<20)+1)); reads <- readResult{data, err} }()
+	var data []byte
+	var err error
+	select {
+	case read := <-reads:
+		data, err = read.data, read.err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	if err != nil {
 		return err
 	}
@@ -81,8 +98,8 @@ func Serve(ctx context.Context, cfg config.Config, runner core.Executor, in io.R
 	}
 	output := core.NewTail(128 << 10)
 	result, runErr := registry.Execute(ctx, req.Operation, req.Arguments, output)
-	text, _ := output.Snapshot()
-	response := Response{Result: result, Output: text}
+	text, truncated := output.Snapshot()
+	response := Response{Result: result, Output: text, Truncated: truncated}
 	if runErr != nil {
 		response.Result = nil
 		response.Error = runErr.Error()

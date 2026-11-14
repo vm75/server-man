@@ -3,11 +3,13 @@ package admin
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"serverman/internal/config"
 	"serverman/internal/core"
 	"strings"
 	"testing"
+	"time"
 )
 
 type noCommands struct{ t *testing.T }
@@ -43,5 +45,23 @@ func TestValidateBeforeExecution(t *testing.T) {
 		if !strings.Contains(out.String(), `"error"`) {
 			t.Fatal(out.String())
 		}
+	}
+}
+
+func TestStalledRequestReleasesOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	defer writer.Close()
+	done := make(chan error, 1)
+	go func() { done <- Serve(ctx, config.Config{}, noCommands{t}, reader, io.Discard) }()
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stalled input ignored cancellation")
 	}
 }

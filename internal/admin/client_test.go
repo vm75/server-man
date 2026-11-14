@@ -80,3 +80,19 @@ func TestRouteWritePolicyPreventsElevation(t *testing.T) {
 		t.Fatal(err, f.calls)
 	}
 }
+
+func TestClientRetainsPrivilegedTruncationNotice(t *testing.T) {
+	encoded, err := json.Marshal(Response{Output: strings.Repeat("x", 128<<10), Truncated: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &clientFixture{t: t, response: string(encoded)}
+	out := core.NewTail(128 << 10)
+	if _, err = (Client{Runner: f}).Call(context.Background(), "updates_install", core.Input{"confirm": true}, out); err != nil {
+		t.Fatal(err)
+	}
+	text, truncated := out.Snapshot()
+	if !truncated || !strings.Contains(text, "Earlier privileged output was discarded") {
+		t.Fatal("privileged truncation was hidden")
+	}
+}

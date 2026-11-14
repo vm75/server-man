@@ -2,17 +2,29 @@
 
 This audit maps the requested features to implementation and evidence. Fixture tests establish command construction, parsing, safety and failure behavior; they do not establish that privileged changes work on a particular live server.
 
-## Current headless host (2026-10-16)
+## User-run privilege boundary (2026-11-14)
+
+The privilege-helper follow-up passes local race/vet/frontend checks, production
+builds, staged installation, 57-tool SDK interoperability and browser checks.
+Real mutations passed in a disposable Ubuntu guest: both service scopes, package
+installation/updates, dependency installation and Samba/NFS setup/share
+transactions. The guest was shut down and discarded. QEMU/libvirt installation
+on the development host was explicitly requested by the user. See the
+[complete verification record](operations/privileged-helper-verification.md) for
+host changes, reproduction and remaining scope limits. The following dated
+snapshots retain their historical evidence and are superseded for these gates.
+
+## Headless deployment snapshot (2026-10-16)
 
 Checkout `/home/shasak/ws/server-man` on Ubuntu 26.10. The installed native
-binary reports revision `4191209-dirty`; user `serverman.service` is enabled/running,
+binary reports revision `4191209-dirty`; user `server-man.service` is enabled/running,
 with user lingering enabled and management writes disabled. The backend listener
 is `0.0.0.0:8080` with Host and Origin restricted to the configured LAN origin. See the [complete operations ledger](operations/host-setup.md)
 for packages, permissions, configs, services, commands and outcomes.
 
 | Requirement | Current evidence | Scope limit |
 | --- | --- | --- |
-| Canonical `server-man` name | UI login/title/navigation/footer, documentation, package labels, systemd descriptions and MCP name/title updated. Official SDK asserts identity on both transports. | Stable `serverman` executable/module/paths, cookie/events, ownership markers and tool schemas preserved deliberately. |
+| Canonical `server-man` name | UI login/title/navigation/footer, documentation, package labels, systemd descriptions and MCP name/title updated. Official SDK asserts identity on both transports. | Stable `server-man` executable/module/paths, cookie/events, ownership markers and tool schemas preserved deliberately. |
 | Reproducible build and validation | `make setup`, `make build check test mcp-test`, then `make check mcp-test ui-test` after security patches pass. All three npm audit trees have zero findings. Staged install modes verified. | Current host lacks testparm; optional native Samba validator tests skip. Command fixtures still pass. |
 | Headless operation | Private user config/token/state, matching built/installed binary SHA-256, enabled user unit and linger, active process with zero restarts, real health response, both systemd units verify. | Boot/logout settings inspected; no reboot test. System/root unit remains disabled/inactive. |
 | Real HTTP/MCP network | Authenticated loopback HTTP inventory, API/MCP 401 without auth, foreign-origin 403, write-policy rejection without jobs; official SDK uses real TCP `/mcp`, checks identity, 48 schemas, monitoring and ping. | No external TLS proxy, public listener, or third-party agent deployment. |
@@ -48,11 +60,11 @@ Its sandbox-specific gaps and measurements are not current-host claims.
 | System package updates | `internal/modules/updates` and Updates view. Fixtures cover APT, DNF, Pacman and Zypper, cancellation and shared serialization; an APT simulation was read-only. | No metadata refresh, installation, distribution migration or reboot was performed. |
 | MCP for agents, shared with web operations | Both transports derive from the same registry. `make mcp-test` passes against the official TypeScript SDK: 48 tools over stdio and the production Streamable HTTP handler, schemas, errors, denied writes and HTTP/API parity. | Live MCP HTTP over TCP/TLS and external OpenClaw/Hermes clients were not launched in this network-restricted environment. |
 | Extensibility and KISS | `docs/extensions.md`; modules register typed tools in the shared registry. Node/Playwright and MCP SDK are development-only. | A separately maintained third-party module has not been built against a stable external module API. |
-| Build/install and operations | `make install DESTDIR="$PWD/.cache/install-root"` staged the binary, example config and system/user units with expected modes. `bin/serverman -version` printed the source revision. Config example is covered by a Go test. | Service unit activation and live reverse-proxy TLS were not exercised; host service state was left untouched. |
+| Build/install and operations | `make install DESTDIR="$PWD/.cache/install-root"` staged the binary, example config and system/user units with expected modes. `bin/server-man -version` printed the source revision. Config example is covered by a Go test. | Service unit activation and live reverse-proxy TLS were not exercised; host service state was left untouched. |
 
 ## Idle measurement
 
-`python3 tools/measure-idle.py bin/serverman 12` measured one stdio process waiting for input, with the real two-second Linux sampler active and no MCP requests. It used a temporary config/state directory and opened no listener. On the previous host the 12-second sample used 0.06 CPU seconds (0.50% of one core), 14,528 KiB RSS at the end (11,948 KiB at the start), 11 threads, and 6 file descriptors. This measures this namespace and process shape only; it is not a long-running HTTP daemon or large-host benchmark.
+`python3 tools/measure-idle.py bin/server-man 12` measured one stdio process waiting for input, with the real two-second Linux sampler active and no MCP requests. It used a temporary config/state directory and opened no listener. On the previous host the 12-second sample used 0.06 CPU seconds (0.50% of one core), 14,528 KiB RSS at the end (11,948 KiB at the start), 11 threads, and 6 file descriptors. This measures this namespace and process shape only; it is not a long-running HTTP daemon or large-host benchmark.
 
 ## Network and CI limits
 
