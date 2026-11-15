@@ -73,6 +73,13 @@ async function exercise(client, label) {
   assert.equal(plannedResource.isError,false)
   const deniedResource = await client.callTool({name:'managed_resource_save',arguments:{...resourceArgs,mode:'now',confirm:true}})
   assert.equal(deniedResource.structuredContent.error.code,'writes_disabled')
+  for (const name of ['managed_config_history','managed_config_history_read','managed_config_revert_plan']) {
+    const args = name === 'managed_config_history' ? {} : {target:'a'.repeat(64),...(name === 'managed_config_revert_plan' ? {revision:'missing'} : {})}
+    const denied = await client.callTool({name,arguments:args})
+    assert.equal(denied.structuredContent.error.code,'writes_disabled')
+  }
+  const deniedRevert = await client.callTool({name:'managed_config_revert',arguments:{target:'a'.repeat(64),revision:'missing',mode:'next_start',confirm:true}})
+  assert.equal(deniedRevert.structuredContent.error.code,'writes_disabled')
   const deniedConfig = await client.callTool({ name: 'managed_config_read', arguments: {} })
   assert.equal(deniedConfig.structuredContent.error.code, 'writes_disabled')
   const readiness = await client.callTool({name:'managed_config_readiness',arguments:{}})

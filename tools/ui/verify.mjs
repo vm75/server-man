@@ -22,6 +22,9 @@ let fixtureMode = false
 let readinessScenario = 'blocked'
 
 const fixtures = {
+  managed_config_history: () => ({entries:[{revision:'c'.repeat(64),modifiedAt:new Date().toISOString(),valid:true}]}),
+  managed_config_history_read: args => ({revision:args.target,content:'version: 1\n',valid:true}),
+  managed_config_revert_plan: args => ({plan:{baseRevision:args.revision,desiredRevision:args.target,changes:[{resource:'service/website',backend:'podman/quadlet',operation:'update'}],files:{issues:[]}}}),
   managed_config_readiness: () => ({ configured: true, valid: readinessScenario !== 'invalid', ...(readinessScenario === 'invalid' ? {error:'Configuration is invalid or inaccessible; open Configuration to repair it.'} : {health: {checkedAt:new Date().toISOString(), runtimeCheckedAt:new Date().toISOString(), issues: readinessScenario === 'healthy' ? [] : readinessScenario === 'unknown' ? [{severity:'unknown',resource:'service/website',field:'runtime',code:'check_cancelled',message:'Backend checks could not complete.',remedy:'Restore backend access and retry.'}] : fixtures.managed_services().health.issues}}) }),
   managed_config_check: () => ({ checkedAt:new Date().toISOString(), issues:[] }),
   managed_config_model: () => ({ revision: 'a'.repeat(64), config: { version: 1, services: {}, shares: {}, storage: { documents: {path:'data/documents',kind:'directory'} }, bindings: { lan:{kind:'network',name:'default'}, pool:{kind:'pool',name:'default'}, project:{kind:'project',name:'default'} }, secrets: {} } }),
@@ -123,6 +126,19 @@ async function exerciseManagement(page) {
   await page.getByText('System update started. Follow its progress in Activity.', { exact: true }).waitFor()
   await page.locator('.activity-button').click()
 
+  await page.getByRole('navigation').getByRole('button',{name:'Configuration',exact:true}).click()
+  const history = page.getByRole('region',{name:'Configuration history',exact:true})
+  await history.getByRole('button',{name:'Inspect cccccccccccc',exact:true}).click()
+  assert.equal(await history.getByLabel('Historical configuration',{exact:true}).inputValue(),'version: 1\n')
+  await history.getByRole('button',{name:'Review revert',exact:true}).click()
+  await history.getByRole('heading',{name:'Review configuration revert',exact:true}).waitFor()
+  assert.equal(await history.getByLabel('Revert apply mode',{exact:true}).inputValue(),'next_start')
+  await history.getByRole('button',{name:'Confirm configuration revert',exact:true}).click()
+  await page.getByText('Configuration revert started. Follow Activity for apply results.',{exact:true}).waitFor()
+  await page.locator('.activity-button').click()
+  const reverted = managementCalls.find(call => call.tool === 'managed_config_revert')
+  assert.deepEqual(reverted.args,{target:'c'.repeat(64),revision:'a'.repeat(64),mode:'next_start',confirm:true})
+
   const submitted = Object.fromEntries(managementCalls.map(call => [call.tool, call.args]))
   assert.equal(submitted.services_stop?.unit, 'sshd.service')
   assert.equal(submitted.services_stop?.confirm, true)
@@ -136,7 +152,7 @@ async function exerciseManagement(page) {
   assert.equal(submitted.shares_setup?.confirm, true)
   assert.equal(submitted.dependencies_install?.target, 'podman')
   assert.equal(submitted.dependencies_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['managed_resource_save', 'managed_resource_save', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
+  assert.deepEqual(deniedByServer.sort(), ['managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
   // The alert stays mounted on every page; rechecks clear only resolved issues.
   const beforeRepairCalls = managementCalls.length
   readinessScenario = 'unknown'
@@ -224,7 +240,7 @@ try {
           await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
           return
         }
-        if (['services_stop', 'managed_resource_save', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
+        if (['services_stop', 'managed_resource_save', 'managed_config_revert', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
           assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)

@@ -44,6 +44,7 @@ type ResourceResult struct {
 	Message     string `json:"message,omitempty"`
 }
 type Journal struct {
+	Superseded      *Journal                  `json:"superseded,omitempty"`
 	Version         int                       `json:"version"`
 	BaseRevision    string                    `json:"baseRevision"`
 	DesiredRevision string                    `json:"desiredRevision"`
@@ -155,7 +156,7 @@ func (c Coordinator) prepare(candidate Config, expected string) (Config, Config,
 	if expected != revision {
 		return Config{}, Config{}, Plan{}, ErrConflict
 	}
-	previous, _ := Parse(raw)
+	previous := previousConfiguration(raw)
 	desired, err := PrepareIdentities(candidate, previous)
 	if err != nil {
 		return Config{}, Config{}, Plan{}, err
@@ -217,6 +218,10 @@ func (c Coordinator) Preview(ctx context.Context, candidate Config, expected str
 // SaveApply is called only inside the shared mutation job lock. Desired state is
 // retained after failure. A pending/failed journal never counts as successful apply.
 func (c Coordinator) SaveApply(ctx context.Context, candidate Config, expected, mode string) (Journal, error) {
+	return c.saveApply(ctx, candidate, expected, mode, false)
+}
+
+func (c Coordinator) saveApply(ctx context.Context, candidate Config, expected, mode string, revert bool) (Journal, error) {
 	if mode != "now" && mode != "next_start" {
 		return Journal{}, errors.New("unsupported apply mode")
 	}
@@ -229,7 +234,12 @@ func (c Coordinator) SaveApply(ctx context.Context, candidate Config, expected, 
 		return Journal{}, err
 	}
 	if err == nil && existing.Stage != "complete" && existing.Stage != "aborted" {
-		return existing, errors.New("an incomplete apply requires inspection and retry before another save")
+		if !revert {
+			return existing, errors.New("an incomplete apply requires inspection and retry before another save")
+		}
+		if err = c.validateSupersession(ctx, existing, previous, desired, expected); err != nil {
+			return existing, err
+		}
 	}
 	// Verify unchanged definitions too: a copied manifest or external drift must
 	// not be treated as applied simply because its YAML did not change.
@@ -283,6 +293,9 @@ func (c Coordinator) SaveApply(ctx context.Context, candidate Config, expected, 
 		return Journal{}, err
 	}
 	j := Journal{Version: 1, BaseRevision: plan.BaseRevision, DesiredRevision: plan.DesiredRevision, Stage: "prepared", Mode: mode, Resources: map[string]ResourceResult{}}
+	if revert && existing.Version == 1 && existing.Stage != "complete" && existing.Stage != "aborted" {
+		j.Superseded = &existing
+	}
 	for _, change := range plan.Changes {
 		j.Resources[change.Resource] = ResourceResult{Fingerprint: change.Fingerprint, State: "pending"}
 	}
@@ -294,6 +307,7 @@ func (c Coordinator) SaveApply(ctx context.Context, candidate Config, expected, 
 		return j, err
 	}
 	j.DesiredRevision = saved.Revision
+	j.Superseded = nil
 	j.Stage = "saved"
 	if err = c.writeJournal(&j); err != nil {
 		return j, err
@@ -396,6 +410,10 @@ func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
 		return j, err
 	}
 	if j.Stage == "prepared" && revision == j.BaseRevision {
+		if j.Superseded != nil {
+			prior := *j.Superseded
+			return prior, c.writeJournal(&prior)
+		}
 		j.Stage = "aborted"
 		return j, c.writeJournal(&j) // intent was durable, config was not committed
 	}
@@ -406,6 +424,7 @@ func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
 	if err != nil {
 		return j, err
 	}
+	j.Superseded = nil
 	if j.Stage == "complete" || j.Stage == "aborted" {
 		return j, nil
 	}
@@ -414,11 +433,11 @@ func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
 		if !revisionPattern.MatchString(j.BaseRevision) {
 			return j, errors.New("invalid journal base revision")
 		}
-		bytes, _, readErr := (Store{Path: c.Store.Path + ".history/" + j.BaseRevision + ".yaml"}).ReadRaw()
+		bytes, readErr := c.Store.ReadHistory(j.BaseRevision)
 		if readErr != nil || digest(bytes) != j.BaseRevision {
 			return j, errors.New("previous configuration snapshot is unavailable or damaged")
 		}
-		previous, _ = Parse(bytes)
+		previous = previousConfiguration(bytes)
 	}
 	pendingChanges := []Change{}
 	for resource := range j.Resources {

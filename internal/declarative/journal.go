@@ -45,25 +45,50 @@ func (c Coordinator) ReadJournal() (Journal, error) {
 	if decoder.Decode(&extra) != io.EOF {
 		return j, errors.New("invalid apply journal")
 	}
+	if err = validateJournal(j); err != nil {
+		return j, err
+	}
+	return j, nil
+}
+
+func validateJournal(j Journal) error {
+	if j.Version != 1 {
+		return errors.New("invalid journal version")
+	}
 	if !revisionPattern.MatchString(j.DesiredRevision) || (j.BaseRevision != "missing" && !revisionPattern.MatchString(j.BaseRevision)) || len(j.Resources) > 192 {
-		return j, errors.New("invalid journal revisions or resource limit")
+		return errors.New("invalid journal revisions or resource limit")
 	}
 	if j.Mode != "now" && j.Mode != "next_start" {
-		return j, errors.New("invalid journal apply mode")
+		return errors.New("invalid journal apply mode")
 	}
 	switch j.Stage {
 	case "prepared", "saved", "applying", "blocked", "failed", "complete", "aborted":
 	default:
-		return j, errors.New("invalid journal stage")
+		return errors.New("invalid journal stage")
 	}
 	for key := range j.Resources {
 		kind, id, ok := strings.Cut(key, "/")
 		if !ok || (kind != "service" && kind != "share") || !validID(id) {
-			return j, errors.New("invalid journal resource")
+			return errors.New("invalid journal resource")
 		}
 	}
-	return j, nil
+	if j.Superseded != nil {
+		prior := j.Superseded
+		if j.Stage != "prepared" || prior.Superseded != nil || prior.DesiredRevision != j.BaseRevision {
+			return errors.New("invalid superseded journal")
+		}
+		switch prior.Stage {
+		case "saved", "applying", "blocked", "failed":
+		default:
+			return errors.New("invalid superseded journal stage")
+		}
+		if err := validateJournal(*prior); err != nil {
+			return err
+		}
+	}
+	return nil
 }
+
 func (c Coordinator) writeJournal(j *Journal) error {
 	j.UpdatedAt = time.Now().UTC()
 	data, err := json.Marshal(j)

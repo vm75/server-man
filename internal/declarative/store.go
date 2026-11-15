@@ -29,21 +29,30 @@ func (s Store) ReadRaw() ([]byte, string, error) {
 		return nil, "", err
 	}
 	defer f.Close()
-	info, err := f.Stat()
+	data, err := readPrivateConfiguration(f)
 	if err != nil {
 		return nil, "", err
 	}
+	return data, digest(data), nil
+}
+
+// Current and historical YAML share the same descriptor-based file policy.
+func readPrivateConfiguration(f *os.File) ([]byte, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return nil, "", errors.New("configuration must be an owner-only regular file")
+		return nil, errors.New("configuration must be an owner-only regular file")
 	}
 	data, err := io.ReadAll(io.LimitReader(f, MaxConfigBytes+1))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if len(data) > MaxConfigBytes {
-		return nil, "", errors.New("configuration exceeds 1 MiB")
+		return nil, errors.New("configuration exceeds 1 MiB")
 	}
-	return data, digest(data), nil
+	return data, nil
 }
 func (s Store) Read() (Snapshot, error) {
 	data, revision, err := s.ReadRaw()
@@ -65,7 +74,7 @@ func (s Store) Save(c Config, expected string) (Snapshot, error) {
 	if expected != current {
 		return Snapshot{}, ErrConflict
 	}
-	previous, _ := Parse(raw)
+	previous := previousConfiguration(raw)
 	c, err = PrepareIdentities(c, previous)
 	if err != nil {
 		return Snapshot{}, err

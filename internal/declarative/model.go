@@ -296,3 +296,13 @@ func Encode(c Config) ([]byte, error) {
 	}
 	return yaml.Marshal(c)
 }
+
+// Invalid YAML remains available for private repair/history, but partially
+// decoded fields must never authorize native removals or identity decisions.
+func previousConfiguration(raw []byte) Config {
+	cfg, err := Parse(raw)
+	if err != nil {
+		return Config{Version: 1}
+	}
+	return cfg
+}
