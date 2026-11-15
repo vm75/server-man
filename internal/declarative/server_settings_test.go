@@ -126,3 +126,57 @@ func TestUnifiedConfigurationRejectsInvalidServerSettings(t *testing.T) {
 		t.Fatal(loaded, err)
 	}
 }
+
+func TestPendingServerRestartAppearsOnEachResource(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	running, err := config.Defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.RunningServer = &running
+	settings := running
+	settings.Listen = "127.0.0.1:8181"
+	cfg.Server = &settings
+	cfg.Shares = map[string]Share{"documents": {Protocol: "nfs", Storage: "content", Clients: []string{"192.0.2.0/24"}}}
+	if _, err = c.Store.Save(cfg, "missing"); err != nil {
+		t.Fatal(err)
+	}
+	c.HealthCache = &HealthCache{}
+	for _, refresh := range []bool{true, false} {
+		health := c.Preflight(context.Background(), cfg, refresh)
+		for _, resource := range []string{"configuration", "service/website", "share/documents"} {
+			found := 0
+			for _, issue := range health.Issues {
+				if issue.Resource == resource && issue.Code == "restart_required" {
+					found++
+				}
+			}
+			if found != 1 {
+				t.Fatalf("%s has %d restart blockers (refresh=%t)", resource, found, refresh)
+			}
+		}
+	}
+	status, err := c.ServiceStatuses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	services := status.(map[string]any)["services"].([]ServiceStatus)
+	if len(services) != 1 {
+		t.Fatal(services)
+	}
+	found := false
+	for _, issue := range services[0].Issues {
+		if issue.Code == "restart_required" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("application status omitted the global blocker")
+	}
+	c.RunningServer = &settings
+	for _, issue := range c.Preflight(context.Background(), cfg, false).Issues {
+		if issue.Code == "restart_required" {
+			t.Fatal("old restart blocker retained in native cache")
+		}
+	}
+}

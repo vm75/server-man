@@ -103,16 +103,13 @@ func (c Coordinator) Preflight(ctx context.Context, cfg Config, refresh bool) He
 }
 func propagateReadiness(cfg Config, h Health, native []Issue) Health {
 	h.Issues = append(h.Issues, native...)
-	available := map[string]bool{}
-	for _, i := range native {
-		available[i.Resource] = true
-	}
-	// Native checks report backend-scoped issues; every affected service/share
-	// receives its own blocker for direct UI display and dependency propagation.
+	sourceIssues := slices.Clone(h.Issues)
+	// Backend and configuration-wide issues also belong on affected resources
+	// so inventory controls and dependency checks reflect the same blockers.
 	for _, key := range orderedResources(cfg) {
 		target := backend(cfg, key)
-		for _, issue := range native {
-			if issue.Resource == "backend/"+target {
+		for _, issue := range sourceIssues {
+			if issue.Resource == "backend/"+target || issue.Resource == "configuration" {
 				copy := issue
 				copy.Resource = key
 				h.Issues = append(h.Issues, copy)

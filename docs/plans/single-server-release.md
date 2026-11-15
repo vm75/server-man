@@ -6,7 +6,7 @@ Status: active, 2026-11-15. This checklist supersedes the broader plan's release
 
 First deployment: this Ubuntu 26.10 machine, as its workload account. Debian and Arch Linux remain support targets; neither has native acceptance evidence yet.
 
-- One authoritative server-man YAML for managed containers, VMs and Samba/NFS shares. Native definitions are derived state.
+- One authoritative server-man YAML for application settings, managed containers, VMs and Samba/NFS shares. Native definitions are derived state.
 - Podman Quadlet and Compose, Docker Compose, KVM/libvirt and Incus VMs. Configure/update, start/stop and independent boot enable/disable through the same validated web/MCP functions.
 - Friendly typed editors, review before apply, useful status and alerts for missing programs/providers, permissions, files/directories/disks, mounts, pools and networks. Do not create empty data to conceal a failed prerequisite.
 - Host system services and software remain direct operations outside workload YAML. Preserve rootless workload ownership and unmanaged share configuration/data.
@@ -20,7 +20,7 @@ First deployment: this Ubuntu 26.10 machine, as its workload account. Debian and
 - [x] Inspect target without mutation. No existing system/user server-man unit or bootstrap configuration found. Podman/libvirt executables present; Docker, Incus, Samba and NFS management executables absent. Presence does not establish working runtime access.
 - [x] Simulate missing dependency installation: `apt-get --simulate install docker.io docker-compose-v2 incus samba nfs-kernel-server`. Cached repositories propose 48 new packages, zero removals/upgrades; Compose v2 package already installed. No refresh or installation performed.
 - [x] Run `make check test mcp-test ui-test`, then stage `make install DESTDIR=...` and verify packaged paths/unit syntax. Fix actual deployment blockers before extending scope.
-- [x] Install the verified application/helper and workload-account service with private bootstrap configuration, loopback listener and explicit manifest path. Validate helper sudo policy and service health without exposing the token.
+- [x] Install the verified application/helper and workload-account service with a private unified YAML configuration and loopback listener. Validate helper sudo policy and service health without exposing the token.
 - [x] Obtain an explicit exception to AGENTS.md's development-host package prohibition before installing missing runtime/share dependencies. Package installation may start system daemons. Do not initialize Incus storage/network or expose shares without concrete reviewed settings.
 - [x] Inspect account access to Podman user systemd, Docker socket, libvirt and Incus. Report necessary access/setup explicitly; executable presence alone is insufficient. Do not alter `~/vms` or import its workloads.
 - [ ] Confirm readiness diagnostics for absent prerequisites and fix blockers affecting the core UI/configure/apply workflow.
@@ -31,7 +31,7 @@ First deployment: this Ubuntu 26.10 machine, as its workload account. Debian and
 
 A running web service is an application deployment, not proof that all workloads are ready. Distinguish app health, provider availability, fixture coverage, live lifecycle, boot and client checks. Do not claim Debian/Arch support verified from Ubuntu checks. Release scope excludes backup/restore; the broader declarative phase remains incomplete until its retained future requirements pass.
 
-Deployment evidence: [Ubuntu first deployment](../operations/ubuntu-first-deployment.md). Application is installed, enabled and serving HTTP 200. Authenticated readiness correctly reports no initial manifest. Docker/Incus account access is verified; Incus initialization remains pending; no workload/share lifecycle acceptance is claimed. Explicit user approval allowed the helper rule; its isolated syntax check passed. Full sudoers validation found an unrelated existing file-mode issue, recorded in the operations note.
+Deployment evidence: [Ubuntu first deployment](../operations/ubuntu-first-deployment.md). Application is installed, enabled and serving HTTP 200. Authenticated readiness reports the unified configuration valid; initial missing-file behavior is covered separately. Docker/Incus account access is verified; Incus initialization remains pending; no workload/share lifecycle acceptance is claimed. Explicit user approval allowed the helper rule; its isolated syntax check passed. Full sudoers validation found an unrelated existing file-mode issue, recorded in the operations note.
 
 ## Repeatable installation increment
 
@@ -60,3 +60,9 @@ The earlier two-file installation records above are historical and superseded by
 Unified-config verification: `make check test` passed with zero frontend diagnostics and the full Go race suite. Added tests cover strict/default/private YAML startup parsing, preserved server fields through typed resource edits, revision safety, restart preview/readiness/lifecycle blocking, rejection of mixed server/resource changes and absence of native drift apply during server-only saves. SDK stdio verification now starts with the unified configuration and checks its actual revision/configured state; HTTP still covers missing initial configuration. `make mcp-test ui-test` passed with 55-tool schema parity and Firefox desktop/mobile checks. `make install DESTDIR=/tmp/server-man-unified-stage` passed. Installed unit verification passed with only unrelated xfs-unit warnings. Live checks verified retained server settings, configured/valid readiness, no pending restart and HTTP 200. Release packaging/checksum and extracted-installer preservation checks are recorded with the final artifact below. Fresh native Debian/Arch, live guest/container boot/share-client acceptance and archive/restore remain outside this increment.
 
 Final unified artifact check: native amd64 release checksum, safe extraction and extracted installer dry-run passed. The installed shared tool was rerun with existing dependencies and existing YAML preserved; no compatibility reader or general migration layer was added.
+
+## First-use readiness follow-up (2026-11-15)
+
+A unified configuration exists before applications are defined. Applications now distinguishes that initial empty inventory from a search with no matches and from invalid configuration. Shared readiness propagation now copies configuration-wide blockers to service/share issue lists, including the pending server restart, so application startup controls reflect the existing mutation guard. The native cache cannot retain the derived blocker after restart.
+
+Verification: `make check test ui-test` passed (zero frontend diagnostics, full Go race suite and Firefox desktop/mobile checks). Added fixtures prove one restart blocker at configuration/service/share scopes on fresh and cached checks, inventory visibility and clearing after running settings match. Browser fixtures verify first-use guidance with Define application enabled and a distinct unmatched search. No host workload, package, share or VM state changed during verification. These checks improve the readiness gate but do not complete its full native/porting matrix. Incus pool/network selection remains a deployment question; archival stays deferred.

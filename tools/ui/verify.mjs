@@ -21,6 +21,7 @@ const deniedByServer = []
 const backupJobResults = new Map()
 let fixtureMode = false
 let readinessScenario = 'blocked'
+let applicationsScenario = 'blocked'
 let backupRecoveryPending = false
 let backupPublicationPending = false
 let backupPublicationFinalized = true
@@ -40,7 +41,7 @@ const fixtures = {
   managed_apply_status: () => ({ stage: 'complete' }),
   managed_shares: () => ({ configured: true, revision: 'a'.repeat(64), shares: [] }),
   managed_resource_plan: args => ({ baseRevision: args.revision, desiredRevision: 'b'.repeat(64), changes: [{resource: `${args.kind}/${args.id}`,backend:'fixture',operation:args.operation}], files: {issues:[]} }),
-  managed_services: () => ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
+  managed_services: () => applicationsScenario === 'empty' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[]} : ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
   services_list: args => ({ scope: args.scope ?? 'system', available: true, journalAvailable: true, services: [{ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled' }], warnings: [] }),
   services_details: () => ({ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', canStart: false, canStop: true, canReload: true, mainPID: 1234 }),
   shares_list: () => ({ backends: [{ protocol: 'samba', available: true, canManage: true, managedFile: '/tmp/server-man/samba.conf', revision: 'a'.repeat(64), setupRequired: false }, { protocol: 'nfs', available: true, canManage: true, managedFile: '/tmp/server-man/exports', revision: 'b'.repeat(64), setupRequired: false }], shares: [], warnings: [] }),
@@ -62,6 +63,16 @@ async function exerciseManagement(page) {
   await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
   await page.getByText('Management enabled', { exact: true }).waitFor()
 
+  // A unified configuration exists before any workload is defined. This is
+  // an empty installation rather than a failed search.
+  applicationsScenario = 'empty'
+  await page.getByRole('navigation').getByRole('button', {name:'Applications',exact:true}).click()
+  await page.getByRole('heading', {name:'No managed applications yet',exact:true}).waitFor()
+  assert.equal(await page.getByRole('heading', {name:'No matching applications',exact:true}).count(),0)
+  assert.equal(await page.getByRole('button', {name:'Define application',exact:true}).isEnabled(),true)
+  applicationsScenario = 'blocked'
+  await page.getByRole('navigation').getByRole('button', {name:'Overview',exact:true}).click()
+
   const globalHealth = page.getByRole('region', {name:'Configuration readiness',exact:true})
   await globalHealth.getByText('Workload configuration alert',{exact:true}).waitFor()
   await globalHealth.getByText('View all configuration issues (1)',{exact:true}).click()
@@ -72,6 +83,10 @@ async function exerciseManagement(page) {
   await page.getByText('Restore the data folder before starting.', { exact: true }).first().waitFor()
   assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
   assert.equal(await page.getByRole('button', { name: 'Disable boot startup', exact: true }).isDisabled(), false)
+  await page.getByRole('searchbox', {name:'Find an application',exact:true}).fill('no-such-application')
+  await page.getByRole('heading', {name:'No matching applications',exact:true}).waitFor()
+  assert.equal(await page.getByRole('heading', {name:'No managed applications yet',exact:true}).count(),0)
+  await page.getByRole('searchbox', {name:'Find an application',exact:true}).fill('')
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, 'application diagnostics overflow')
   await page.getByRole('button',{name:'Define application',exact:true}).click()
   const applicationEditor = page.getByRole('region',{name:'Definition editor'})

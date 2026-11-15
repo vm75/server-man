@@ -51,8 +51,8 @@
 {#if blocked.length}<section class="panel health-alert" role="alert"><h2>Configuration needs attention</h2><p>Some applications have startup requirements to resolve. Restore missing data and repair host dependencies before starting them.</p></section>{/if}
 {#if inventory?.health}<p class="resource-hint">Files checked {new Date(inventory.health.checkedAt).toLocaleString()}. {#if inventory.health.runtimeCheckedAt}Native requirements checked {new Date(inventory.health.runtimeCheckedAt).toLocaleString()}.{/if}</p>{/if}
 {#if !allowWrites}<p class="resource-hint">Management writes are disabled. Status and configuration checks remain available.</p>{/if}
-{#if inventory && !inventory.configured}<section class="panel empty-state"><h2>No managed applications yet</h2><p>No workload configuration has been saved. Use Define application to create a stopped container application or virtual machine. Configure storage and host bindings in Configuration first.</p></section>
-{:else if inventory && !filtered.length}<section class="panel empty-state"><h2>No matching applications</h2><p>Try a different search.</p></section>{/if}
+{#if inventory && !inventory.error && !inventory.services.length}<section class="panel empty-state"><h2>No managed applications yet</h2><p>No applications have been defined yet. Use Define application to create a stopped container application or virtual machine. Configure storage and host bindings in Configuration first.</p></section>
+{:else if inventory && !inventory.error && inventory.services.length && !filtered.length}<section class="panel empty-state"><h2>No matching applications</h2><p>Try a different search.</p></section>{/if}
 <div class="applications">
 {#each filtered as service (service.id)}
   <section class="panel application">
