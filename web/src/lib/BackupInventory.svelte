@@ -105,7 +105,7 @@
     <details><summary>Explicit exclusions ({inventory.exclusions.length})</summary><ul>{#each inventory.exclusions as exclusion}<li><strong>{exclusion.kind.replaceAll('_',' ')}</strong><p>{exclusion.reason}</p></li>{/each}</ul></details>
     <div class="prepare-section">
       <h3>Capture backup inputs</h3>
-      <p>Capture supported inputs into a private checksummed bundle. This initial capture is not a prepared or restorable backup: complete filesystem metadata, native exports and restore validation remain unfinished. Published shares and unresolved prerequisites block capture.</p>
+      <p>Capture supported inputs into a private checksummed bundle. This initial capture is not a prepared or restorable backup: full metadata preservation, libvirt capture and restore validation remain unfinished. Initial Incus instance and custom-volume exports are supported. Published shares and unresolved prerequisites block capture.</p>
       {#if prepareError}<p class="form-error" role="alert">{prepareError}</p>{/if}
       {#if summary}
         <div class="summary-box" role="status">

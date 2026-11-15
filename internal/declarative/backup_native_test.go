@@ -83,12 +83,13 @@ func TestLibvirtBackupRefusesOwnershipAndDoesNotGuessTPMState(t *testing.T) {
 
 type incusBackupRecorder struct {
 	*incusRecorder
-	volumeProject   string
-	volumeUsers     []string
-	projectVolumes  bool
-	failVolume      bool
-	clustered       bool
-	omitServerProof bool
+	volumeContentType string
+	volumeProject     string
+	volumeUsers       []string
+	projectVolumes    bool
+	failVolume        bool
+	clustered         bool
+	omitServerProof   bool
 }
 
 func (r *incusBackupRecorder) Capture(ctx context.Context, cmd core.Command) (string, error) {
@@ -112,7 +113,11 @@ func (r *incusBackupRecorder) Capture(ctx context.Context, cmd core.Command) (st
 		if r.failVolume {
 			return "", errors.New("private native diagnostic")
 		}
-		metadata = map[string]any{"name": "data", "type": "custom", "content_type": "filesystem", "used_by": r.volumeUsers}
+		contentType := r.volumeContentType
+		if contentType == "" {
+			contentType = "filesystem"
+		}
+		metadata = map[string]any{"name": "data", "type": "custom", "content_type": contentType, "used_by": r.volumeUsers}
 	default:
 		return r.incusRecorder.Capture(ctx, cmd)
 	}

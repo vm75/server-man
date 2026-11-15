@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -192,53 +191,3 @@ func (l *Libvirt) BackupDependencies(ctx context.Context, c Config, key string) 
 	result.require(key, "native_state_capture", "Reinspect stopped guest XML/state and disk dependencies, capture private NVRAM/TPM metadata and validate native snapshots/managed-save state before a completed bundle.")
 	return result, nil
 }
-
-func (l *Libvirt) BackupExport(ctx context.Context, c Config, key string, bundleDir string) ([]BackupExport, error) {
-	_, id, _ := strings.Cut(key, "/")
-	service, ok := c.Services[id]
-	if !ok || service.VM == nil || service.Backend != "libvirt" {
-		return nil, nil
-	}
-	var exports []BackupExport
-	_, raw, err := l.readDomainXML(ctx, c, key, true)
-	if err == nil && len(raw) > 0 {
-		xmlRel := filepath.ToSlash(filepath.Join("native", "libvirt", id+".xml"))
-		xmlDst := filepath.Join(bundleDir, "native", "libvirt", id+".xml")
-		_ = os.MkdirAll(filepath.Dir(xmlDst), 0700)
-		if err := os.WriteFile(xmlDst, raw, 0600); err != nil {
-			return nil, err
-		}
-		exports = append(exports, BackupExport{
-			BundlePath: xmlRel,
-			SizeBytes:  int64(len(raw)),
-			SHA256:     digest(raw),
-			Kind:       "libvirt_domain_xml",
-			Native:     &NativeBackupObject{Backend: "libvirt", Name: vmDomainName(id)},
-		})
-	}
-	deps, err := l.BackupDependencies(ctx, c, key)
-	if err == nil {
-		for _, input := range deps.Inputs {
-			if input.Strategy == "native_file" && input.Path != "" {
-				fileRel := input.BundlePath
-				if fileRel == "" {
-					fileRel = filepath.ToSlash(filepath.Join("native", "libvirt", id, filepath.Base(input.Path)))
-				}
-				fileDst := filepath.Join(bundleDir, fileRel)
-				_ = os.MkdirAll(filepath.Dir(fileDst), 0700)
-				entry, err := copyFileSparseAndHash(input.Path, fileDst, 0600)
-				if err == nil {
-					exports = append(exports, BackupExport{
-						BundlePath: fileRel,
-						SizeBytes:  entry.SizeBytes,
-						SHA256:     entry.SHA256,
-						Kind:       input.Kind,
-						Native:     &NativeBackupObject{Backend: "libvirt", Name: vmDomainName(id)},
-					})
-				}
-			}
-		}
-	}
-	return exports, nil
-}
-

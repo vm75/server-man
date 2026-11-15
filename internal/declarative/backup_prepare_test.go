@@ -25,8 +25,8 @@ type backupTestAdapter struct {
 	actions         []string
 	activeStates    map[string]bool
 	failAction      string
+	drift           bool
 	failInspect     bool
-	exportItems     []BackupExport
 	failAfterChange bool
 	silentStart     bool
 }
@@ -42,7 +42,7 @@ func (a *backupTestAdapter) Inspect(_ context.Context, _ Config, key string) (Ob
 		return Observation{}, errors.New("inspect failed")
 	}
 	isActive := a.activeStates[key]
-	return Observation{Registered: true, Active: isActive, Matches: true}, nil
+	return Observation{Registered: true, Active: isActive, Matches: !a.drift}, nil
 }
 
 func (a *backupTestAdapter) Apply(_ context.Context, _ Config, _ Config, _ string, _ string) error {
@@ -68,10 +68,6 @@ func (a *backupTestAdapter) Action(_ context.Context, _ Config, key, action stri
 		return errors.New("action failed after state change")
 	}
 	return nil
-}
-
-func (a *backupTestAdapter) BackupExport(_ context.Context, _ Config, key string, bundleDir string) ([]BackupExport, error) {
-	return a.exportItems, nil
 }
 
 func setupBackupFixture(t *testing.T) (Coordinator, *backupTestAdapter, string) {
@@ -372,7 +368,7 @@ func TestPrepareBackupSparseFileSupport(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manifestFile, err := copyFileSparseAndHash(src, dst, 0644)
+	manifestFile, err := copyBackupFile(context.Background(), src, dst, 0644)
 	if err != nil {
 		t.Fatalf("copyFileSparseAndHash failed: %v", err)
 	}
@@ -453,19 +449,6 @@ func TestPrepareBackupCancellationCleansStagingAndResumes(t *testing.T) {
 	}
 }
 
-func TestPrepareBackupRejectsUnverifiedNativeExportRecords(t *testing.T) {
-	coord, adapter, _ := setupBackupFixture(t)
-	adapter.activeStates = map[string]bool{}
-	adapter.exportItems = []BackupExport{{BundlePath: "native/missing.tar", SizeBytes: 123, SHA256: strings.Repeat("a", 64), Kind: "fake_export"}}
-	destination := filepath.Join(t.TempDir(), "bundle")
-	if _, err := coord.PrepareBackup(context.Background(), BackupPrepareOptions{Revision: backupRevision(t, coord), Destination: destination, Quiesce: true}, io.Discard); err == nil {
-		t.Fatal("nonexistent native export was accepted")
-	}
-	if _, err := os.Stat(destination); !os.IsNotExist(err) {
-		t.Fatal("incomplete bundle was published", err)
-	}
-}
-
 func TestPrepareBackupRegistryPolicy(t *testing.T) {
 	coord, _, _ := setupBackupFixture(t)
 	jobs, err := core.NewJobs(context.Background(), t.TempDir())
@@ -508,7 +491,7 @@ func backupRevision(t *testing.T, c Coordinator) string {
 }
 
 func TestBackupCaptureGuardsRunBeforeQuiescence(t *testing.T) {
-	for _, scenario := range []string{"missing revision", "stale revision", "unknown runtime", "live copy", "corrupt journal", "destination symlink", "parent alias into source"} {
+	for _, scenario := range []string{"missing revision", "stale revision", "unknown runtime", "definition drift", "live copy", "corrupt journal", "destination symlink", "parent alias into source"} {
 		t.Run(scenario, func(t *testing.T) {
 			coord, adapter, root := setupBackupFixture(t)
 			dest := filepath.Join(t.TempDir(), "bundle")
@@ -520,6 +503,8 @@ func TestBackupCaptureGuardsRunBeforeQuiescence(t *testing.T) {
 				options.Revision = strings.Repeat("0", 64)
 			case "unknown runtime":
 				adapter.failInspect = true
+			case "definition drift":
+				adapter.drift = true
 			case "live copy":
 				options.Quiesce = false
 			case "corrupt journal":

@@ -35,7 +35,7 @@ type BackupManifestFile struct {
 }
 
 type BackupManifestNativeExport struct {
-	Resource   string              `json:"resource"`
+	Resources  []string            `json:"resources"`
 	Backend    string              `json:"backend"`
 	Kind       string              `json:"kind"`
 	BundlePath string              `json:"bundlePath"`
@@ -80,12 +80,10 @@ type BackupExport struct {
 }
 
 type BackupExporter interface {
-	BackupExport(ctx context.Context, c Config, key string, bundleDir string) ([]BackupExport, error)
+	ValidateBackupExport(context.Context, Config, BackupInput) error
+	BackupExport(ctx context.Context, c Config, input BackupInput, bundleDir string) (BackupExport, error)
 }
 
-func copyFileSparseAndHash(src, dst string, mode os.FileMode) (BackupManifestFile, error) {
-	return copyBackupFile(context.Background(), src, dst, mode)
-}
 func copyBackupFile(ctx context.Context, src, dst string, mode os.FileMode) (BackupManifestFile, error) {
 	srcF, err := os.OpenFile(src, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
@@ -231,14 +229,6 @@ func copyDirectory(ctx context.Context, srcDir, dstDir, bundlePrefix string, max
 	return files, err
 }
 
-func fileHash(path string) (string, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	return hashBackupFile(context.Background(), f)
-}
 func hashBackupFile(ctx context.Context, f *os.File) (string, error) {
 	if _, err := f.Seek(0, 0); err != nil {
 		return "", err
@@ -360,13 +350,20 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		if input.Strategy == "external_data" {
 			return BackupSummary{}, errors.New("external data inclusion remains unresolved")
 		}
+
 		if input.Strategy == "native_export" && input.Required && input.IncludedBy == "" {
-			for _, resource := range input.Resources {
-				if _, ok := c.Adapters[backend(snapshot.Config, resource)].(BackupExporter); !ok {
-					return BackupSummary{}, errors.New("required native export support is unavailable; backup cannot be marked prepared")
-				}
+			if input.Native == nil {
+				return BackupSummary{}, errors.New("native export identity is unresolved")
+			}
+			adapter, ok := c.Adapters[input.Native.Backend].(BackupExporter)
+			if !ok {
+				return BackupSummary{}, fmt.Errorf("native export support for %s is unavailable; capture is blocked", input.Native.Backend)
+			}
+			if err := adapter.ValidateBackupExport(bCtx, snapshot.Config, input); err != nil {
+				return BackupSummary{}, err
 			}
 		}
+
 		if input.Strategy == "native_file" {
 			return BackupSummary{}, errors.New("native state paths require a verified capture strategy before backup")
 		}
@@ -421,6 +418,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		obs, inspectErr := adapter.Inspect(bCtx, snapshot.Config, key)
 		if inspectErr != nil {
 			return BackupSummary{}, errors.New("service runtime state could not be established before backup")
+		}
+		if obs.Active && (!obs.Matches || !obs.Registered) {
+			return BackupSummary{}, errors.New("resolve managed definition drift before quiescing running workloads for capture")
 		}
 		if obs.Active {
 			runningWorkloads = append(runningWorkloads, id)
@@ -502,6 +502,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 	}
 
+	if err := c.verifyNativeCaptureBoundary(bCtx, inventory); err != nil {
+		return BackupSummary{}, err
+	}
 	if err := os.MkdirAll(filepath.Join(stagingDir, "data"), 0700); err != nil {
 		return BackupSummary{}, err
 	}
@@ -572,45 +575,32 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 	}
 
-	for id := range snapshot.Config.Services {
-		key := "service/" + id
-		adapter := c.Adapters[backend(snapshot.Config, key)]
-		if exporter, ok := adapter.(BackupExporter); ok {
-			exports, err := exporter.BackupExport(bCtx, snapshot.Config, key, stagingDir)
-			if err != nil {
-				return BackupSummary{}, fmt.Errorf("native export for %s: %w", id, err)
-			}
-			for _, exp := range exports {
-				if err := verifyBackupExport(bCtx, stagingDir, exp); err != nil {
-					return BackupSummary{}, err
-				}
-				manifestNativeExports = append(manifestNativeExports, BackupManifestNativeExport{
-					Resource:   key,
-					Backend:    snapshot.Config.Services[id].Backend,
-					Kind:       exp.Kind,
-					BundlePath: exp.BundlePath,
-					SizeBytes:  exp.SizeBytes,
-					SHA256:     exp.SHA256,
-					Native:     exp.Native,
-				})
-			}
-		}
-	}
-
 	for _, input := range inventory.Inputs {
-		if input.Strategy != "native_export" || !input.Required || input.IncludedBy != "" {
+		if input.Strategy != "native_export" || input.IncludedBy != "" {
 			continue
 		}
-		covered := false
-		for _, exported := range manifestNativeExports {
-			if input.Native != nil && exported.Native != nil && *input.Native == *exported.Native && input.Kind == exported.Kind && slices.Contains(input.Resources, exported.Resource) {
-				covered = true
-				break
-			}
+		if input.Native == nil || len(input.Resources) == 0 {
+			return BackupSummary{}, errors.New("native backup input identity is unresolved")
 		}
-		if !covered {
-			return BackupSummary{}, fmt.Errorf("required native input %s has no verified matching export", input.ID)
+		adapter, ok := c.Adapters[input.Native.Backend].(BackupExporter)
+		if !ok {
+			return BackupSummary{}, errors.New("required native exporter is unavailable")
 		}
+		expected := *input.Native
+		exp, err := adapter.BackupExport(bCtx, snapshot.Config, input, stagingDir)
+		if err != nil {
+			return BackupSummary{}, fmt.Errorf("native export for %s: %w", input.ID, err)
+		}
+		if exp.Native == nil || *exp.Native != expected || exp.Kind != input.Kind {
+			return BackupSummary{}, errors.New("native exporter returned a different object or kind")
+		}
+		if err := verifyBackupExport(bCtx, stagingDir, exp); err != nil {
+			return BackupSummary{}, err
+		}
+		manifestNativeExports = append(manifestNativeExports, BackupManifestNativeExport{Resources: slices.Clone(input.Resources), Backend: expected.Backend, Kind: exp.Kind, BundlePath: exp.BundlePath, SizeBytes: exp.SizeBytes, SHA256: exp.SHA256, Native: exp.Native})
+	}
+	if err := c.verifyNativeCaptureBoundary(bCtx, inventory); err != nil {
+		return BackupSummary{}, err
 	}
 
 	if _, current, e := c.Store.ReadRaw(); e != nil || current != snapshot.Revision {
