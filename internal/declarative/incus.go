@@ -84,10 +84,12 @@ func (i *Incus) mutate(ctx context.Context, project, method, path string, payloa
 
 type incusInstanceInfo struct {
 	incusDefinition
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	Status     string `json:"status"`
-	StatusCode int    `json:"status_code"`
+	ExpandedDevices map[string]map[string]string `json:"expanded_devices"`
+	Location        string                       `json:"location"`
+	Name            string                       `json:"name"`
+	Type            string                       `json:"type"`
+	Status          string                       `json:"status"`
+	StatusCode      int                          `json:"status_code"`
 }
 
 func incusPath(id string) string { return "/1.0/instances/" + url.PathEscape(incusInstance(id)) }

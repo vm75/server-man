@@ -120,4 +120,4 @@ Initial sources affect desired configuration fingerprints but are excluded from 
 
 ## Portable backup input inventory
 
-`managed_backup_inventory` and Configuration's **Review backup inventory** inspect the selected current revision without copying data, reading private-file contents or changing workloads. Private inventory follows the write-enabled editor access policy on HTTP/MCP. [Backup design](backup.md) describes its input/requirement contract and current limits. Service data references are shared across backup/provisioning, startup blockers and resource fingerprints, rather than copied into each workflow.
+`managed_backup_inventory` and Configuration's **Review backup inventory** inspect the selected current revision and bounded native guest dependencies without copying data, reading private-file contents or changing workloads. Private inventory follows the write-enabled editor access policy on HTTP/MCP. [Backup design](backup.md) describes its input/requirement contract and current limits. Service data references are shared across backup/provisioning, startup blockers and resource fingerprints, rather than copied into each workflow.

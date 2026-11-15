@@ -80,6 +80,10 @@ func (l *Libvirt) exists(ctx context.Context, id, uuid string) (bool, error) {
 	return false, nil
 }
 func (l *Libvirt) readDomain(ctx context.Context, c Config, key string, inactive bool) (domainXML, error) {
+	domain, _, err := l.readDomainXML(ctx, c, key, inactive)
+	return domain, err
+}
+func (l *Libvirt) readDomainXML(ctx context.Context, c Config, key string, inactive bool) (domainXML, []byte, error) {
 	_, id, _ := strings.Cut(key, "/")
 	uuid := c.Services[id].VM.UUID
 	args := []string{"dumpxml", "--domain", uuid}
@@ -88,16 +92,16 @@ func (l *Libvirt) readDomain(ctx context.Context, c Config, key string, inactive
 	}
 	output, err := l.Runner.Capture(ctx, l.command(args...))
 	if err != nil {
-		return domainXML{}, errors.New("libvirt domain definition cannot be read")
+		return domainXML{}, nil, errors.New("libvirt domain definition cannot be read")
 	}
 	var domain domainXML
 	if xml.Unmarshal([]byte(output), &domain) != nil {
-		return domain, errors.New("invalid libvirt domain XML")
+		return domain, nil, errors.New("invalid libvirt domain XML")
 	}
 	if domain.UUID != uuid || domain.Name != vmDomainName(id) || domain.Metadata.Managed.XMLName.Space != libvirtMetadataNS || domain.Metadata.Managed.ID != id {
-		return domain, errors.New("libvirt domain is not owned by this managed definition")
+		return domain, nil, errors.New("libvirt domain is not owned by this managed definition")
 	}
-	return domain, nil
+	return domain, []byte(output), nil
 }
 func domainMatches(want, actual domainXML) bool {
 	if actual.Memory.Unit == "KiB" || actual.Memory.Unit == "kib" {

@@ -16,18 +16,20 @@ import (
 // BackupInput describes required inputs, not a completed snapshot. Native state
 // and directory trees need dedicated collection before any bundle can be complete.
 type BackupInput struct {
-	ID             string   `json:"id"`
-	Kind           string   `json:"kind"`
-	Strategy       string   `json:"strategy"`
-	Path           string   `json:"path,omitempty"`
-	BundlePath     string   `json:"bundlePath,omitempty"`
-	Resources      []string `json:"resources"`
-	Required       bool     `json:"required"`
-	Sensitive      bool     `json:"sensitive"`
-	IncludedBy     string   `json:"includedBy,omitempty"`
-	Inspection     string   `json:"inspection"`
-	LogicalBytes   *int64   `json:"logicalBytes,omitempty"`
-	AllocatedBytes *int64   `json:"allocatedBytes,omitempty"`
+	Native         *NativeBackupObject `json:"native,omitempty"`
+	RuntimeState   string              `json:"runtimeState,omitempty"`
+	ID             string              `json:"id"`
+	Kind           string              `json:"kind"`
+	Strategy       string              `json:"strategy"`
+	Path           string              `json:"path,omitempty"`
+	BundlePath     string              `json:"bundlePath,omitempty"`
+	Resources      []string            `json:"resources"`
+	Required       bool                `json:"required"`
+	Sensitive      bool                `json:"sensitive"`
+	IncludedBy     string              `json:"includedBy,omitempty"`
+	Inspection     string              `json:"inspection"`
+	LogicalBytes   *int64              `json:"logicalBytes,omitempty"`
+	AllocatedBytes *int64              `json:"allocatedBytes,omitempty"`
 }
 type BackupRequirement struct {
 	Resource    string `json:"resource"`
@@ -85,7 +87,7 @@ func (c Coordinator) BackupInventory(ctx context.Context) (BackupInventory, erro
 			return errors.New("backup inventory entry limit exceeded")
 		}
 		input.Resources = slices.Compact(slices.Sorted(slices.Values(input.Resources)))
-		if input.Path != "" && input.Strategy != "external_data" {
+		if input.Path != "" && input.Strategy == "bundle_copy" {
 			relative, e := filepath.Rel(rootPath, input.Path)
 			var info os.FileInfo
 			if e == nil {
@@ -174,6 +176,8 @@ func (c Coordinator) BackupInventory(ctx context.Context) (BackupInventory, erro
 			return result, err
 		}
 	}
+	nativeContext, cancelNative := context.WithTimeout(ctx, 8*time.Second)
+	defer cancelNative()
 	for _, key := range orderedResources(cfg) {
 		if err = ctx.Err(); err != nil {
 			return result, err
@@ -198,17 +202,69 @@ func (c Coordinator) BackupInventory(ctx context.Context) (BackupInventory, erro
 		if service.Backend == "incus" {
 			nativeKind = "incus_instance_export"
 		}
-		if err = addInput(BackupInput{ID: "native/" + id, Kind: nativeKind, Strategy: "native_export", Resources: []string{key}, Required: true, Sensitive: true, Inspection: "native_dependencies_unchecked"}); err != nil {
+		baseInput := BackupInput{ID: "native/" + id, Kind: nativeKind, Strategy: "native_export", Resources: []string{key}, Required: true, Sensitive: true, Inspection: "native_dependencies_unchecked"}
+		probe, available := c.Adapters[service.Backend].(BackupDependencyAdapter)
+		if !available || nativeContext.Err() != nil {
+			if err = addInput(baseInput); err != nil {
+				return result, err
+			}
+			addIssue("unknown", key, "native_state", "backup_native_dependencies", "Native guest dependencies have not been enumerated for this inventory.", "Restore backend access and recheck; native probes are bounded and never imply a completed export.")
+			continue
+		}
+		probeContext, cancelProbe := context.WithTimeout(nativeContext, 2*time.Second)
+		discovered, probeErr := probe.BackupDependencies(probeContext, cfg, key)
+		cancelProbe()
+		if probeErr != nil {
+			if err = addInput(baseInput); err != nil {
+				return result, err
+			}
+			message, remedy := "Native guest dependency discovery failed or timed out.", "Check backend access/ownership and retry; no native data or configuration was changed."
+			var safeError *backupDiscoveryError
+			if errors.As(probeErr, &safeError) {
+				message, remedy = safeError.message, safeError.remedy
+			}
+			addIssue("unknown", key, "native_state", "backup_native_dependencies", message, remedy)
+			continue
+		}
+		baseInput.Inspection = "native_dependencies_discovered"
+		baseInput.RuntimeState = discovered.State
+		baseInput.Native = discovered.Object
+		if err = addInput(baseInput); err != nil {
 			return result, err
 		}
-		remedy := "Enumerate the owned domain's NVRAM/TPM, backing chains and other guest state before collecting a stopped, consistent export."
-		if service.Backend == "incus" {
-			remedy = "Enumerate the owned local instance and attached custom volumes, then use native portable exports; never copy internal daemon storage."
+		for _, input := range discovered.Inputs {
+			if err = addInput(input); err != nil {
+				return result, err
+			}
 		}
-		addIssue("unknown", key, "native_state", "backup_native_dependencies", "Native guest dependencies have not yet been enumerated for this backup inventory.", remedy)
+		result.Issues = append(result.Issues, discovered.Issues...)
+		for _, requirement := range discovered.Requirements {
+			addRequirement(requirement.Resource, requirement.Kind, requirement.Description)
+		}
+
 	}
 	for _, id := range slices.Sorted(maps.Keys(cfg.Bindings)) {
 		addRequirement("binding/"+id, "host_binding", "Review/rebind the declared "+cfg.Bindings[id].Kind+" and recreate its native host setup before activation on the destination.")
+	}
+	nativeVolumes := map[string]int{}
+	for index := range result.Inputs {
+		input := &result.Inputs[index]
+		if input.Kind != "incus_custom_volume" || input.Native == nil {
+			continue
+		}
+		object := input.Native
+		identity := object.Backend + "/" + object.Project + "/" + object.Pool + "/" + object.Name
+		if priorIndex, found := nativeVolumes[identity]; found {
+			prior := &result.Inputs[priorIndex]
+			if prior.Native.ContentType != object.ContentType {
+				addIssue("unknown", input.ID, "native_state", "backup_volume_changed", "Native volume metadata changed during discovery.", "Recheck before selecting a consistent export boundary.")
+				continue
+			}
+			prior.Resources = slices.Compact(slices.Sorted(slices.Values(append(prior.Resources, input.Resources...))))
+			input.IncludedBy = prior.ID
+		} else {
+			nativeVolumes[identity] = index
+		}
 	}
 	// Mark overlapping paths as covered by a selected directory or exact prior
 	// input. Future copy code must not duplicate secret files or shared storage.
@@ -252,6 +308,9 @@ func (c Coordinator) BackupInventory(ctx context.Context) (BackupInventory, erro
 	}
 	if limitExceeded || len(result.Inputs)+len(result.Requirements) > 2048 {
 		return result, errors.New("backup inventory entry limit exceeded")
+	}
+	if err = ctx.Err(); err != nil {
+		return result, err
 	}
 	if _, revision, e := c.Store.ReadRaw(); e != nil || revision != snapshot.Revision {
 		return result, ErrConflict
