@@ -2,10 +2,12 @@
   import { onMount } from 'svelte'
   import DefinitionEditor from '../lib/DefinitionEditor.svelte'
   import ConfigurationHistory from '../lib/ConfigurationHistory.svelte'
+  import StorageProvision from '../lib/StorageProvision.svelte'
   import { invokeTool, startJob, type Job } from '../lib/api'
   import type { ResourceKind, ModelSnapshot, ImpactPlan } from '../lib/managed'
   let { allowWrites }: { allowWrites: boolean } = $props()
   let model = $state<ModelSnapshot | null>(null)
+  let provisioning = $state<string | null>(null)
   let editor = $state<{kind:ResourceKind;id:string} | null>(null)
   let error = $state('')
   let feedback = $state('')
@@ -54,11 +56,12 @@
   <div class="actions"><button disabled={busy || activeJob !== null} onclick={load}>Refresh configuration</button><button disabled={busy || activeJob !== null} onclick={() => { rawOpen = !rawOpen }}>YAML / recovery editor</button></div>
   {#if error}<p role="alert" class="form-error">{error}</p>{/if}{#if feedback}<p role="status">{feedback}</p>{/if}
   {#if !['none','complete','aborted'].includes(applyStage)}<section class="panel"><h2>Apply needs attention: {applyStage}</h2><p>The saved configuration may differ from registered or running resources. Retry inspects native state before repeating work; uncertain destructive operations are refused.</p><button disabled={busy || activeJob !== null} onclick={retry}>Inspect and retry apply</button></section>{/if}
+  {#if provisioning}<StorageProvision storageID={provisioning} {revision} kind={model?.config.storage?.[provisioning]?.kind || 'directory'} onClose={() => { provisioning = null }} onStarted={(id) => { activeJob = id; provisioning = null; feedback = 'New data creation started. Follow Activity for results; workloads remain stopped.' }} />{/if}
   {#if editor}{#key `${editor.kind}/${editor.id}`}<DefinitionEditor kind={editor.kind} resourceID={editor.id} onClose={() => { editor = null }} onSaved={(id) => { editor = null; activeJob = id; feedback = 'Definition save started. Follow Activity for apply results.' }} />{/key}{/if}
   {#if valid}{#each [{kind:'storage',title:'Storage references'},{kind:'binding',title:'Host bindings'},{kind:'secret',title:'Private file references'}] as group}
     <section class="panel"><header><h2>{group.title}</h2><button disabled={busy || activeJob !== null} onclick={() => { editor = {kind:group.kind as ResourceKind,id:''} }}>Add {group.kind === 'secret' ? 'private file reference' : group.kind}</button></header>
     {#if !entries(group.kind as ResourceKind).length}<p>No references defined.</p>{/if}
-    <ul>{#each entries(group.kind as ResourceKind) as [id,description]}<li><div><strong>{id}</strong><p>{description}</p></div><button disabled={busy || activeJob !== null} onclick={() => { editor = {kind:group.kind as ResourceKind,id} }}>Edit {id}</button></li>{/each}</ul>
+    <ul>{#each entries(group.kind as ResourceKind) as [id,description]}<li><div><strong>{id}</strong><p>{description}</p></div><div class="actions"><button disabled={busy || activeJob !== null} onclick={() => { editor = {kind:group.kind as ResourceKind,id} }}>Edit {id}</button>{#if group.kind === 'storage' && !model?.config.storage?.[id]?.external}<button disabled={busy || activeJob !== null} onclick={() => { provisioning = id }}>Create empty data for {id}</button>{/if}</div></li>{/each}</ul>
     </section>
   {/each}{/if}
   {#key revision}<ConfigurationHistory {revision} disabled={busy || activeJob !== null} onStarted={(id) => { activeJob = id; feedback = 'Configuration revert started. Follow Activity for apply results.' }} onInspect={(historical) => { content = historical; rawOpen = true; plan = null }} />{/key}

@@ -78,6 +78,9 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 							err = declarative.RegisterEditing(registry, coordinator)
 							if err == nil {
 								err = declarative.RegisterHistory(registry, coordinator)
+								if err == nil {
+									err = declarative.RegisterProvisioning(registry, declarative.NewProvisioner(coordinator, runner))
+								}
 							}
 						}
 					}

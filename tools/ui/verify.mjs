@@ -22,6 +22,7 @@ let fixtureMode = false
 let readinessScenario = 'blocked'
 
 const fixtures = {
+  managed_storage_plan: args => ({storage:args.storage,revision:args.revision,path:'/tmp/new-data',kind:'directory',sizeGiB:0,availableBytes:10737418240,uid:1000,gid:1000,mode:'0700',consumers:[],reviewToken:'d'.repeat(64)}),
   managed_config_history: () => ({entries:[{revision:'c'.repeat(64),modifiedAt:new Date().toISOString(),valid:true}]}),
   managed_config_history_read: args => ({revision:args.target,content:'version: 1\n',valid:true}),
   managed_config_revert_plan: args => ({plan:{baseRevision:args.revision,desiredRevision:args.target,changes:[{resource:'service/website',backend:'podman/quadlet',operation:'update'}],files:{issues:[]}}}),
@@ -127,6 +128,18 @@ async function exerciseManagement(page) {
   await page.locator('.activity-button').click()
 
   await page.getByRole('navigation').getByRole('button',{name:'Configuration',exact:true}).click()
+  await page.getByRole('button',{name:'Create empty data for documents',exact:true}).click()
+  const provisioning = page.getByRole('region',{name:'New storage provisioning',exact:true})
+  await provisioning.getByRole('button',{name:'Review new data creation',exact:true}).click()
+  await provisioning.getByRole('heading',{name:'Review new storage',exact:true}).waitFor()
+  assert.equal(await provisioning.getByRole('button',{name:'Confirm new data creation',exact:true}).isDisabled(),true)
+  await provisioning.getByRole('checkbox',{name:'I want new empty data; I am not restoring missing data.',exact:true}).check()
+  await provisioning.getByRole('button',{name:'Confirm new data creation',exact:true}).click()
+  await page.getByText('New data creation started. Follow Activity for results; workloads remain stopped.',{exact:true}).waitFor()
+  await page.locator('.activity-button').click()
+  const provisioned = managementCalls.find(call => call.tool === 'managed_storage_create')
+  assert.deepEqual(provisioned.args,{storage:'documents',revision:'a'.repeat(64),sizeGiB:0,reviewToken:'d'.repeat(64),purpose:'new_data',confirm:true})
+  await page.evaluate(({id,tool}) => window.dispatchEvent(new CustomEvent('serverman:job-finished',{detail:{id,tool,state:'succeeded'}})),{id:`fixture-${managementCalls.length}`,tool:'managed_storage_create'})
   const history = page.getByRole('region',{name:'Configuration history',exact:true})
   await history.getByRole('button',{name:'Inspect cccccccccccc',exact:true}).click()
   assert.equal(await history.getByLabel('Historical configuration',{exact:true}).inputValue(),'version: 1\n')
@@ -152,7 +165,7 @@ async function exerciseManagement(page) {
   assert.equal(submitted.shares_setup?.confirm, true)
   assert.equal(submitted.dependencies_install?.target, 'podman')
   assert.equal(submitted.dependencies_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
+  assert.deepEqual(deniedByServer.sort(), ['managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
   // The alert stays mounted on every page; rechecks clear only resolved issues.
   const beforeRepairCalls = managementCalls.length
   readinessScenario = 'unknown'
@@ -240,7 +253,7 @@ try {
           await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
           return
         }
-        if (['services_stop', 'managed_resource_save', 'managed_config_revert', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
+        if (['services_stop', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
           assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)
