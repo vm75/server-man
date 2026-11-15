@@ -3,7 +3,7 @@ package updates
 import (
 	"context"
 	"io"
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 // InstallShareServer uses native distribution package names and returns the

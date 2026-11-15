@@ -40,8 +40,8 @@
       feedback = failed ? job.error || `Operation ${job.state}. Check Activity and native package state before retrying.` : result?.recheckRequired ? 'The package manager was updated. Review remaining updates and run installation again.' : job.tool === 'updates_refresh' ? 'Metadata refresh completed.' : job.tool === 'dependencies_install' ? 'Dependencies installed. Restart server-man to refresh provider discovery. Enable daemons or rootless user setup separately as needed.' : job.tool === 'packages_install' ? 'Repository package installation completed.' : 'System package update completed. Review the remaining packages and reboot status below.'
       await load()
     }
-    window.addEventListener('serverman:job-finished', finished); void load()
-    return () => { stopped = true; controller?.abort(); window.removeEventListener('serverman:job-finished', finished) }
+    window.addEventListener('server-man:job-finished', finished); void load()
+    return () => { stopped = true; controller?.abort(); window.removeEventListener('server-man:job-finished', finished) }
   })
 </script>
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"go.yaml.in/yaml/v3"
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func composeFixture(t *testing.T) (*Compose, Config, *composeRecorder) {

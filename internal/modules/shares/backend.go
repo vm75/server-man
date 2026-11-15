@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func (b *Backend) List(ctx context.Context, protocol string) (Inventory, error) {

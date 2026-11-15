@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func libvirtFixture(t *testing.T) (*Libvirt, Config, *libvirtRecorder) {

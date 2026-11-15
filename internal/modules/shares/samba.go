@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func shareKey(name string) string { return strings.ToLower(strings.Join(strings.Fields(name), "")) }

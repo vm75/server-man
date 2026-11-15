@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { firefox } from 'playwright'
 
 const repo = fileURLToPath(new URL('../../', import.meta.url))
-const root = await mkdtemp(path.join(tmpdir(), 'serverman-ui-'))
+const root = await mkdtemp(path.join(tmpdir(), 'server-man-ui-'))
 const artifacts = path.join(repo, 'tools/ui/artifacts')
 await mkdir(artifacts, { recursive: true })
 let bridge, browser
@@ -36,7 +36,7 @@ const fixtures = {
   managed_services: () => ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
   services_list: args => ({ scope: args.scope ?? 'system', available: true, journalAvailable: true, services: [{ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled' }], warnings: [] }),
   services_details: () => ({ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', canStart: false, canStop: true, canReload: true, mainPID: 1234 }),
-  shares_list: () => ({ backends: [{ protocol: 'samba', available: true, canManage: true, managedFile: '/tmp/serverman/samba.conf', revision: 'a'.repeat(64), setupRequired: false }, { protocol: 'nfs', available: true, canManage: true, managedFile: '/tmp/serverman/exports', revision: 'b'.repeat(64), setupRequired: false }], shares: [], warnings: [] }),
+  shares_list: () => ({ backends: [{ protocol: 'samba', available: true, canManage: true, managedFile: '/tmp/server-man/samba.conf', revision: 'a'.repeat(64), setupRequired: false }, { protocol: 'nfs', available: true, canManage: true, managedFile: '/tmp/server-man/exports', revision: 'b'.repeat(64), setupRequired: false }], shares: [], warnings: [] }),
   updates_status: () => ({ manager: { id: 'apt', title: 'APT', available: true, canRefresh: true }, distribution: 'Ubuntu 24.04', packages: [{ name: 'demo-package', architecture: 'amd64', installed: '1.0', candidate: '1.1', kind: 'upgrade' }], valid: true, notice: 'Fixture package candidates.', cacheSource: 'fixture cache', reboot: { required: false, reason: 'No marker' }, readAt: new Date().toISOString() }),
 }
 
@@ -103,7 +103,7 @@ async function exerciseManagement(page) {
 
   await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
   await exerciseShareCreation(page, 'documents')
-  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('serverman:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'managed_resource_save' })
+  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('server-man:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'managed_resource_save' })
   await page.getByRole('button', { name: 'Set up server…', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Set up server', exact: true }).click()
   await page.locator('.activity-button').click()
@@ -114,12 +114,12 @@ async function exerciseManagement(page) {
   await page.getByRole('button', { name: 'Install packages…', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Install packages', exact: true }).click()
   await page.locator('.activity-button').click()
-  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('serverman:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'packages_install' })
+  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('server-man:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'packages_install' })
   await page.getByLabel('Module dependencies', { exact: true }).selectOption('podman')
   await page.getByRole('button', { name: 'Install dependencies…', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Install dependencies', exact: true }).click()
   await page.locator('.activity-button').click()
-  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('serverman:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'dependencies_install' })
+  await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('server-man:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'dependencies_install' })
   await page.getByRole('button', { name: 'Install system updates' }).click()
   const updateDialog = page.getByRole('dialog')
   await updateDialog.getByRole('heading', { name: 'Install system package updates' }).waitFor()
@@ -139,7 +139,7 @@ async function exerciseManagement(page) {
   await page.locator('.activity-button').click()
   const provisioned = managementCalls.find(call => call.tool === 'managed_storage_create')
   assert.deepEqual(provisioned.args,{storage:'documents',revision:'a'.repeat(64),sizeGiB:0,reviewToken:'d'.repeat(64),purpose:'new_data',confirm:true})
-  await page.evaluate(({id,tool}) => window.dispatchEvent(new CustomEvent('serverman:job-finished',{detail:{id,tool,state:'succeeded'}})),{id:`fixture-${managementCalls.length}`,tool:'managed_storage_create'})
+  await page.evaluate(({id,tool}) => window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool,state:'succeeded'}})),{id:`fixture-${managementCalls.length}`,tool:'managed_storage_create'})
   const history = page.getByRole('region',{name:'Configuration history',exact:true})
   await history.getByRole('button',{name:'Inspect cccccccccccc',exact:true}).click()
   assert.equal(await history.getByLabel('Historical configuration',{exact:true}).inputValue(),'version: 1\n')

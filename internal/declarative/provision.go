@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 type Provisioner struct {

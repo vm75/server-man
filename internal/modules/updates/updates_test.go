@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"serverman/internal/config"
-	"serverman/internal/core"
+	"server-man/internal/config"
+	"server-man/internal/core"
 )
 
 const aptData = "Reading package lists... Done\nThe following packages have been kept back:\n  held-package\nInst demo [1.0] (2.0 Ubuntu:stable [amd64])\nInst dependency (1:3.0-1 Ubuntu:stable [amd64])\nConf demo (2.0 Ubuntu:stable [amd64])\n1 upgraded, 1 newly installed, 0 to remove and 1 not upgraded.\n"

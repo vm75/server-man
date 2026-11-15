@@ -7,7 +7,7 @@ server-man exposes the shared tool registry over stdio and Streamable HTTP. Init
 Run the binary as the workload owner:
 
 ```sh
-/absolute/path/to/serverman -transport stdio -config /absolute/path/to/config.json
+/absolute/path/to/server-man -transport stdio -config /absolute/path/to/config.json
 ```
 
 The client launches this command and exchanges newline-delimited JSON on stdin/stdout. Diagnostics go to stderr. No HTTP listener or browser token is needed in this mode; the operating-system account supplies local access. Configuration defaults still apply, including `allowWrites: false`.
@@ -31,18 +31,18 @@ For [Hermes](https://hermes-agent.nousresearch.com/docs/reference/mcp-config-ref
 ```yaml
 mcp_servers:
   server-man:
-    command: /absolute/path/to/serverman
+    command: /absolute/path/to/server-man
     args: ["-transport", "stdio", "-config", "/absolute/path/to/config.json"]
 ```
 
-Or connect Hermes to the existing HTTP instance. Put the access token in the agent's secret/environment scope as `SERVERMAN_TOKEN` and reference it in the header:
+Or connect Hermes to the existing HTTP instance. Put the access token in the agent's secret/environment scope as `SERVER_MAN_TOKEN` and reference it in the header:
 
 ```yaml
 mcp_servers:
   server-man:
     url: https://your-server.example/mcp
     headers:
-      Authorization: "Bearer ${SERVERMAN_TOKEN}"
+      Authorization: "Bearer ${SERVER_MAN_TOKEN}"
 ```
 
 For [OpenClaw](https://docs.openclaw.ai/tools/mcp), configure a stdio server under `mcp.servers`:
@@ -53,7 +53,7 @@ For [OpenClaw](https://docs.openclaw.ai/tools/mcp), configure a stdio server und
     "servers": {
       "server-man": {
         "transport": "stdio",
-        "command": "/absolute/path/to/serverman",
+        "command": "/absolute/path/to/server-man",
         "args": ["-transport", "stdio", "-config", "/absolute/path/to/config.json"],
         "enabled": true
       }

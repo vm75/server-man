@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"serverman/internal/buildinfo"
-	"serverman/internal/core"
+	"server-man/internal/buildinfo"
+	"server-man/internal/core"
 )
 
 const ProtocolVersion = "2025-11-25"

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 // EditResource updates typed desired data only. Native operations remain in the

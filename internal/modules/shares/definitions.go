@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 // NormalizeDefinitions validates typed native settings once for both the central

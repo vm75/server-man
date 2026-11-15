@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func Register(registry *core.Registry, sampler *Sampler) error {

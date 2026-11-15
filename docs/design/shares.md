@@ -11,14 +11,14 @@ Install and configure a standalone Samba file server using your distribution's n
 ```json
 {
   "sambaConfig": "/etc/samba/smb.conf",
-  "sambaManagedFile": "/etc/samba/serverman.conf"
+  "sambaManagedFile": "/etc/samba/server-man.conf"
 }
 ```
 
 Choose a new, unused managed filename. Add exactly one literal include at the **end** of the main config:
 
 ```ini
-include = /etc/samba/serverman.conf
+include = /etc/samba/server-man.conf
 ```
 
 Use the configured managed path verbatim, without variable substitutions. The owned file may be absent initially; server-man creates it on the first successful save. Do not prefill it with another configuration or create an empty placeholder: existing files must have server-man's ownership marker and exact generated format. No include is inserted automatically into the host file. See Samba's [include and reload semantics](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html).
@@ -27,7 +27,7 @@ The account must be able to read the main configuration, create temporary files 
 
 ### NFS
 
-Install/configure the Linux NFS server, including its normal exports loading, filesystem support, firewall and mountd/nfsd services. Create `/etc/exports.d` using your host's normal setup if absent. The native paths are `/etc/exports`, `/etc/exports.d/*.exports`, and the owned fragment `/etc/exports.d/serverman.exports`. They follow nfs-utils rather than introducing a parallel configuration tree. The account needs permission to create/replace the fragment and manage the export table through `exportfs`.
+Install/configure the Linux NFS server, including its normal exports loading, filesystem support, firewall and mountd/nfsd services. Create `/etc/exports.d` using your host's normal setup if absent. The native paths are `/etc/exports`, `/etc/exports.d/*.exports`, and the owned fragment `/etc/exports.d/server-man.exports`. They follow nfs-utils rather than introducing a parallel configuration tree. The account needs permission to create/replace the fragment and manage the export table through `exportfs`.
 
 No existing exports file is rewritten. A new fragment is picked up by the native server's normal exports loading on subsequent startup/reload. Runtime changes use individual client/path operations. The upstream [exports file format](https://github.com/linux-nfs/nfs-utils/blob/master/utils/exportfs/exports.man) documents native fragments and access rules.
 

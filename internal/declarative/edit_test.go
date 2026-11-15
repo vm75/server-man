@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func TestTypedEditingStaleReferencesAndFieldValidation(t *testing.T) {

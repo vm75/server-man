@@ -20,11 +20,11 @@ func helperCommand(t *testing.T, mode string) Command {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Command{Program: program, Args: []string{"-test.run=^TestRunnerHelperProcess$"}, Env: []string{"SERVERMAN_TEST_HELPER=" + mode, "GORACE=atexit_sleep_ms=0"}}
+	return Command{Program: program, Args: []string{"-test.run=^TestRunnerHelperProcess$"}, Env: []string{"SERVER_MAN_TEST_HELPER=" + mode, "GORACE=atexit_sleep_ms=0"}}
 }
 
 func TestRunnerHelperProcess(t *testing.T) {
-	switch os.Getenv("SERVERMAN_TEST_HELPER") {
+	switch os.Getenv("SERVER_MAN_TEST_HELPER") {
 	case "output":
 		fmt.Fprint(os.Stdout, `{"result":"ok"}`)
 		fmt.Fprint(os.Stderr, "diagnostic warning")

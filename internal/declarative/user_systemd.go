@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func userSystemdCommand(program string, args ...string) core.Command {

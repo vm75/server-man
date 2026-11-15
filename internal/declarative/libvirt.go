@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 type Libvirt struct {

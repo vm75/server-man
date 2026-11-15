@@ -24,6 +24,8 @@ make build
 ./bin/server-man
 ```
 
+Release builds can set `SERVER_MAN_VERSION`, for example `SERVER_MAN_VERSION=0.1.0 make build`. The Go module, executables, service units, UI and native ownership markers use `server-man`.
+
 Open `http://127.0.0.1:8080`. Sign in with the access token from the private file created on first start. The startup log shows its path; the default is `~/.config/server-man/token` (or under `XDG_CONFIG_HOME`). The server binds to loopback. `GET /healthz` provides a small unauthenticated JSON health response.
 
 Management writes are disabled by default. When enabled, jobs run one at a time and appear in **Activity**. Instances using the same state directory also serialize writes through a file lock. Cancelling a job stops its remaining work; it does not undo completed changes. Package commands first receive an interrupt and have up to 30 seconds before forced termination; interrupted package transactions can require native recovery. Each process retains 64 recent jobs in memory and records audit metadata under `~/.local/state/server-man` (or `XDG_STATE_HOME`).

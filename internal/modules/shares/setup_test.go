@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
-	"serverman/internal/core"
+	"server-man/internal/core"
 	"strings"
 	"testing"
 )

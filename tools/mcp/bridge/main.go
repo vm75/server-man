@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"serverman/internal/app"
-	"serverman/internal/auth"
-	"serverman/internal/config"
-	"serverman/internal/core"
-	"serverman/internal/httpapi"
-	"serverman/internal/modules/monitor"
+	"server-man/internal/app"
+	"server-man/internal/auth"
+	"server-man/internal/config"
+	"server-man/internal/core"
+	"server-man/internal/httpapi"
+	"server-man/internal/modules/monitor"
 )
 
 func main() {

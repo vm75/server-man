@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func managedUnitOwner(cfg Config, unit string) string {

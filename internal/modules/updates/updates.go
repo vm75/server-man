@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"serverman/internal/config"
-	"serverman/internal/core"
+	"server-man/internal/config"
+	"server-man/internal/core"
 )
 
 type Manager struct {

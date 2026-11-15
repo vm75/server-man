@@ -4,12 +4,12 @@ package shares
 import (
 	"os/exec"
 
-	"serverman/internal/config"
-	"serverman/internal/core"
+	"server-man/internal/config"
+	"server-man/internal/core"
 )
 
 const maxFile = 1 << 20
-const header = "# Managed by Serverman. Do not edit.\n# serverman-format: 1\n"
+const header = "# Managed by server-man. Do not edit.\n# server-man-format: 1\n"
 
 // Definition is the complete supported format. Credentials and arbitrary options
 // deliberately have no place in it. Native configuration remains administrator-owned.
@@ -54,12 +54,12 @@ type Backend struct {
 }
 
 func New(cfg config.Config, runner core.Executor) *Backend {
-	b := &Backend{sambaConfig: cfg.SambaConfig, sambaManaged: cfg.SambaManagedFile, nfsExports: "/etc/exports", nfsDir: "/etc/exports.d", nfsManaged: "/etc/exports.d/serverman.exports", programs: map[string]string{}, runner: runner}
+	b := &Backend{sambaConfig: cfg.SambaConfig, sambaManaged: cfg.SambaManagedFile, nfsExports: "/etc/exports", nfsDir: "/etc/exports.d", nfsManaged: "/etc/exports.d/server-man.exports", programs: map[string]string{}, runner: runner}
 	if b.sambaConfig == "" {
 		b.sambaConfig = "/etc/samba/smb.conf"
 	}
 	if b.sambaManaged == "" {
-		b.sambaManaged = "/etc/samba/serverman.conf"
+		b.sambaManaged = "/etc/samba/server-man.conf"
 	}
 	for _, name := range []string{"testparm", "smbcontrol", "smbstatus", "exportfs"} {
 		if path, err := exec.LookPath(name); err == nil {

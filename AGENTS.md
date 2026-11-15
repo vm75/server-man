@@ -4,7 +4,7 @@ server-man is a Linux administration application built with Go, Svelte 5, TypeSc
 
 ## Repository map and commands
 
-- `cmd/serverman/`: entry point and process lifecycle.
+- `cmd/server-man/`: entry point and process lifecycle.
 - `internal/config/`, `internal/httpapi/`, `internal/webui/`: configuration, HTTP routes, and embedded assets.
 - `internal/core/`: shared schemas, registry, execution, jobs, and audit. `internal/auth/`: token/session authentication. `internal/app/`: module assembly.
 - `internal/modules/monitor/`: Linux collector, sampler, and tools; see [monitoring design](docs/design/monitoring.md) for units and bounds. `web/src/pages/Overview.svelte` renders the dashboard.
@@ -18,13 +18,13 @@ server-man is a Linux administration application built with Go, Svelte 5, TypeSc
 - `make api` and `make dev`: backend and frontend development servers, in separate terminals.
 - `make check`: Go vet and frontend type checking. `make test`: Go race tests.
 - `make mcp-test`: build and verify stdio/HTTP MCP using the official SDK; requires `make setup` dependencies. The helper disables writes and does not listen on TCP.
-- `make build`: production UI and Go binary at `bin/serverman`.
+- `make build`: production UI and Go binary at `bin/server-man`.
 - Generated frontend assets and dependencies are ignored; do not edit them.
 
 ## Scope and tracking
 
 - Follow [the implementation plan](docs/plans/implementation.md); commit each verified step and its tracking update separately.
-- Use KISS and YAGNI. Prefer standard libraries and small explicit interfaces.
+- Use DRY, KISS, and YAGNI. Share domain rules, schemas, and management workflows; prefer standard libraries and small explicit interfaces over speculative abstractions.
 - Search before reading broad files; keep context relevant and avoid generated/dependency directories.
 - Preserve existing conventions unless the task requires a change.
 
@@ -44,4 +44,5 @@ server-man is a Linux administration application built with Go, Svelte 5, TypeSc
 
 - Validate behavior relevant to each change. Record what ran and its limits in the plan.
 - Update only documentation whose truth changed: user commands/capabilities in README, implementation tracking in the plan, component boundaries in architecture documentation when it exists.
+- When an implementation plan is complete, consolidate durable decisions into architecture/design/operations documentation, remove obsolete planning detail and duplicate history, and retain a concise completion record with verification limits. Architecture must describe the implemented current state.
 - Keep unrelated changes out of each commit. Never claim unfinished plan items are complete.

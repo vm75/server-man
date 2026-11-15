@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"io"
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 type ServiceStatus struct {

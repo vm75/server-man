@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 var unitName = regexp.MustCompile(`^(?:[A-Za-z0-9_@:.+-]|\\x[0-9A-Fa-f]{2})+\.service$`)

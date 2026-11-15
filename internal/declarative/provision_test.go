@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"testing"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func provisionFixture(t *testing.T, kind, format string) (Provisioner, string, string) {

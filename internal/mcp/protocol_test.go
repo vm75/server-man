@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func testServer(t *testing.T, allowWrites bool) (*Server, *core.Jobs) {

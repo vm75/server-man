@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 var namePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)

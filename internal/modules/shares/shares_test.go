@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"serverman/internal/config"
-	"serverman/internal/core"
+	"server-man/internal/config"
+	"server-man/internal/core"
 )
 
 type recorder struct {
@@ -140,12 +140,12 @@ func put(t *testing.T, file, text string) {
 func fixture(t *testing.T) (*Backend, *recorder, string) {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "host config")
-	cfg := config.Config{SambaConfig: filepath.Join(root, "samba", "smb.conf"), SambaManagedFile: filepath.Join(root, "samba", "serverman.conf")}
+	cfg := config.Config{SambaConfig: filepath.Join(root, "samba", "smb.conf"), SambaManagedFile: filepath.Join(root, "samba", "server-man.conf")}
 	r := &recorder{runtime: map[string]export{}}
 	b := New(cfg, r)
 	b.nfsExports = filepath.Join(root, "exports")
 	b.nfsDir = filepath.Join(root, "exports.d")
-	b.nfsManaged = filepath.Join(b.nfsDir, "serverman.exports")
+	b.nfsManaged = filepath.Join(b.nfsDir, "server-man.exports")
 	for _, program := range []string{"testparm", "smbcontrol", "smbstatus", "exportfs"} {
 		b.programs[program] = program
 	}
@@ -260,7 +260,7 @@ func TestCreateEditRemovePreservesUnmanagedFilesAndDirectoryData(t *testing.T) {
 			}
 			entries, _ := os.ReadDir(filepath.Dir(b.file(p)))
 			for _, e := range entries {
-				if strings.HasPrefix(e.Name(), ".serverman-") {
+				if strings.HasPrefix(e.Name(), ".server-man-") {
 					t.Fatal("temporary file leaked")
 				}
 			}

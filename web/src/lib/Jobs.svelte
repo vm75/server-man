@@ -24,7 +24,7 @@
       try {
         jobs = await invokeTool<Job[]>('jobs_list', {}, controller.signal)
         for (const job of jobs) {
-          if (states.get(job.id) === 'running' && job.state !== 'running') window.dispatchEvent(new CustomEvent<Job>('serverman:job-finished', { detail: job }))
+          if (states.get(job.id) === 'running' && job.state !== 'running') window.dispatchEvent(new CustomEvent<Job>('server-man:job-finished', { detail: job }))
           states.set(job.id, job.state)
         }
         for (const [id, state] of states) if (state !== 'running' && !jobs.some(job => job.id === id)) states.delete(id)
@@ -33,7 +33,7 @@
           const updated = await invokeTool<Job>('jobs_get', { id: previous.id }, controller.signal)
           if (selected?.id === previous.id) {
             selected = updated
-            if (states.get(updated.id) === 'running' && updated.state !== 'running') window.dispatchEvent(new CustomEvent<Job>('serverman:job-finished', { detail: updated }))
+            if (states.get(updated.id) === 'running' && updated.state !== 'running') window.dispatchEvent(new CustomEvent<Job>('server-man:job-finished', { detail: updated }))
             states.set(updated.id, updated.state)
           }
         }
@@ -43,9 +43,9 @@
     }
     refresh = poll
     const started = (event: Event) => { selected = (event as CustomEvent<Job>).detail; states.set(selected.id, 'running'); open = true; void poll() }
-    window.addEventListener('serverman:job-started', started)
+    window.addEventListener('server-man:job-started', started)
     void poll()
-    return () => { stopped = true; clearTimeout(timer); controller.abort(); window.removeEventListener('serverman:job-started', started) }
+    return () => { stopped = true; clearTimeout(timer); controller.abort(); window.removeEventListener('server-man:job-started', started) }
   })
 
   async function select(job: Job) {

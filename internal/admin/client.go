@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"serverman/internal/core"
+	"server-man/internal/core"
 	"strings"
 	"time"
 )

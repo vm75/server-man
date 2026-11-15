@@ -2,6 +2,8 @@
 
 server-man runs as one Linux process for the web UI, authenticated JSON APIs and MCP HTTP. An agent can also launch a standalone stdio process. Both transports call the same management registry.
 
+The canonical identifier is `server-man`: Go module/imports, executables, service/configuration paths, browser event namespace, session cookie and owned share markers use that spelling. Environment variables use the shell-compatible `SERVER_MAN_` prefix. No legacy-name aliases or migration layer are provided.
+
 ## Components
 
 | Path | Responsibility |

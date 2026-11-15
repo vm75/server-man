@@ -38,8 +38,8 @@
   }
   onMount(() => {
     const finished = (event: Event) => { const job = (event as CustomEvent<Job>).detail; if (job.id !== activeJob) return; activeJob = null; feedback = job.state === 'succeeded' ? 'Operation completed.' : job.error || `Operation ${job.state}.`; void load() }
-    window.addEventListener('serverman:job-finished', finished); void load()
-    return () => { stopped = true; controller?.abort(); window.removeEventListener('serverman:job-finished', finished) }
+    window.addEventListener('server-man:job-finished', finished); void load()
+    return () => { stopped = true; controller?.abort(); window.removeEventListener('server-man:job-finished', finished) }
   })
 </script>
 

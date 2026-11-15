@@ -8,10 +8,10 @@ import (
 	"mime"
 	"net/http"
 
-	"serverman/internal/auth"
-	"serverman/internal/core"
-	"serverman/internal/mcp"
-	"serverman/internal/webui"
+	"server-man/internal/auth"
+	"server-man/internal/core"
+	"server-man/internal/mcp"
+	"server-man/internal/webui"
 )
 
 func Handler(authentication *auth.Auth, registry *core.Registry) http.Handler {

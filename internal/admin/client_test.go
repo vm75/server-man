@@ -6,7 +6,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
-	"serverman/internal/core"
+	"server-man/internal/core"
 	"strings"
 	"testing"
 )

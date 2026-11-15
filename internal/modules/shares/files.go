@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 type snapshot struct {
@@ -66,7 +66,7 @@ func render(protocol string, defs []Definition) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Fprintf(&text, "# serverman-share: %s\n", data)
+		fmt.Fprintf(&text, "# server-man-share: %s\n", data)
 		if protocol == "samba" {
 			yes := func(value bool) string {
 				if value {
@@ -100,11 +100,11 @@ func load(protocol string, s snapshot) ([]Definition, error) {
 	seen := map[string]bool{}
 	paths := map[string]bool{}
 	for _, line := range strings.Split(string(s.data), "\n") {
-		if !strings.HasPrefix(line, "# serverman-share: ") {
+		if !strings.HasPrefix(line, "# server-man-share: ") {
 			continue
 		}
 		var d Definition
-		dec := json.NewDecoder(strings.NewReader(strings.TrimPrefix(line, "# serverman-share: ")))
+		dec := json.NewDecoder(strings.NewReader(strings.TrimPrefix(line, "# server-man-share: ")))
 		dec.DisallowUnknownFields()
 		if dec.Decode(&d) != nil {
 			return nil, errors.New("managed share metadata is invalid")
@@ -129,7 +129,7 @@ func load(protocol string, s snapshot) ([]Definition, error) {
 }
 
 func temporary(dir string, data []byte, mode os.FileMode) (string, error) {
-	f, err := os.CreateTemp(dir, ".serverman-*")
+	f, err := os.CreateTemp(dir, ".server-man-*")
 	if err != nil {
 		return "", err
 	}

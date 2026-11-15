@@ -7,7 +7,7 @@ import (
 	"os"
 	"slices"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 type ShareStatus struct {

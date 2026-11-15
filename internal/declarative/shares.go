@@ -10,8 +10,8 @@ import (
 	"slices"
 	"strings"
 
-	"serverman/internal/core"
-	"serverman/internal/modules/shares"
+	"server-man/internal/core"
+	"server-man/internal/modules/shares"
 )
 
 // PrivilegedShareCaller is the existing narrow one-shot helper boundary, injected

@@ -11,7 +11,7 @@
   let busy = $state(true)
   let copied = $state('')
   const controller = new AbortController()
-  const localExample = JSON.stringify({ command: '/absolute/path/to/serverman', args: ['-transport', 'stdio', '-config', '/absolute/path/to/config.json'] }, null, 2)
+  const localExample = JSON.stringify({ command: '/absolute/path/to/server-man', args: ['-transport', 'stdio', '-config', '/absolute/path/to/config.json'] }, null, 2)
 
   async function load() {
     busy = true

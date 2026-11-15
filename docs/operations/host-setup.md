@@ -237,7 +237,7 @@ libx11-xcb1:amd64 2:1.8.13-1
 
 ### Deployment preparation
 
-- Created `~/.config/serverman` (0700) and `config.json` (0600), both owned by
+- Created `~/.config/server-man` (0700) and `config.json` (0600), both owned by
   `shasak`, refusing to replace an existing file. Config selects loopback
   `127.0.0.1:8080`, `/home/shasak/vms`, a two-second sampler and `allowWrites:false`.
   Default private token/state paths and system service inventory scope are kept.
@@ -273,8 +273,8 @@ is needed. Firefox/GTK/X11 libraries above support headless verification only;
 Node, Firefox and these libraries are not application runtime dependencies.
 The daemon is a native Go process. Browser access is through loopback/SSH.
 
-Pre-install checks found no existing serverman unit/binary/config and no listener
-on 8080. `make build` from clean revision `e4424dd` produced `bin/serverman`
+Pre-install checks found no existing server-man unit/binary/config and no listener
+on 8080. `make build` from clean revision `e4424dd` produced `bin/server-man`
 reporting `e4424dd`, SHA-256
 `26cc7c4632ce0b9180a36627fc86a1e26e2f9a41c5e0f2ae34e79faea49c1fb5`.
 
@@ -283,15 +283,15 @@ Commands applied successfully:
 ```sh
 sudo make install
 systemctl --user daemon-reload
-systemd-analyze verify /usr/local/lib/systemd/system/serverman.service
-systemd-analyze --user verify /usr/local/lib/systemd/user/serverman.service
+systemd-analyze verify /usr/local/lib/systemd/system/server-man.service
+systemd-analyze --user verify /usr/local/lib/systemd/user/server-man.service
 sudo loginctl enable-linger shasak
-systemctl --user enable --now serverman.service
+systemctl --user enable --now server-man.service
 ```
 
-Installation writes `/usr/local/bin/serverman` (0755),
-`/usr/local/share/serverman/config.example.json` (0644), and system/user unit files
-under `/usr/local/lib/systemd` (0644), owned by root. Only the **user** serverman
+Installation writes `/usr/local/bin/server-man` (0755),
+`/usr/local/share/server-man/config.example.json` (0644), and system/user unit files
+under `/usr/local/lib/systemd` (0644), owned by root. Only the **user** server-man
 unit is enabled and started, under the existing `shasak` account; no account or
 group is created. User lingering changes from no to yes so the manager survives
 logout and starts at boot on this headless host. The system/root unit stays
@@ -305,13 +305,13 @@ host network changes were applied. Final service and verification results are be
   verification. The system checker also emitted pre-existing XFS units' removed
   `CPUAccounting` option warnings; no server-man unit error occurred. These
   unrelated vendor unit files were left unchanged.
-- User `serverman.service` is enabled and active, running the installed revision
-  `e4424dd`, with zero restarts. System `serverman.service` is disabled/inactive.
+- User `server-man.service` is enabled and active, running the installed revision
+  `e4424dd`, with zero restarts. System `server-man.service` is disabled/inactive.
   Installed and built binary hashes match. User `podman.socket` is enabled/active
   at `/run/user/1000/podman/podman.sock`; no root Podman service was enabled.
   `loginctl show-user shasak -p Linger` reports `yes`.
-- First app start created `~/.config/serverman/token` (0600),
-  `~/.local/state/serverman` (0700), and its `audit.jsonl` (0600), owned by
+- First app start created `~/.config/server-man/token` (0600),
+  `~/.local/state/server-man` (0700), and its `audit.jsonl` (0600), owned by
   `shasak`. Config and token directory are 0700. Podman's account storage is
   `~/.local/share/containers/storage` (0700). These contain generated private
   runtime state and are excluded from Git and this document's content.
@@ -363,26 +363,26 @@ host network changes were applied. Final service and verification results are be
 ## Operating this headless host
 
 ```sh
-systemctl --user status serverman.service
-journalctl --user -u serverman.service
-systemctl --user restart serverman.service
+systemctl --user status server-man.service
+journalctl --user -u server-man.service
+systemctl --user restart server-man.service
 ```
 
 From another computer on the LAN, open `https://192.168.192.78` after trusting
 the exported public CA. Read the token directly from the private
-`~/.config/serverman/token` file in your SSH session; never put it in a URL or
+`~/.config/server-man/token` file in your SSH session; never put it in a URL or
 commit it. No SSH tunnel or desktop session is needed. See the direct LAN
 follow-up below for certificate transfer and configuration details.
 
 The default deployment is read-only. To manage workloads, deliberately change
-`allowWrites` in `~/.config/serverman/config.json` and restart the user service;
+`allowWrites` in `~/.config/server-man/config.json` and restart the user service;
 this enables the shared management API under this account's native permissions.
 Remove only the chosen example's `.disabled` marker when ready to use it.
 **Up** creates a workload; **Start** requires an existing container. Both status
 examples publish loopback-only ports; heartbeat has no networking. Images have
 not been pulled. Review definitions and provider access before enabling writes.
 
-To undo this deployment without deleting data: disable/stop the user serverman
+To undo this deployment without deleting data: disable/stop the user server-man
 unit and Podman socket, stop the socket-activated user Podman API service, and
 remove the installed files/config only after checking for subsequent use. Disable
 user lingering only if no other user services need it. Preserve tokens/state and
@@ -440,15 +440,15 @@ dpkg-deb --extract .cache/caddy-package/caddy_*.deb .cache/caddy-package/root
 sudo install -d -m 0755 /etc/caddy
 sudo install -m 0644 packaging/Caddyfile.lan.example /etc/caddy/Caddyfile
 sudo apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends caddy
-systemctl --user restart serverman.service
-sudo install -o shasak -g shasak -m 0644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt /home/shasak/.config/serverman/lan-ca.crt
+systemctl --user restart server-man.service
+sudo install -o shasak -g shasak -m 0644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt /home/shasak/.config/server-man/lan-ca.crt
 sudo -u caddy env HOME=/var/lib/caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
 
 The proxy package and adapter output are cached under ignored `.cache`; install
 and validation logs are `/tmp/server-man-caddy-*.log`. Before restarting the app,
 a read-only authenticated check confirmed no management jobs existed. A Python
-file operation saved its prior config as `~/.config/serverman/config.before-lan.json`
+file operation saved its prior config as `~/.config/server-man/config.before-lan.json`
 (0600) using exclusive creation, then atomically added
 `publicOrigin: "https://192.168.192.78"` to `config.json` (0600).
 The token and write policy were preserved. Restart expires prior browser sessions.
@@ -469,7 +469,7 @@ Caddyfile 0644; the unused vendor example is retained as `Caddyfile.dpkg-dist`.
 Its normal private CA/leaf keys and certs are under
 `/var/lib/caddy/.local/share/caddy` (root key 0600, caddy:caddy). Caddy's runtime
 state/autosaved config is under its own home. The public CA was exported 0644,
-shasak:shasak, inside the existing private `~/.config/serverman` directory.
+shasak:shasak, inside the existing private `~/.config/server-man` directory.
 No private key was exported; automatic machine trust installation was disabled.
 
 The native Caddy unit is enabled/active with zero restarts. Its `caddy-api` unit
@@ -482,10 +482,10 @@ remains write-disabled, and its token permissions remain unchanged.
 ### LAN verification
 
 - Native `caddy adapt` and `caddy validate` accept the deployed config.
-- `curl --cacert ~/.config/serverman/lan-ca.crt https://192.168.192.78/healthz`
+- `curl --cacert ~/.config/server-man/lan-ca.crt https://192.168.192.78/healthz`
   verifies the certificate chain and IP identity and returns 200/ok. A connection
   bound to source `127.0.0.1` receives 403 from the proxy's LAN source restriction.
-- `NODE_EXTRA_CA_CERTS=/home/shasak/.config/serverman/lan-ca.crt node
+- `NODE_EXTRA_CA_CERTS=/home/shasak/.config/server-man/lan-ca.crt node
   .cache/lan-verification.mjs` passes with certificate verification enabled:
   health, unauthenticated API/MCP 401, authenticated foreign-origin 403,
   authenticated API discovery, secure/HttpOnly/SameSite Strict cookie login and
@@ -506,7 +506,7 @@ remains write-disabled, and its token permissions remain unchanged.
 Copy the **public certificate** over your authenticated SSH connection:
 
 ```sh
-scp shasak@192.168.192.78:.config/serverman/lan-ca.crt ./server-man-lan-ca.crt
+scp shasak@192.168.192.78:.config/server-man/lan-ca.crt ./server-man-lan-ca.crt
 openssl x509 -in server-man-lan-ca.crt -noout -fingerprint -sha256
 ```
 
@@ -531,7 +531,7 @@ The user requested plain HTTP directly from the application, bound to
 `0.0.0.0`. The live config now sets `listen` to `0.0.0.0:8080` and
 `publicOrigin` to `http://192.168.192.78:8080`; `allowWrites:false` and the
 existing token file are preserved. Config remains mode 0600 in the private
-serverman config directory. The application validates this explicit remote
+server-man config directory. The application validates this explicit remote
 listener against a non-loopback IP origin and matching port, and uses
 non-Secure session cookies for HTTP.
 
@@ -549,7 +549,7 @@ were deleted. No firewall, router, DHCP, or DNS settings changed. Other physical
 clients have not been tested; this HTTP deployment is intended for a trusted
 network only.
 
-The app was rebuilt and installed at `/usr/local/bin/serverman`; the running
+The app was rebuilt and installed at `/usr/local/bin/server-man`; the running
 user service uses the new binary. HTTP health, authentication, cookie behavior,
 Host and Origin rejection, API jobs state, unauthenticated MCP denial, and an
 authenticated official SDK MCP session (48 tools and ping) were checked after
@@ -558,7 +558,7 @@ the change. Go test suites were not rerun.
 ## Compose authoring deployment follow-up (2026-10-16)
 
 The requested project editor was built from commit `d016f2c` and installed at
-`/usr/local/bin/serverman` (SHA-256
+`/usr/local/bin/server-man` (SHA-256
 `9e06ec36c2275091bab965a3e42a77f34306875fa76779e6b789913357db033d`). The
 existing user service was restarted and remains active. Its configuration was
 left untouched; at deployment it had `allowWrites:true`,

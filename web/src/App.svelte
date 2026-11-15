@@ -45,9 +45,9 @@
 
   onMount(() => {
     const expired = () => { needsAuth = true; status = null; menuOpen = false }
-    window.addEventListener('serverman:unauthorized', expired)
+    window.addEventListener('server-man:unauthorized', expired)
     void connect()
-    return () => window.removeEventListener('serverman:unauthorized', expired)
+    return () => window.removeEventListener('server-man:unauthorized', expired)
   })
 </script>
 

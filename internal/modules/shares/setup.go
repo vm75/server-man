@@ -7,10 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"serverman/internal/config"
-	"serverman/internal/core"
-	"serverman/internal/modules/services"
-	"serverman/internal/modules/updates"
+	"server-man/internal/config"
+	"server-man/internal/core"
+	"server-man/internal/modules/services"
+	"server-man/internal/modules/updates"
 	"strings"
 )
 

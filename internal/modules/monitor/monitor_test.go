@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func TestCPUUsesDeltasWithoutDoubleCountingGuestTime(t *testing.T) {

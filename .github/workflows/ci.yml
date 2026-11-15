@@ -34,9 +34,9 @@ jobs:
         run: make check test mcp-test ui-test
       - name: Verify staged install
         run: |
-          make install DESTDIR="$RUNNER_TEMP/serverman-stage"
-          test -x "$RUNNER_TEMP/serverman-stage/usr/local/bin/serverman"
-          "$RUNNER_TEMP/serverman-stage/usr/local/bin/serverman" -version
+          make install DESTDIR="$RUNNER_TEMP/server-man-stage"
+          test -x "$RUNNER_TEMP/server-man-stage/usr/local/bin/server-man"
+          "$RUNNER_TEMP/server-man-stage/usr/local/bin/server-man" -version
       - name: Upload browser screenshots
         if: always()
         uses: actions/upload-artifact@v7

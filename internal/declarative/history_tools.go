@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func RegisterHistory(r *core.Registry, c Coordinator) error {

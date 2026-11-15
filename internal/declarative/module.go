@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 // RegisterInspection adds read/validate operations independently of backend

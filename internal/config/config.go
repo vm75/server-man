@@ -128,7 +128,7 @@ func (c Config) Validate() error {
 		if !filepath.IsAbs(path) || strings.ContainsAny(path, "\\%") || strings.ContainsFunc(path, unicode.IsControl) || strings.TrimSpace(path) != path || filepath.Clean(path) != path {
 			return errors.New("Samba config paths must be clean absolute literal paths")
 		}
-		if path == "/etc/exports" || (path == "/etc/exports.d/server-man.exports" || path == "/etc/exports.d/serverman.exports") {
+		if path == "/etc/exports" || path == "/etc/exports.d/server-man.exports" {
 			return errors.New("Samba config paths must not overlap native NFS configuration")
 		}
 	}

@@ -53,7 +53,7 @@ enabled, package and share operations and system service operations use the
 helper; user services run directly as X. Privileged operations use automatic
 native package-manager detection, `/etc/samba/smb.conf`, the owned Samba fragment
 `/etc/samba/server-man.conf`, and the compatible NFS fragment
-`/etc/exports.d/serverman.exports`. Conflicting app overrides are rejected.
+`/etc/exports.d/server-man.exports`. Conflicting app overrides are rejected.
 Root-owned helper state is separate at `/var/lib/server-man-admin`.
 
 The Updates page also offers module dependency installation for Podman/Compose,

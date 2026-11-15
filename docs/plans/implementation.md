@@ -2,6 +2,10 @@
 
 Status: active. Updated: 2026-10-16. Check off a step only after its acceptance criteria have evidence. Commit each completed step separately, including its tracking update. This plan is the scope and progress authority.
 
+## Next phase: declarative management (in progress, 2026-11-14)
+
+The [declarative management implementation plan](declarative-management.md) is the scope and progress authority for the next phase. It supersedes this document's legacy workload discovery, Compose authoring, LXD/classic LXC, and fragment-owned share configuration requirements for that work. No compatibility or migration layer is required. Existing evidence below describes the earlier implementation, not completion of the new plan. The new phase follows DRY, KISS, and YAGNI and ends with architecture updates and consolidation of obsolete planning material. No implementation of that phase is recorded as complete.
+
 ## Goal
 
 A lightweight Linux server manager inspired by Cockpit, using Go, Svelte 5, TypeScript, and Vite. The responsive web UI and MCP expose the same operations for Podman Compose, Docker Compose, LXC/LXD, KVM, systemd services, Samba/NFS shares, package updates, and live resource monitoring inspired by btop. Additional features fit a small Go module interface.

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 type recorder struct {

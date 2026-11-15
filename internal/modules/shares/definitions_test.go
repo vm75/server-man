@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func TestAuthoritativeReplacementRemovesStaleOutputs(t *testing.T) {

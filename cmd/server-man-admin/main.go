@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"serverman/internal/admin"
-	"serverman/internal/config"
-	"serverman/internal/core"
+	"server-man/internal/admin"
+	"server-man/internal/config"
+	"server-man/internal/core"
 	"syscall"
 	"time"
 )

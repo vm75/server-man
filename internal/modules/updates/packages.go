@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"serverman/internal/core"
+	"server-man/internal/core"
 	"strings"
 	"time"
 )

@@ -24,9 +24,9 @@ def read_sample(pid):
     return values
 
 
-binary = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "bin/serverman")
+binary = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "bin/server-man")
 duration = float(sys.argv[2] if len(sys.argv) > 2 else "12")
-with tempfile.TemporaryDirectory(prefix="serverman-idle-") as root:
+with tempfile.TemporaryDirectory(prefix="server-man-idle-") as root:
     root = Path(root)
     config = root / "config.json"
     config.write_text(json.dumps({

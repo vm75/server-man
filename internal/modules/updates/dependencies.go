@@ -3,7 +3,7 @@ package updates
 import (
 	"context"
 	"io"
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 // dependencyPackages resolves only native distribution packages. It never adds

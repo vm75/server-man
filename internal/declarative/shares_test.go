@@ -7,8 +7,8 @@ import (
 	"io"
 	"testing"
 
-	"serverman/internal/core"
-	"serverman/internal/modules/shares"
+	"server-man/internal/core"
+	"server-man/internal/modules/shares"
 )
 
 type shareHelperFixture struct {

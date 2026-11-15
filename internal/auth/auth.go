@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const cookieName = "serverman_session"
+const cookieName = "server-man_session"
 const sessionLifetime = 8 * time.Hour
 
 type Auth struct {

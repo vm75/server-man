@@ -1,4 +1,4 @@
-module serverman
+module server-man
 
 go 1.26.0
 

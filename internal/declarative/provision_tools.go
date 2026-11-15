@@ -3,7 +3,7 @@ package declarative
 import (
 	"context"
 	"io"
-	"serverman/internal/core"
+	"server-man/internal/core"
 )
 
 func RegisterProvisioning(r *core.Registry, p Provisioner) error {

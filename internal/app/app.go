@@ -6,17 +6,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"serverman/internal/declarative"
+	"server-man/internal/declarative"
 	"time"
 
-	"serverman/internal/admin"
-	"serverman/internal/buildinfo"
-	"serverman/internal/config"
-	"serverman/internal/core"
-	"serverman/internal/modules/monitor"
-	"serverman/internal/modules/services"
-	"serverman/internal/modules/shares"
-	"serverman/internal/modules/updates"
+	"server-man/internal/admin"
+	"server-man/internal/buildinfo"
+	"server-man/internal/config"
+	"server-man/internal/core"
+	"server-man/internal/modules/monitor"
+	"server-man/internal/modules/services"
+	"server-man/internal/modules/shares"
+	"server-man/internal/modules/updates"
 )
 
 func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, runner core.Executor) (*core.Registry, error) {
