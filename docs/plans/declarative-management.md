@@ -29,6 +29,14 @@ YAML is the initial format. A TOML parser is unnecessary for the agreed goal; do
 - Preserve authentication, write policy, destructive acknowledgements, process/output bounds and HTTP/MCP parity. Rootless Podman runs as the configured application account; never silently elevate it or change ownership to make an operation work.
 - Architecture documentation describes shipped behavior. This plan describes intended behavior until each step has evidence.
 
+## Product naming
+
+Use **server-man** consistently for the product, repository documentation, UI, MCP identity, Go module/imports, executables, installation/configuration paths, systemd units and owned native artifacts. Use `SERVER_MAN_` for shell environment variables. Language identifiers and serialized field names follow their language/schema conventions; product branding does not require mechanically inserting hyphens into them.
+
+The rename is a clean replacement: do not add old-name aliases, compatibility paths, duplicate units, migration commands or automatic host-data moves. Historical verification records describe their original environment and are not current installation instructions. Keep unrelated host resources and `~/vms` untouched.
+
+The existing rename has implementation evidence recorded below. Future changes must retain the canonical spelling in source, examples, generated definitions and release/install tooling. Verify with a tracked-source spelling audit, build/type/race checks, HTTP/MCP identity and UI assertions, and a temporary staged install; no real deployment is needed for naming verification.
+
 ## Behavioral contract
 
 ### Definitions and lifecycle
@@ -240,6 +248,7 @@ Acceptance: a bundle restores on a clean disposable host under a different direc
 Depends on steps 1–10.
 
 - [ ] Remove obsolete discovery/import/edit paths, LXD/classic LXC tools, `.disabled` marker semantics and stale packaging/examples after replacement coverage passes. Preserve unrelated host-service/package/monitoring capabilities.
+- [x] Incorporate the clean `server-man` rebrand across product identity, code, packaging and examples, using `SERVER_MAN_` environment variables without compatibility aliases. Existing implementation and verification evidence appears under “Rebrand integration” below; retain naming checks during final release verification.
 - [ ] Run the repository checks and end-to-end acceptance matrix below. Record exact environments, backend/provider versions, evidence and unresolved limits.
 - [ ] Update README, installation/config examples, component design docs, extension guide, MCP docs and operations/verification docs where behavior changed. Document prerequisites and the supported feature/version matrix.
 - [ ] Update `ARCHITECTURE.md` to describe the actual configuration authority, coordinator, adapters, storage/preflight, journal/recovery, native boot ownership, privilege boundaries and host-direct management split. Include DRY, KISS and YAGNI as design tenets; remove superseded descriptions.

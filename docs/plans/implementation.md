@@ -186,6 +186,8 @@ The planned implementation steps have code and local evidence. The host migratio
 
 ## Host migration follow-up (2026-10-16)
 
+Historical record: the compatibility-preserving naming policy below was superseded by the clean rebrand in the [declarative management plan](declarative-management.md#product-naming). Current changes use `server-man` and `SERVER_MAN_` without legacy aliases or migration support. This section records earlier work, not instructions to deploy or migrate this checkout.
+
 Requested end state: canonical `server-man` display name with compatibility
 preserved; buildable checkout; prepared local service; safe discoverable examples
 under this account's `~/vms`; complete host change record.
