@@ -24,7 +24,7 @@ make build
 ./bin/server-man
 ```
 
-Release builds can set `SERVER_MAN_VERSION`, for example `SERVER_MAN_VERSION=0.1.0 make build`. The Go module, executables, service units, UI and native ownership markers use `server-man`.
+Application versions use the committed [`VERSION`](VERSION) file and pre-1.0 prerelease tags while the implementation plan is unfinished. Untagged builds include a Git commit suffix; a clean build at an exact matching `v<VERSION>` tag reports the release version. `./bin/server-man -version`, `/api/status` and the UI footer expose it. `SERVER_MAN_VERSION` remains available as an explicit build override. See the [versioning and CI policy](docs/versioning.md) for tagging and release steps. The Go module, executables, service units, UI and native ownership markers use `server-man`.
 
 Open `http://127.0.0.1:8080`. Sign in with the access token from the private file created on first start. The startup log shows its path; the default is `~/.config/server-man/token` (or under `XDG_CONFIG_HOME`). The server binds to loopback. `GET /healthz` provides a small unauthenticated JSON health response.
 
