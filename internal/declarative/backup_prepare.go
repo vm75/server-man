@@ -266,14 +266,11 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 	}
 
-	deadline := opts.DeadlineSeconds
-	if deadline == 0 {
-		deadline = 900
+	deadline, err := backupTimeout(opts.DeadlineSeconds)
+	if err != nil {
+		return BackupSummary{}, err
 	}
-	if deadline < 30 || deadline > 86400 {
-		return BackupSummary{}, core.Invalid("deadlineSeconds must be between 30 and 86400")
-	}
-	bCtx, cancel := context.WithTimeout(ctx, time.Duration(deadline)*time.Second)
+	bCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
 	if err := c.checkApplyIdle(); err != nil {

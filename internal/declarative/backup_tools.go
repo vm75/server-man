@@ -10,6 +10,14 @@ import (
 
 func RegisterBackup(r *core.Registry, c Coordinator) error {
 	return r.AddModule(core.Module{ID: "managed_backup", Title: "Portable backup planning", Available: true},
+		core.Tool{Name: "managed_backup_publish", Title: "Verify and finish capture publication", Description: "Verify the reviewed recorded capture tree and complete its durable publication. A destination must be absent or already be the recorded capture directory. Never replaces/deletes data, starts workloads, imports native data or marks the capture restorable. Requires the current configuration revision and recovery token.", Destructive: true, JobTimeout: 24 * time.Hour, Fields: map[string]core.Field{
+			"revision":        core.StringField("Current configuration revision from recovery status", true, 64),
+			"reviewToken":     core.StringField("Current recovery review token", true, 64),
+			"deadlineSeconds": {Type: "integer", Minimum: backupDeadlineMinimum(), Maximum: backupDeadlineMaximum(), Description: "Verification/publication timeout in seconds (30-86400, default 900)"},
+		}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			status, err := c.ReconcileBackupPublication(ctx, in.String("revision"), in.String("reviewToken"), int(in.Number("deadlineSeconds")))
+			return status, managedError(err)
+		}},
 		core.Tool{Name: "managed_backup_release", Title: "Leave backup workloads as they are", Description: "Acknowledge the reviewed interrupted capture and release its management blocker without starting/stopping workloads, publishing/deleting capture data or replaying capture. Requires the current configuration revision and recovery token; retained journal states do not claim successful resumption.", Destructive: true, Fields: map[string]core.Field{
 			"revision":    core.StringField("Current configuration revision from recovery status", true, 64),
 			"reviewToken": core.StringField("Current recovery review token", true, 64),
@@ -72,3 +80,13 @@ func RegisterBackup(r *core.Registry, c Coordinator) error {
 
 func backupDeadlineMinimum() *float64 { value := 30.0; return &value }
 func backupDeadlineMaximum() *float64 { value := 86400.0; return &value }
+
+func backupTimeout(seconds int) (time.Duration, error) {
+	if seconds == 0 {
+		seconds = 900
+	}
+	if seconds < 30 || seconds > 86400 {
+		return 0, core.Invalid("deadlineSeconds must be between 30 and 86400")
+	}
+	return time.Duration(seconds) * time.Second, nil
+}

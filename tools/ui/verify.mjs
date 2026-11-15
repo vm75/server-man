@@ -23,10 +23,11 @@ let fixtureMode = false
 let readinessScenario = 'blocked'
 let backupRecoveryPending = false
 let backupPublicationPending = false
+let backupPublicationFinalized = true
 let backupRecoveryCurrentRevision = 'a'.repeat(64)
 
 const fixtures = {
-  managed_backup_recovery_status: () => backupPublicationPending ? {currentRevision:'a'.repeat(64),journal:{version:1,stage:'complete',revision:'a'.repeat(64),destination:'/tmp/interrupted-capture',updatedAt:new Date().toISOString(),services:{},artifact:{stage:'publishing',stagingPath:'/tmp/.staging-backup-fixture',manifestChecksum:'e'.repeat(64)}},reviewToken:'c'.repeat(64)} : backupRecoveryPending ? {currentRevision:backupRecoveryCurrentRevision,journal:{version:1,stage:'recovering',revision:'a'.repeat(64),destination:'/tmp/interrupted-capture',updatedAt:new Date().toISOString(),services:{app:'failed',db:'resumed',guest:'stop_uncertain'}},reviewToken:'c'.repeat(64)} : {},
+  managed_backup_recovery_status: () => backupPublicationPending ? {currentRevision:'a'.repeat(64),journal:{version:1,stage:'complete',revision:'a'.repeat(64),destination:'/tmp/interrupted-capture',updatedAt:new Date().toISOString(),services:{},artifact:{stage:backupPublicationFinalized?'publishing':'building',stagingPath:'/tmp/.staging-backup-fixture',manifestChecksum:backupPublicationFinalized?'e'.repeat(64):undefined}},reviewToken:'c'.repeat(64)} : backupRecoveryPending ? {currentRevision:backupRecoveryCurrentRevision,journal:{version:1,stage:'recovering',revision:'a'.repeat(64),destination:'/tmp/interrupted-capture',updatedAt:new Date().toISOString(),services:{app:'failed',db:'resumed',guest:'stop_uncertain'}},reviewToken:'c'.repeat(64)} : {},
   managed_backup_inventory: () => ({stage:'inventory',revision:'a'.repeat(64),checkedAt:new Date().toISOString(),inputs:[{id:'storage/documents',kind:'directory',strategy:'bundle_copy',path:'/tmp/data/documents',bundlePath:'data/documents',resources:['storage/documents','share/files'],required:true,sensitive:true,inspection:'metadata_only'},{id:'native/guest',kind:'incus_instance_export',strategy:'native_export',native:{backend:'incus',name:'sm-guest',project:'managed',pool:'default'},runtimeState:'stopped',resources:['service/guest'],required:true,sensitive:true,inspection:'native_dependencies_unchecked'}],requirements:[{resource:'storage/documents',kind:'tree_scan',description:'Recursively inventory links and metadata before copy.'}],exclusions:[{kind:'derived_native_state',reason:'Regenerate owned native definitions from the selected configuration.'}],issues:[{severity:'unknown',resource:'service/guest',field:'native_state',code:'backup_native_dependencies',message:'Native guest dependencies have not been enumerated.',remedy:'Inventory instance and attached volume exports before backup.'}]}),
   managed_storage_plan: args => ({storage:args.storage,revision:args.revision,path:'/tmp/new-data',kind:args.storage === 'vm-root' ? 'file' : 'directory',sizeGiB:args.sizeGiB,format:args.storage === 'vm-root' ? 'qcow2' : undefined,...(args.storage === 'vm-root' ? {source:{path:'assets/base.qcow2',format:'qcow2',sha256:'e'.repeat(64)},sourceVirtualBytes:1073741824} : {}),availableBytes:10737418240,uid:1000,gid:1000,mode:'0700',consumers:[],reviewToken:'d'.repeat(64)}),
   managed_config_history: () => ({entries:[{revision:'c'.repeat(64),modifiedAt:new Date().toISOString(),valid:true}]}),
@@ -200,7 +201,7 @@ async function exerciseManagement(page) {
   assert.equal(submitted.shares_setup?.confirm, true)
   assert.equal(submitted.dependencies_install?.target, 'podman')
   assert.equal(submitted.dependencies_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['managed_backup_prepare', 'managed_backup_prepare', 'managed_backup_recover', 'managed_backup_release', 'managed_backup_release', 'managed_resource_save', 'managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
+  assert.deepEqual(deniedByServer.sort(), ['managed_backup_prepare', 'managed_backup_prepare', 'managed_backup_recover', 'managed_backup_release', 'managed_backup_release', 'managed_backup_publish', 'managed_resource_save', 'managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
   // The alert stays mounted on every page; rechecks clear only resolved issues.
   const beforeRepairCalls = managementCalls.length
   readinessScenario = 'unknown'
@@ -276,6 +277,21 @@ async function exerciseBackupInventory(page) {
   await recovery.getByText('Recorded publication phase: publishing',{exact:true}).waitFor()
   await recovery.getByText('Recorded staging location: /tmp/.staging-backup-fixture',{exact:true}).waitFor()
   assert.equal(await recovery.getByRole('button',{name:'Resume backup workloads',exact:true}).count(),0,'publication-only review must not offer workload replay')
+  assert.equal(await recovery.getByRole('button',{name:'Verify and finish publication',exact:true}).isDisabled(),true)
+  await recovery.getByLabel('I reviewed the interrupted capture and selected a recovery action',{exact:true}).check()
+  await recovery.getByRole('button',{name:'Verify and finish publication',exact:true}).click()
+  await recovery.getByRole('button',{name:'Verifying publication…',exact:true}).waitFor()
+  assert.deepEqual(managementCalls.at(-1),{tool:'managed_backup_publish',args:{revision:'a'.repeat(64),reviewToken:'c'.repeat(64),confirm:true}})
+  backupPublicationPending=false
+  await page.evaluate(id=>window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool:'managed_backup_publish',state:'succeeded'}})),`fixture-${managementCalls.length}`)
+  await recovery.getByText('No pending backup recovery.',{exact:true}).waitFor()
+  backupPublicationPending=true
+  backupPublicationFinalized=false
+  await recovery.getByRole('button',{name:'Review recovery',exact:true}).click()
+  await recovery.getByText('The interrupted capture has no finalized manifest checksum. Inspect the incomplete data before releasing recovery.',{exact:true}).waitFor()
+  assert.equal(await recovery.getByRole('button',{name:'Verify and finish publication',exact:true}).count(),0,'incomplete captures must not offer publication')
+  backupPublicationFinalized=true
+  await recovery.getByRole('button',{name:'Review recovery',exact:true}).click()
   await recovery.getByLabel('I reviewed the interrupted capture and selected a recovery action',{exact:true}).check()
   await recovery.getByRole('button',{name:'Leave workloads as they are',exact:true}).click()
   await recovery.getByRole('button',{name:'Releasing recovery…',exact:true}).waitFor()
@@ -358,7 +374,7 @@ try {
           await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
           return
         }
-        if (['services_stop', 'managed_backup_prepare', 'managed_backup_recover', 'managed_backup_release', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
+        if (['services_stop', 'managed_backup_prepare', 'managed_backup_recover', 'managed_backup_release', 'managed_backup_publish', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
           assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)

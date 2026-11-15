@@ -23,7 +23,7 @@
   let recoveryChecking=$state(false)
   let recoveryConfirm=$state(false)
   let recoveryJob=$state<string|null>(null)
-  let recoveryKind=$state<'resume'|'release'>('resume')
+  let recoveryKind=$state<'resume'|'release'|'publish'>('resume')
   const publicationPending=$derived(!!recovery?.journal?.artifact && !['published','discarded','released'].includes(recovery.journal.artifact.stage))
   const workloadsPending=$derived(!!recovery?.journal && !['complete','released'].includes(recovery.journal.stage))
   const recoveryPending=$derived(workloadsPending||publicationPending)
@@ -34,11 +34,12 @@
     catch(e){if(!stopped)recoveryError=e instanceof Error?e.message:'Could not read backup recovery'}
     finally{if(!stopped)recoveryChecking=false}
   }
-  async function recover(resume=true){
+  async function recover(kind:'resume'|'release'|'publish'){
     if(!recovery?.journal||!recovery.reviewToken||!recoveryConfirm)return
-    recoveryActionError='';recoveryKind=resume?'resume':'release'
-    try{const job=await startJob(resume?'managed_backup_recover':'managed_backup_release',{revision:resume?recovery.journal.revision:recovery.currentRevision,reviewToken:recovery.reviewToken,confirm:true});if(!stopped)recoveryJob=job.id}
-    catch(e){if(!stopped)recoveryActionError=e instanceof Error?e.message:'Could not resume backup workloads'}
+    recoveryActionError='';recoveryKind=kind
+    const tool={resume:'managed_backup_recover',release:'managed_backup_release',publish:'managed_backup_publish'}[kind]
+    try{const job=await startJob(tool,{revision:kind==='resume'?recovery.journal.revision:recovery.currentRevision,reviewToken:recovery.reviewToken,confirm:true});if(!stopped)recoveryJob=job.id}
+    catch(e){if(!stopped)recoveryActionError=e instanceof Error?e.message:'Could not start backup recovery'}
   }
   let controller:AbortController|undefined
   let stopped=false
@@ -96,13 +97,16 @@
         <p>Recorded publication phase: {recovery.journal.artifact.stage}</p>
         <p>Recorded staging location: {recovery.journal.artifact.stagingPath}</p>
         {#if recovery.journal.artifact.manifestChecksum}<p>Recorded manifest checksum: {recovery.journal.artifact.manifestChecksum}</p>{/if}
-        {#if publicationPending}<p>Inspect the destination and recorded staging location before releasing recovery. Release does not publish or delete capture data.</p>{/if}
+        {#if publicationPending}<p>Verify and finish publication checks the recorded capture and publishes it only if the destination is absent or already contains that same capture. It never replaces existing data, resumes workloads or marks a capture restorable. Release does not publish or delete capture data.</p>
+          {#if !recovery.journal.artifact.manifestChecksum}<p>The interrupted capture has no finalized manifest checksum. Inspect the incomplete data before releasing recovery.</p>{/if}
+        {/if}
       {/if}
       <ul>{#each Object.entries(recovery.journal.services) as [id,state]}<li>{id}: {state.replaceAll('_',' ')}</li>{/each}</ul>
       <p>Resume only workloads whose stop was attempted. An uncertain stop may still complete later; inspect native state before releasing recovery. This does not replay capture or restore data. “Leave workloads as they are” acknowledges the interruption and releases managed controls without changing runtime state. If the configuration changed outside server-man, restore the recorded revision before recovery.</p>
       <label><input type="checkbox" bind:checked={recoveryConfirm} disabled={disabled||!!recoveryJob} /> I reviewed the interrupted capture and selected a recovery action</label>
-      {#if workloadsPending}      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(true)}>{recoveryJob&&recoveryKind==='resume'?'Recovering workloads…':'Resume backup workloads'}</button>{/if}
-      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(false)}>{recoveryJob&&recoveryKind==='release'?'Releasing recovery…':'Leave workloads as they are'}</button>
+      {#if publicationPending && recovery.journal.artifact?.manifestChecksum}<button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover('publish')}>{recoveryJob&&recoveryKind==='publish'?'Verifying publication…':'Verify and finish publication'}</button>{/if}
+      {#if workloadsPending}      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover('resume')}>{recoveryJob&&recoveryKind==='resume'?'Recovering workloads…':'Resume backup workloads'}</button>{/if}
+      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover('release')}>{recoveryJob&&recoveryKind==='release'?'Releasing recovery…':'Leave workloads as they are'}</button>
     {:else if recovery}<p>No pending backup recovery.</p>{/if}
   </section>
 

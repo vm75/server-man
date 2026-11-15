@@ -236,7 +236,7 @@ func TestBackupRecoveryToolsApplyPrivatePolicyAndConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	args, _ := json.Marshal(map[string]any{"revision": status.Journal.Revision, "reviewToken": status.ReviewToken, "confirm": true})
-	for name, raw := range map[string]json.RawMessage{"managed_backup_recovery_status": json.RawMessage(`{}`), "managed_backup_recover": args, "managed_backup_release": args} {
+	for name, raw := range map[string]json.RawMessage{"managed_backup_recovery_status": json.RawMessage(`{}`), "managed_backup_recover": args, "managed_backup_release": args, "managed_backup_publish": args} {
 		if _, err := r.Invoke(context.Background(), name, raw, "test"); err == nil || !strings.Contains(err.Error(), "disabled") {
 			t.Fatal(name, err)
 		}
@@ -249,8 +249,10 @@ func TestBackupRecoveryToolsApplyPrivatePolicyAndConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	args, _ = json.Marshal(map[string]any{"revision": status.Journal.Revision, "reviewToken": status.ReviewToken})
-	if _, err := r.Invoke(context.Background(), "managed_backup_recover", args, "test"); err == nil || !strings.Contains(err.Error(), "confirm") {
-		t.Fatal(err)
+	for _, name := range []string{"managed_backup_recover", "managed_backup_publish"} {
+		if _, err := r.Invoke(context.Background(), name, args, "test"); err == nil || !strings.Contains(err.Error(), "confirm") {
+			t.Fatal(err)
+		}
 	}
 }
 

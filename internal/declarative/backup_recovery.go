@@ -105,7 +105,7 @@ func (c Coordinator) checkBackupIdle() error {
 		return errors.New("backup recovery journal is invalid or inaccessible; inspect it before managing workloads")
 	}
 	if backupRecoveryPending(status.Journal) {
-		return errors.New("backup recovery is pending; review resume/release actions in Configuration")
+		return errors.New("backup recovery is pending; review recovery actions in Configuration")
 	}
 	return nil
 }

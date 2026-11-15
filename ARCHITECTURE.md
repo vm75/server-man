@@ -33,6 +33,8 @@ Portable backup planning currently inventories metadata and unresolved native/ex
 
 Capture validates the private manifest's path/type/link graph and configuration revision before publication. An internal held-root manifest reader adds bounded private-file reads and strict JSON checks. A shared tree verifier then checks observed payload bytes, sizes, link identities, private permissions, mount boundaries and exact tree membership against the reviewed manifest checksum before capture publication. Hashing is bounded to each initial file size and rejects observed metadata changes. These checks do not validate native archive contents, dependency completeness, account mappings or restorability. See [backup design](docs/design/backup.md) for the current checks and limits.
 
+Reviewed `managed_backup_publish` uses that same verifier to complete interrupted artifact publication through a serialized bounded job. Current configuration revision and journal token pin the review; recorded parent/capture identities and checksum pin filesystem selection. It syncs verified data, journals publication intent, uses no-replace rename when staging remains, then syncs the parent before recording publication. An already renamed recorded directory is verified and synced in place. Conflicting/missing/changed directories and captures without finalized checksums remain pending; no data is deleted or overwritten and workload recovery states are preserved. Configuration exposes this operation separately from resume/release. Startup does not replay publication automatically.
+
 Domain rules and workflows follow DRY, KISS and YAGNI: share validation and management functions across transports, keep interfaces explicit, and avoid speculative infrastructure.
 
 ## Operation flow
