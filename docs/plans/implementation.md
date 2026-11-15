@@ -1,10 +1,14 @@
 # server-man implementation plan
 
-Status: active. Updated: 2026-10-16. Check off a step only after its acceptance criteria have evidence. Commit each completed step separately, including its tracking update. This plan is the scope and progress authority.
+Status: active. Updated: 2026-10-16. Check off a step only after its acceptance criteria have evidence. Commit each completed step separately, including its tracking update. The [single-server release plan](single-server-release.md) is the current deployment scope authority; historical tracking below remains evidence.
+
+## Current deployment priority (2026-11-15)
+
+Deploy first on this Ubuntu machine, retaining Debian and Arch Linux as support targets. Focus on container/VM configuration and lifecycle, central Samba/NFS shares, and actionable prerequisite alerts. Backup/restore is deferred; preserve partial implementation. Follow the [single-server release plan](single-server-release.md). Full declarative-phase completion is separate from this initial deployment.
 
 ## Next phase: declarative management (in progress, 2026-11-14)
 
-The [declarative management implementation plan](declarative-management.md) is the scope and progress authority for the next phase. It supersedes this document's legacy workload discovery, Compose authoring, LXD/classic LXC, and fragment-owned share configuration requirements for that work. No compatibility or migration layer is required. Existing evidence below describes the earlier implementation, not completion of the new plan. The new phase follows DRY, KISS, and YAGNI and ends with architecture updates and consolidation of obsolete planning material. No implementation of that phase is recorded as complete.
+The [declarative management implementation plan](declarative-management.md) is the scope and progress authority for the next phase. It supersedes this document's legacy workload discovery, Compose authoring, LXD/classic LXC, and fragment-owned share configuration requirements for that work. No compatibility or migration layer is required. Existing evidence below describes the earlier implementation, not completion of the new plan. The new phase follows DRY, KISS, and YAGNI and ends with architecture updates and consolidation of obsolete planning material. Partial implementation and verification are recorded in that plan; native acceptance remains open.
 
 ## Versioning and CI policy (2026-11-14)
 

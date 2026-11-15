@@ -1,6 +1,6 @@
 # Declarative management implementation plan
 
-Status: implementation in progress; steps 1–10 partial, with release/integration acceptance incomplete. Created: 2026-11-14.
+Status: implementation in progress; archival/backup/restore deferred on 2026-11-15. First deployment follows the [single-server release plan](single-server-release.md); native release acceptance remains incomplete. Created: 2026-11-14.
 
 This document is the scope and progress authority for the next server-man phase, linked from [the implementation tracker](implementation.md). All implementation checkboxes start unchecked. Commit each verified implementation step with its tracking update. Record evidence and limits, not intentions, before checking a step complete. This planning change does not authorize running mutations against development-host workloads.
 
@@ -230,7 +230,9 @@ Build incrementally with steps 1–8; complete after all adapters exist.
 
 Acceptance: keyboard-accessible desktop/mobile flows create/update/start/stop/enable/disable every supported resource type. HTTP and MCP enforce identical validation and write policy. Fixtures cover stale edits, missing dependencies/data, partial running groups, restart-required updates, denied privileges, inaccessible backends and recovery after refresh.
 
-### 10. Portable backup preparation and restore
+### 10. Portable backup preparation and restore (deferred)
+
+Preserve partial implementation; do not extend archival before the single-server deployment. The acceptance below belongs to a later phase.
 
 Depends on steps 1–9.
 
@@ -246,7 +248,7 @@ Acceptance: a bundle restores on a clean disposable host under a different direc
 
 ### 11. Integration, documentation and plan cleanup
 
-Depends on steps 1–10.
+For the initial deployment, depends on steps 1–9 within the single-server release scope. Step 10 is deferred and is not a release prerequisite. Full-phase integration still includes step 10.
 
 - [ ] Remove obsolete discovery/import/edit paths, LXD/classic LXC tools, `.disabled` marker semantics and stale packaging/examples after replacement coverage passes. Preserve unrelated host-service/package/monitoring capabilities.
 - [x] Incorporate the clean `server-man` rebrand across product identity, code, packaging and examples, using `SERVER_MAN_` environment variables without compatibility aliases. Existing implementation and verification evidence appears under “Rebrand integration” below; retain naming checks during final release verification.
@@ -267,7 +269,7 @@ Acceptance: architecture matches code, commands/examples match the delivered UI/
 | Apply/recovery | Failures at durable boundaries, concurrent processes, cancellation, interrupted jobs, retry/no-op, stale native files, partial-resource success and no unrelated restart |
 | Porting alerts | Missing executables/provider/daemon, missing folders/files/secrets/disks, unavailable mount/network/pool, permissions/UID mapping, architecture/firmware issues; UI and MCP parity, dependent-resource propagation |
 | Shared storage/shares | Correct shared reference resolution; no path escape/data deletion; Samba client access and NFS mounts on disposable hosts |
-| Backup/restore | Consistent data, complete dependencies, relocated roots/account mappings, Incus custom volumes, libvirt guest state, interrupted backup refusal and stopped restore |
+| Backup/restore (deferred; excluded from initial release) | Consistent data, complete dependencies, relocated roots/account mappings, Incus custom volumes, libvirt guest state, interrupted backup refusal and stopped restore |
 | Security/bounds | Authentication/write policy, redaction, helper revalidation, config/archive/systemd injection, traversal/symlink/FIFO handling, bounded processes/output/probes/history |
 | UI/MCP | Desktop/mobile/keyboard flows, same domain validation, useful error messages and honest observed/pending states |
 | Host-direct features | System service/package changes do not edit workload config; managed-unit controls cannot bypass central policy |

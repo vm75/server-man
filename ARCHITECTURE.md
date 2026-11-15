@@ -4,6 +4,8 @@ server-man runs as one Linux process for the web UI, authenticated JSON APIs and
 
 The canonical identifier is `server-man`: Go module/imports, executables, service/configuration paths, browser event namespace, session cookie and owned share markers use that spelling. Environment variables use the shell-compatible `SERVER_MAN_` prefix. No legacy-name aliases or migration layer are provided.
 
+The current delivery priority is a single-host deployment of the existing container/VM and share management paths, first on Ubuntu, with Debian and Arch Linux as support targets. Backup/restore development is deferred; its partial implementation and recovery safeguards remain present. This scope decision does not establish native backend or cross-distribution acceptance. See the [release checklist](docs/plans/single-server-release.md).
+
 ## Components
 
 | Path | Responsibility |

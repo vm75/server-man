@@ -71,13 +71,13 @@ protections. X is trusted to administer the allowed capabilities, including
 package scripts that run as root; the helper does not make package administration
 low privilege.
 
-The legacy system unit remains available for deployments deliberately running
+The system unit remains available for deployments deliberately running
 server-man as root. Root does not manage X's rootless Podman inventory or X's
 user manager. Do not enable both deployments on the same listener.
 
-## Naming compatibility
+## Product naming
 
-The product is named **server-man**. Keep the installed executable and unit as `server-man` and `server-man.service`, and keep `/etc/server-man`, `/var/lib/server-man` and the user XDG `server-man` directories. This preserves existing scripts, service enablement, tokens and audit history. Packaging descriptions and MCP identity use `server-man`. Share format markers and filenames remain compatible with existing owned fragments. No second service or automatic path migration is installed.
+Use `server-man`, `server-man.service`, the `server-man` configuration/state directories and `SERVER_MAN_` environment variables. No legacy-name aliases or migration layer are provided.
 
 ## TLS reverse proxy
 
@@ -102,10 +102,12 @@ for example `http://192.168.192.78:8080`. This explicit configuration enables
 IPv4 remote access and restricts accepted Host and Origin values to that
 address. The service does not configure firewall or router rules; permit port
 8080 only on a trusted network. Browser session cookies are HttpOnly and
-SameSite Strict, but are not Secure over HTTP. The project editor can return
-private Compose/env file contents to authenticated web and MCP clients, and env
-values travel over HTTP. For untrusted networks, use the TLS reverse proxy
+SameSite Strict, but are not Secure over HTTP. Management requests and browser session credentials travel over HTTP. For untrusted networks, use the TLS reverse proxy
 setup above instead.
 
-The current headless host uses this configuration with writes disabled. See its
+For historical host configuration and verification, see the
 [access and verification record](operations/host-setup.md#direct-lan-http-follow-up-2026-10-16).
+
+## First Ubuntu deployment
+
+See the [current deployment record](operations/ubuntu-first-deployment.md) for application access, installed dependencies and remaining provider setup. Debian and Arch Linux remain support targets without native acceptance evidence.
