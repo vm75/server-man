@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import {createHash} from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -15,7 +16,8 @@ const clients = []
 const protocolErrors = []
 let bridge
 
-async function exercise(client, label) {
+async function exercise(client, label, revision = 'missing') {
+  const configured = revision !== 'missing'
   assert.equal(client.getServerVersion().name, 'server-man')
   assert.equal(client.getServerVersion().title, 'server-man')
   const { tools } = await client.listTools()
@@ -56,19 +58,19 @@ async function exercise(client, label) {
   }
   assert(names.includes('managed_services') && names.includes('managed_config_check'))
   const managed = await client.callTool({ name: 'managed_services', arguments: {} })
-  assert.equal(managed.structuredContent.configured, false)
+  assert.equal(managed.structuredContent.configured, configured)
   assert.deepEqual(managed.structuredContent.services, [])
   assert(names.includes('managed_shares') && names.includes('managed_share_publish'))
   assert(!names.includes('shares_definitions_apply') && !names.includes('shares_definitions_validate'))
   const configuredShares = await client.callTool({ name: 'managed_shares', arguments: {} })
-  assert.equal(configuredShares.structuredContent.configured, false)
+  assert.equal(configuredShares.structuredContent.configured, configured)
   assert.deepEqual(configuredShares.structuredContent.shares, [])
   const deniedSharePublish = await client.callTool({ name: 'managed_share_publish', arguments: { share: 'documents', published: false, confirm: true } })
   assert.equal(deniedSharePublish.structuredContent.error.code, 'writes_disabled')
   for (const name of ['managed_config_model','managed_resource_plan','managed_resource_save']) assert(names.includes(name))
   const deniedModel = await client.callTool({name:'managed_config_model',arguments:{}})
   assert.equal(deniedModel.structuredContent.error.code,'writes_disabled')
-  const resourceArgs = {kind:'storage',id:'documents',operation:'save',definition:JSON.stringify({path:'data/documents'}),revision:'missing'}
+  const resourceArgs = {kind:'storage',id:'documents',operation:'save',definition:JSON.stringify({path:'data/documents'}),revision}
   const plannedResource = await client.callTool({name:'managed_resource_plan',arguments:resourceArgs})
   assert.equal(plannedResource.isError,false)
   const deniedResource = await client.callTool({name:'managed_resource_save',arguments:{...resourceArgs,mode:'now',confirm:true}})
@@ -100,11 +102,11 @@ async function exercise(client, label) {
   assert.equal(deniedConfig.structuredContent.error.code, 'writes_disabled')
   const readiness = await client.callTool({name:'managed_config_readiness',arguments:{}})
   assert.equal(readiness.isError,false)
-  assert.equal(readiness.structuredContent.configured,false)
-  assert.equal(readiness.structuredContent.valid,false)
+  assert.equal(readiness.structuredContent.configured,configured)
+  assert.equal(readiness.structuredContent.valid,configured)
   const configHealth = await client.callTool({ name: 'managed_config_health', arguments: {} })
   assert.equal(configHealth.isError, false)
-  assert.equal(configHealth.structuredContent.configured, false)
+  assert.equal(configHealth.structuredContent.configured, configured)
   assert.equal(configHealth.structuredContent.runtimeChecked, false)
   const configValidation = await client.callTool({ name: 'managed_config_validate', arguments: { content: 'version: 1\n' } })
   assert.equal(configValidation.isError, false)
@@ -160,14 +162,15 @@ async function exercise(client, label) {
 }
 
 try {
-  const config = path.join(root, 'stdio.json')
-  await writeFile(config, JSON.stringify({ stateDir: path.join(root, 'stdio-state'), tokenFile: path.join(root, 'unused-token'), allowWrites: false }), { mode: 0o600 })
+  const config = path.join(root, 'server-man.yaml')
+  const content = JSON.stringify({version:1,server:{state_dir:path.join(root,'stdio-state'),token_file:path.join(root,'unused-token'),allow_writes:false}})
+  await writeFile(config, content, {mode:0o600})
   const stdioClient = new Client({ name: 'server-man-verifier', version: '1.0.0' })
   stdioClient.onerror = error => protocolErrors.push(error)
   clients.push(stdioClient)
   const stdio = new StdioClientTransport({ command: path.join(repo, 'bin/server-man'), args: ['-transport', 'stdio', '-config', config], stderr: 'pipe' })
   await stdioClient.connect(stdio)
-  const stdioTools = await exercise(stdioClient, 'Official SDK / stdio')
+  const stdioTools = await exercise(stdioClient, 'Official SDK / stdio',createHash('sha256').update(content).digest('hex'))
 
   bridge = spawn(path.join(repo, 'bin/mcp-http-bridge'), [path.join(root, 'http-state')], { stdio: ['pipe', 'pipe', 'pipe'] })
   const pending = new Map()

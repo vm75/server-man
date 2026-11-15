@@ -86,7 +86,7 @@ func TestAtomicInstallReplacesLeafSymlinkWithoutFollowingIt(t *testing.T) {
 func TestAccountUnitUsesFreshSystemGroupsAndUserBus(t *testing.T) {
 	p := plan{Account: "example", Home: "/home/example", UID: "1234", GID: "1234"}
 	unit := p.unit()
-	for _, part := range []string{"User=example", "Group=1234", "Requires=user@1234.service", "XDG_RUNTIME_DIR=/run/user/1234", "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1234/bus", "-config /home/example/.config/server-man/config.json"} {
+	for _, part := range []string{"User=example", "Group=1234", "Requires=user@1234.service", "XDG_RUNTIME_DIR=/run/user/1234", "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1234/bus", "-config /home/example/.config/server-man/server-man.yaml"} {
 		if !strings.Contains(unit, part) {
 			t.Fatal(part, unit)
 		}
@@ -113,7 +113,7 @@ func TestRootDirectoryRejectsSymlink(t *testing.T) {
 
 func TestInitialConfigurationPrivateAndPreserved(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "config.json")
+	path := filepath.Join(dir, "server-man.yaml")
 	if err := writeInitialConfiguration(path, "/home/example"); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestInitialConfigurationPrivateAndPreserved(t *testing.T) {
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal(info, err)
 	}
-	original := []byte(`{"listen":"127.0.0.1:8181","allowWrites":false}`)
+	original := []byte("version: 1\nserver:\n  listen: 127.0.0.1:8181\n  allow_writes: false\n")
 	if err := os.WriteFile(path, original, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestInitialConfigurationPrivateAndPreserved(t *testing.T) {
 	if string(data) != string(original) {
 		t.Fatal("existing config overwritten")
 	}
-	if err := os.WriteFile(path, []byte(`{"unknown":true}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("version: 1\nserver: {unknown: true}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeInitialConfiguration(path, "/home/example"); err == nil {

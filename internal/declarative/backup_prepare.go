@@ -203,7 +203,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	if !revisionPattern.MatchString(opts.Revision) {
 		return BackupSummary{}, core.Invalid("a reviewed configuration revision is required")
 	}
-	if err := c.checkBackupIdle(); err != nil {
+	if err := c.checkMutationReady(); err != nil {
 		return BackupSummary{}, err
 	}
 	if opts.Destination == "" {

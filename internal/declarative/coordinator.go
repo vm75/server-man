@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"server-man/internal/config"
 	"slices"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ type Change struct {
 	Fingerprint string `json:"fingerprint"`
 }
 type Plan struct {
+	RestartRequired bool     `json:"restartRequired"`
 	BaseRevision    string   `json:"baseRevision"`
 	DesiredRevision string   `json:"desiredRevision"`
 	Changes         []Change `json:"changes"`
@@ -54,9 +56,10 @@ type Journal struct {
 	Resources       map[string]ResourceResult `json:"resources"`
 }
 type Coordinator struct {
-	HealthCache *HealthCache
-	Store       Store
-	Adapters    map[string]Adapter
+	RunningServer *config.Config
+	HealthCache   *HealthCache
+	Store         Store
+	Adapters      map[string]Adapter
 }
 
 func backend(c Config, key string) string {
@@ -192,6 +195,10 @@ func (c Coordinator) prepare(candidate Config, expected string) (Config, Config,
 			plan.Changes = append(plan.Changes, Change{key, backend(desired, key), op, fp})
 		}
 	}
+	plan.RestartRequired = c.serverRestartRequired(desired)
+	if plan.RestartRequired && len(plan.Changes) > 0 {
+		return Config{}, Config{}, Plan{}, errors.New("save server settings separately and restart server-man before changing managed resources")
+	}
 	return previous, desired, plan, nil
 }
 func (c Coordinator) Preview(ctx context.Context, candidate Config, expected string) (Plan, error) {
@@ -219,7 +226,7 @@ func (c Coordinator) SaveApply(ctx context.Context, candidate Config, expected, 
 }
 
 func (c Coordinator) saveApply(ctx context.Context, candidate Config, expected, mode string, revert bool) (Journal, error) {
-	if err := c.checkBackupIdle(); err != nil {
+	if err := c.checkMutationReady(); err != nil {
 		return Journal{}, err
 	}
 	if mode != "now" && mode != "next_start" {
@@ -247,18 +254,20 @@ func (c Coordinator) saveApply(ctx context.Context, candidate Config, expected, 
 	for _, change := range plan.Changes {
 		planned[change.Resource] = true
 	}
-	for _, key := range orderedResources(desired) {
-		if planned[key] {
-			continue
-		}
-		a := c.Adapters[backend(desired, key)]
-		matches := false
-		if a != nil {
-			obs, e := a.Inspect(ctx, desired, key)
-			matches = e == nil && obs.Matches && (mode == "next_start" || !obs.Active || obs.ActiveMatches)
-		}
-		if !matches {
-			plan.Changes = append(plan.Changes, Change{key, backend(desired, key), "update", resourceFingerprint(desired, key)})
+	if !plan.RestartRequired {
+		for _, key := range orderedResources(desired) {
+			if planned[key] {
+				continue
+			}
+			a := c.Adapters[backend(desired, key)]
+			matches := false
+			if a != nil {
+				obs, e := a.Inspect(ctx, desired, key)
+				matches = e == nil && obs.Matches && (mode == "next_start" || !obs.Active || obs.ActiveMatches)
+			}
+			if !matches {
+				plan.Changes = append(plan.Changes, Change{key, backend(desired, key), "update", resourceFingerprint(desired, key)})
+			}
 		}
 	}
 	// Rebuild update ordering after adding drifted unchanged dependencies.
@@ -399,7 +408,7 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 // Retry inspects a durable transition; it never automatically starts workloads
 // or blindly repeats resource removals after an interrupted native operation.
 func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
-	if err := c.checkBackupIdle(); err != nil {
+	if err := c.checkMutationReady(); err != nil {
 		return Journal{}, err
 	}
 	j, err := c.ReadJournal()

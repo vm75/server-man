@@ -17,7 +17,7 @@ const transport = new StdioClientTransport({ command: 'ssh', args: [
   '-o', `UserKnownHostsFile=${path.join(root, 'known_hosts')}`, '-i', path.join(root, 'key'),
   '-p', String(port), 'manager@127.0.0.1',
   '/usr/local/bin/server-man',
-  '-transport', 'stdio', '-config', '/home/manager/.config/server-man/config.json',
+  '-transport', 'stdio', '-config', '/home/manager/.config/server-man/server-man.yaml',
 ], stderr: 'pipe' })
 transport.stderr?.on('data', data => process.stderr.write(data))
 async function call(name, args = {}) {

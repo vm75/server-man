@@ -244,7 +244,7 @@ func (p Provisioner) Plan(ctx context.Context, id, revision string, sizeGiB int)
 	return plan, err
 }
 func (p Provisioner) Create(ctx context.Context, id, revision, reviewToken string, sizeGiB int) (result ProvisionPlan, resultErr error) {
-	if err := p.Coordinator.checkBackupIdle(); err != nil {
+	if err := p.Coordinator.checkMutationReady(); err != nil {
 		return result, err
 	}
 	plan, parent, err := p.prepare(ctx, id, revision, sizeGiB)

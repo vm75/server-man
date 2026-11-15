@@ -6,7 +6,7 @@ server-man is a Linux administration application built with Go, Svelte 5, TypeSc
 
 - `cmd/server-man/`: entry point and process lifecycle.
 - `cmd/server-man-install/`, `internal/installation/`: shared reviewed host bootstrap for source and release installs; `install.sh` builds as the normal account before sudo. See [installation](docs/installation.md).
-- `internal/config/`, `internal/httpapi/`, `internal/webui/`: configuration, HTTP routes, and embedded assets.
+- `internal/config/`, `internal/httpapi/`, `internal/webui/`: unified YAML server settings, HTTP routes, and embedded assets. `-config` selects the same YAML used by the declarative store; server settings require restart. `internal/yamlutil/` shares bounded YAML structure checks.
 - `internal/core/`: shared schemas, registry, execution, jobs, and audit. `internal/auth/`: token/session authentication. `internal/app/`: module assembly.
 - `internal/modules/monitor/`: Linux collector, sampler, and tools; see [monitoring design](docs/design/monitoring.md) for units and bounds. `web/src/pages/Overview.svelte` renders the dashboard.
 - `internal/declarative/`: central YAML model/store, preflight, apply coordinator, container/VM/share adapters and shared lifecycle/edit tools; see [declarative design](docs/design/declarative.md). `Applications.svelte`, `Configuration.svelte` and `ConfiguredShares.svelte` render managed resources.

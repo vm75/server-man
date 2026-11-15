@@ -1,0 +1,7 @@
+version: 1
+server:
+  listen: 127.0.0.1:8080
+  state_dir: /var/lib/server-man
+  token_file: /etc/server-man/token
+  allow_writes: false
+  sample_interval_seconds: 2

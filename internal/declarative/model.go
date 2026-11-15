@@ -8,6 +8,7 @@ import (
 	"io"
 	"path/filepath"
 	"regexp"
+	"server-man/internal/config"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -16,6 +17,7 @@ import (
 const MaxConfigBytes = 1 << 20
 
 type Config struct {
+	Server   *config.Config     `yaml:"server,omitempty" json:"server,omitempty"`
 	Version  int                `yaml:"version" json:"version"`
 	Services map[string]Service `yaml:"services,omitempty" json:"services"`
 	Storage  map[string]Storage `yaml:"storage,omitempty" json:"storage"`
@@ -131,6 +133,11 @@ func portablePath(p string) bool {
 	return p != "" && !filepath.IsAbs(p) && filepath.Clean(p) == p && p != ".." && !strings.HasPrefix(p, "../") && !strings.ContainsAny(p, "\x00\r\n")
 }
 func (c *Config) Validate() error {
+	if c.Server != nil {
+		if err := c.Server.Validate(); err != nil {
+			return errors.New("invalid server settings: " + err.Error())
+		}
+	}
 	if c.Version != 1 {
 		return errors.New("unsupported configuration version; expected 1")
 	}

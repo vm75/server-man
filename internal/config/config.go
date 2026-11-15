@@ -1,9 +1,7 @@
-// Package config reads the small, explicit server configuration.
+// Package config reads server settings from the unified YAML configuration.
 package config
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,23 +11,24 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"unicode"
 )
 
 type Config struct {
-	ManifestPath          string `json:"manifestPath"`
-	Listen                string `json:"listen"`
-	LibvirtURI            string `json:"libvirtURI"`
-	SystemdScope          string `json:"systemdScope"`
-	SambaConfig           string `json:"sambaConfig"`
-	SambaManagedFile      string `json:"sambaManagedFile"`
-	PackageManager        string `json:"packageManager"`
-	StateDir              string `json:"stateDir"`
-	TokenFile             string `json:"tokenFile"`
-	PublicOrigin          string `json:"publicOrigin"`
-	PrivilegedOperations  bool   `json:"privilegedOperations"`
-	AllowWrites           bool   `json:"allowWrites"`
-	SampleIntervalSeconds int    `json:"sampleIntervalSeconds"`
+	Path                  string `json:"-" yaml:"-"`
+	Listen                string `json:"listen" yaml:"listen,omitempty"`
+	LibvirtURI            string `json:"libvirtURI" yaml:"libvirt_uri,omitempty"`
+	SystemdScope          string `json:"systemdScope" yaml:"systemd_scope,omitempty"`
+	SambaConfig           string `json:"sambaConfig" yaml:"samba_config,omitempty"`
+	SambaManagedFile      string `json:"sambaManagedFile" yaml:"samba_managed_file,omitempty"`
+	PackageManager        string `json:"packageManager" yaml:"package_manager,omitempty"`
+	StateDir              string `json:"stateDir" yaml:"state_dir,omitempty"`
+	TokenFile             string `json:"tokenFile" yaml:"token_file,omitempty"`
+	PublicOrigin          string `json:"publicOrigin" yaml:"public_origin,omitempty"`
+	PrivilegedOperations  bool   `json:"privilegedOperations" yaml:"privileged_operations,omitempty"`
+	AllowWrites           bool   `json:"allowWrites" yaml:"allow_writes,omitempty"`
+	SampleIntervalSeconds int    `json:"sampleIntervalSeconds" yaml:"sample_interval_seconds,omitempty"`
 }
 
 func Defaults() (Config, error) {
@@ -45,45 +44,56 @@ func Defaults() (Config, error) {
 	if stateRoot == "" {
 		stateRoot = filepath.Join(home, ".local", "state")
 	}
-	return Config{Listen: "127.0.0.1:8080", StateDir: filepath.Join(stateRoot, "server-man"), TokenFile: filepath.Join(configDir, "server-man", "token"), LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/server-man.conf", PackageManager: "auto", SampleIntervalSeconds: 2}, nil
+	return Config{Path: filepath.Join(configDir, "server-man", "server-man.yaml"), Listen: "127.0.0.1:8080", StateDir: filepath.Join(stateRoot, "server-man"), TokenFile: filepath.Join(configDir, "server-man", "token"), LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/server-man.conf", PackageManager: "auto", SampleIntervalSeconds: 2}, nil
 }
 
+// Load selects one YAML document for both server settings and desired resources.
 func Load(path string) (Config, error) {
 	cfg, err := Defaults()
 	if err != nil {
 		return cfg, err
 	}
-	if path != "" {
-		file, err := os.Open(path)
-		if err != nil {
-			return cfg, fmt.Errorf("open config: %w", err)
-		}
-		defer file.Close()
-		data, err := io.ReadAll(io.LimitReader(file, (64<<10)+1))
-		if err != nil {
-			return cfg, fmt.Errorf("read config: %w", err)
-		}
-		if len(data) > 64<<10 {
-			return cfg, errors.New("config exceeds 64 KiB")
-		}
-		if data = bytes.TrimSpace(data); len(data) == 0 || data[0] != '{' {
-			return cfg, errors.New("config must be a JSON object")
-		}
-		dec := json.NewDecoder(bytes.NewReader(data))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&cfg); err != nil {
-			return cfg, fmt.Errorf("decode config: %w", err)
-		}
-		if err := dec.Decode(new(any)); !errors.Is(err, io.EOF) {
-			return cfg, errors.New("config must contain one JSON object")
-		}
+	explicit := path != ""
+	if !explicit {
+		path = cfg.Path
+	}
+	if !filepath.IsAbs(path) {
+		return cfg, errors.New("configuration path must be absolute")
+	}
+	cfg.Path = filepath.Clean(path)
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if os.IsNotExist(err) && !explicit {
+		return cfg, cfg.Validate()
+	}
+	if err != nil {
+		return cfg, fmt.Errorf("open configuration: %w", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return cfg, err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+		return cfg, errors.New("configuration must be an owner-only regular file")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	if err != nil {
+		return cfg, err
+	}
+	settings, err := ReadServer(data)
+	if err != nil {
+		return cfg, err
+	}
+	if settings != nil {
+		settings.Path = cfg.Path
+		cfg = *settings
 	}
 	return cfg, cfg.Validate()
 }
 
 func (c Config) Validate() error {
-	if c.ManifestPath != "" && !filepath.IsAbs(c.ManifestPath) {
-		return errors.New("manifestPath must be absolute")
+	if c.Path != "" && !filepath.IsAbs(c.Path) {
+		return errors.New("configuration path must be absolute")
 	}
 	if c.PrivilegedOperations && (c.SambaConfig != "/etc/samba/smb.conf" || c.SambaManagedFile != "/etc/samba/server-man.conf" || c.PackageManager != "auto") {
 		return errors.New("privilegedOperations uses fixed native Samba paths and automatic package-manager detection")

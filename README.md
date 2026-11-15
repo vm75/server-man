@@ -46,24 +46,28 @@ Management writes are disabled by default. When enabled, jobs run one at a time 
 
 Run `make api` in one terminal and `make dev` in another. Open the Vite address (`http://127.0.0.1:5173`); Vite proxies API requests to Go. Rebuild with `make build` to embed updated frontend assets in the executable. A Go-only build without generated UI assets serves APIs and an explanatory 503 response for the UI.
 
-Use `./bin/server-man -config /absolute/path/config.json` to override defaults:
+server-man uses one private YAML configuration: `~/.config/server-man/server-man.yaml` (under `XDG_CONFIG_HOME` when set). Select another absolute path with `./bin/server-man -config /absolute/path/server-man.yaml`.
 
-```json
-{
-  "listen": "127.0.0.1:8080",
-  "manifestPath": "/srv/server-man/server-man.yaml",
-  "allowWrites": false,
-  "sampleIntervalSeconds": 2
-}
+```yaml
+version: 1
+server:
+  listen: 127.0.0.1:8080
+  allow_writes: false
+  sample_interval_seconds: 2
+services: {}
+storage: {}
+shares: {}
+bindings: {}
+secrets: {}
 ```
 
-`manifestPath` defaults to `stateDir/server-man.yaml`. Workload-relative paths resolve against that YAML file. Bootstrap path settings must be absolute; unknown fields are rejected, including retired discovery-root settings. Generated native definitions are derived outputs, never configuration inputs. Remote listening requires `0.0.0.0` plus an HTTP `publicOrigin` pinned to the server's non-loopback IP and same port.
+The `server` section contains application settings; the other sections define managed resources. UI/MCP edits preserve the server section in the same revision-checked file. There is no JSON/TOML configuration or `manifestPath`. Relative workload paths resolve against this YAML's directory. Referenced private files and runtime state remain separate data, rather than additional configuration authorities.
 
-`sampleIntervalSeconds` ranges from 1 to 10. History retains at most 60 samples; the default interval shows two minutes. Process and network data follow the server's visible Linux namespaces/permissions. The first sample has null rates until the next sample establishes a delta.
+Resource changes follow the reviewed native apply workflow. Server-setting changes require a process restart and must be saved separately from resource changes. The UI review and global alert identify a pending restart; managed operations are blocked until the running settings match the file. Restart an installed deployment with `sudo systemctl restart server-man`.
 
-For direct remote browser/API access, bind to `0.0.0.0:8080` and set `publicOrigin` to the server's non-loopback IP and matching HTTP port, such as `http://192.168.192.78:8080`. The application restricts accepted Host and Origin values to that origin. HTTP session cookies are not Secure; use this only on a trusted network. HTTPS deployments can still use a TLS reverse proxy. See [installation and remote access](docs/installation.md).
+`server.sample_interval_seconds` ranges from 1 to 10. Monitoring history retains at most 60 samples. For trusted LAN access, set `server.listen: 0.0.0.0:8080` and `server.public_origin: http://192.168.1.50:8080`, replacing the IP with the server's address. For other networks use an HTTPS reverse proxy; see [installation and remote access](docs/installation.md).
 
-The declarative configuration foundation exposes `managed_config_read`, `managed_config_validate`, and `managed_config_health` through the shared API/MCP registry. Set the absolute bootstrap `manifestPath` to select the workload YAML; it defaults to `stateDir/server-man.yaml`. Private editor reads require `allowWrites`. Preview/save/apply-status/retry operations also use the shared registry and serialized jobs. Desired saves are journaled; initial Podman Quadlet, Docker/Podman Compose, existing-disk libvirt and local Incus adapters and `managed_service_start/stop/restart/enable/disable` tools are connected. The Applications page shows status, startup policy, configuration issues and lifecycle controls. `managed_config_check` refreshes prerequisites and mount/file checks. Compose currently uses boot-only user units with no container crash restart policy. Applications and File shares provide typed definition/edit/review forms; Configuration manages storage, bindings, private-file references, YAML recovery and private history inspection/reviewed revert. Storage references offer a separate reviewed new-directory/disk operation, including checksum-pinned local image cloning; existing/restored data is never replaced. Complete VM provisioning and full runtime verification remain in development. `managed_shares` and `managed_share_publish` inspect and change central share publication through shared native validation/rollback. Legacy Compose discovery/editing, LXD/classic LXC tools and direct native share-edit APIs have been removed. See [current behavior and limits](docs/design/declarative.md).
+The declarative configuration foundation exposes `managed_config_read`, `managed_config_validate`, and `managed_config_health` through the shared API/MCP registry. The CLI `-config` option selects the same unified YAML used at startup. Private editor reads require `server.allow_writes`. Preview/save/apply-status/retry operations also use the shared registry and serialized jobs. Desired saves are journaled; initial Podman Quadlet, Docker/Podman Compose, existing-disk libvirt and local Incus adapters and `managed_service_start/stop/restart/enable/disable` tools are connected. The Applications page shows status, startup policy, configuration issues and lifecycle controls. `managed_config_check` refreshes prerequisites and mount/file checks. Compose currently uses boot-only user units with no container crash restart policy. Applications and File shares provide typed definition/edit/review forms; Configuration manages storage, bindings, private-file references, YAML recovery and private history inspection/reviewed revert. Storage references offer a separate reviewed new-directory/disk operation, including checksum-pinned local image cloning; existing/restored data is never replaced. Complete VM provisioning and full runtime verification remain in development. `managed_shares` and `managed_share_publish` inspect and change central share publication through shared native validation/rollback. Legacy Compose discovery/editing, LXD/classic LXC tools and direct native share-edit APIs have been removed. See [current behavior and limits](docs/design/declarative.md).
 
 ## HTTP API
 
@@ -86,7 +90,7 @@ Managed workloads use `managed_config_*`, `managed_resource_plan/save`, `managed
 Open **Agent access** in the UI for discovery and connection details. The running server provides Streamable HTTP at `/mcp`, authenticated with the same server access token. Local agents can launch a separate stdio process:
 
 ```sh
-/absolute/path/to/server-man -transport stdio -config /absolute/path/to/config.json
+/absolute/path/to/server-man -transport stdio -config /absolute/path/to/server-man.yaml
 ```
 
 Use HTTP to share the web server's jobs and history. A local stdio process has its own history and cancels unfinished work when it exits. See [MCP connection details and Hermes/OpenClaw examples](docs/design/mcp.md) for setup, schemas, protocol limits, and the verification scope. `make mcp-test` checks both transports with the official SDK; Node and its SDK are only verification dependencies.

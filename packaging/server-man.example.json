@@ -1,9 +1,0 @@
-{
-  "listen": "127.0.0.1:8080",
-  "manifestPath": "/srv/server-man/server-man.yaml",
-  "stateDir": "/var/lib/server-man",
-  "tokenFile": "/etc/server-man/token",
-  "allowWrites": false,
-  "sampleIntervalSeconds": 2,
-  "publicOrigin": ""
-}

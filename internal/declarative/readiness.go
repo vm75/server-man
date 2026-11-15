@@ -28,6 +28,9 @@ type HealthCache struct {
 
 func (c Coordinator) Preflight(ctx context.Context, cfg Config, refresh bool) Health {
 	h := c.Store.CheckFiles(cfg)
+	if c.serverRestartRequired(cfg) {
+		h.Issues = append(h.Issues, Issue{"error", "configuration", "server", "restart_required", "Server settings differ from the running process.", "Restart server-man to load the saved server settings before managing resources."})
+	}
 	data, _ := Encode(cfg)
 	key := digest(append(data, []byte(c.Store.Path)...))
 	var native []Issue

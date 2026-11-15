@@ -19,7 +19,7 @@ Build an easy-to-maintain Linux administration application with a friendly UI. O
 
 No migration, legacy configuration import, backward-compatible API, LXD backend, or classic LXC backend is required for this phase. Remove obsolete application paths when their replacements are verified. Removing code does not authorize deleting old host data or changing `~/vms`. Incus system containers, remote/cluster management, arbitrary hypervisor conversion, and a general guest configuration-management agent are outside this phase. Local Incus VMs are included alongside local libvirt VMs.
 
-YAML is the initial format. A TOML parser is unnecessary for the agreed goal; do not maintain two user schemas. Keep a schema version and reject unsupported versions explicitly, without implementing speculative migrations. Local server bootstrap/access settings (listener, token location, privilege policy and manifest location) remain installation settings; there is one portable workload configuration, not a second editable workload database.
+YAML is the initial format. A TOML parser is unnecessary for the agreed goal; do not maintain two user schemas. Keep a schema version and reject unsupported versions explicitly, without implementing speculative migrations. Updated 2026-11-15: server/access settings (listener, token location and privilege policy) share the same YAML under `server`; there is no separate bootstrap JSON or manifest selector. Server changes require restart, while resource edits use reviewed apply. Historical bootstrap references in the evidence below are superseded.
 
 ## Engineering tenets
 

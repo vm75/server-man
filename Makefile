@@ -50,7 +50,7 @@ install:
 	install -D -m 0755 bin/server-man-admin "$(DESTDIR)$(PREFIX)/libexec/server-man-admin"
 	install -D -m 0755 bin/server-man-install "$(DESTDIR)$(PREFIX)/sbin/server-man-install"
 	install -D -m 0644 packaging/server-man.sudoers.example "$(DESTDIR)$(PREFIX)/share/server-man/sudoers.example"
-	install -D -m 0644 packaging/server-man.example.json "$(DESTDIR)$(PREFIX)/share/server-man/config.example.json"
+	install -D -m 0644 packaging/server-man.example.yaml "$(DESTDIR)$(PREFIX)/share/server-man/server-man.example.yaml"
 	install -D -m 0644 packaging/systemd/server-man.service "$(DESTDIR)$(PREFIX)/lib/systemd/system/server-man.service"
 	install -D -m 0644 packaging/systemd/user/server-man.service "$(DESTDIR)$(PREFIX)/lib/systemd/user/server-man.service"
 

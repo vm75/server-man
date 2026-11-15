@@ -6,10 +6,10 @@ export interface DiskSource { path: string; format: string; sha256: string }
 export interface StorageDefinition { source?: DiskSource; path: string; kind?: string; external?: boolean; format?: string; mount?: string }
 export interface ShareDefinition { protocol: string; storage: string; enabled: boolean; readOnly: boolean; guest?: boolean; browseable?: boolean; users?: string[]; clients?: string[]; rootSquash?: boolean; security?: string }
 export interface BindingDefinition { kind: string; name: string }
-export interface ManagedConfig { version: number; services: Record<string, ServiceDefinition> | null; storage: Record<string, StorageDefinition> | null; shares: Record<string, ShareDefinition> | null; bindings: Record<string, BindingDefinition> | null; secrets: Record<string, string> | null }
+export interface ManagedConfig { server?: Record<string, string | number | boolean>; version: number; services: Record<string, ServiceDefinition> | null; storage: Record<string, StorageDefinition> | null; shares: Record<string, ShareDefinition> | null; bindings: Record<string, BindingDefinition> | null; secrets: Record<string, string> | null }
 export interface ModelSnapshot { revision: string; config: ManagedConfig }
 export type ResourceKind = 'service' | 'storage' | 'share' | 'binding' | 'secret'
-export interface ImpactPlan { baseRevision: string; desiredRevision: string; changes: { resource: string; backend: string; operation: string }[]; files: { issues: { resource: string; message: string; remedy: string }[] } }
+export interface ImpactPlan { restartRequired?: boolean; baseRevision: string; desiredRevision: string; changes: { resource: string; backend: string; operation: string }[]; files: { issues: { resource: string; message: string; remedy: string }[] } }
 
 export interface ConfigurationIssue { severity: string; field: string; resource: string; code: string; message: string; remedy: string }
 export interface ConfigurationHealth { checkedAt: string; runtimeCheckedAt?: string; issues: ConfigurationIssue[] }

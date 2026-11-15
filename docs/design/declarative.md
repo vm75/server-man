@@ -8,7 +8,7 @@ The private configuration store resolves relative asset paths against the manife
 
 Up to eight previous configurations are retained in an adjacent owner-only `.history` directory, addressed by hashes of their exact original bytes. Invalid YAML can be read through the same private-file policy and repaired with its current revision; the invalid original is retained in history. UI saves normalize YAML formatting. Private reference files are never opened to collect configuration history.
 
-The bootstrap `manifestPath` setting accepts an absolute path. When omitted, it selects `server-man.yaml` inside `stateDir`. Startup does not create that file or any workload data. Shared registry tools provide:
+One private YAML document contains an optional `server` section and all managed resource sections. `-config` selects this file; its default is `~/.config/server-man/server-man.yaml` (or under `XDG_CONFIG_HOME`). There is no bootstrap JSON or `manifestPath`. Startup validates server settings; invalid typed resource definitions remain inspectable for repair. Typed edits and lifecycle policy saves preserve server settings. Server-only changes skip native drift repair and require a restart before further managed operations; combined server/native-resource changes are rejected. Startup does not create configuration or workload data. Shared registry tools provide:
 
 - `managed_config_read`: private configuration editor content and revision, gated by `allowWrites`, including malformed YAML for recovery.
 - `managed_config_validate`: typed validation and file preflight of a candidate without saving it.

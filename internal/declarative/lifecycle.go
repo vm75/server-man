@@ -11,7 +11,7 @@ type LifecycleAdapter interface {
 }
 
 func (c Coordinator) ServiceAction(ctx context.Context, id, action string) error {
-	if err := c.checkBackupIdle(); err != nil {
+	if err := c.checkMutationReady(); err != nil {
 		return err
 	}
 	if !validID(id) {

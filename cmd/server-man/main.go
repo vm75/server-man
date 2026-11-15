@@ -31,7 +31,7 @@ func main() {
 
 func run() error {
 	version := flag.Bool("version", false, "print version and exit")
-	configPath := flag.String("config", "", "path to a JSON configuration file")
+	configPath := flag.String("config", "", "path to the unified server-man YAML configuration")
 	transport := flag.String("transport", "http", "transport: http (UI, APIs and MCP) or stdio (MCP only)")
 	flag.Parse()
 	if *version {

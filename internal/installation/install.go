@@ -5,10 +5,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"go.yaml.in/yaml/v3"
 	"io"
 	"os"
 	"os/exec"
@@ -266,7 +266,7 @@ User=%s
 Group=%s
 Environment=HOME=%s XDG_RUNTIME_DIR=/run/user/%s DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%s/bus
 WorkingDirectory=%s
-ExecStart=/usr/local/bin/server-man -config %s/.config/server-man/config.json
+ExecStart=/usr/local/bin/server-man -config %s/.config/server-man/server-man.yaml
 Restart=on-failure
 RestartSec=3s
 TimeoutStopSec=60s
@@ -408,7 +408,7 @@ func initializeConfig(home string) error {
 	if u.HomeDir != home {
 		return errors.New("configuration home does not match workload account")
 	}
-	return writeInitialConfiguration(filepath.Join(home, ".config/server-man/config.json"), home)
+	return writeInitialConfiguration(filepath.Join(home, ".config/server-man/server-man.yaml"), home)
 }
 
 func writeInitialConfiguration(path, home string) error {
@@ -421,7 +421,7 @@ func writeInitialConfiguration(path, home string) error {
 		return err
 	}
 	defer f.Close()
-	data, _ := json.MarshalIndent(map[string]any{"listen": "127.0.0.1:8080", "manifestPath": filepath.Join(home, ".local/state/server-man/server-man.yaml"), "allowWrites": true, "privilegedOperations": true}, "", "  ")
+	data, _ := yaml.Marshal(map[string]any{"version": 1, "server": map[string]any{"listen": "127.0.0.1:8080", "allow_writes": true, "privileged_operations": true}})
 	if _, err = f.Write(append(data, '\n')); err != nil {
 		return err
 	}

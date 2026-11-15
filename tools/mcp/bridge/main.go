@@ -46,7 +46,7 @@ func run() error {
 	defer jobs.Close()
 	monitoring := monitor.New(ctx, time.Second)
 	defer monitoring.Close()
-	registry, err := app.Registry(config.Config{StateDir: root}, jobs, monitoring, core.Runner{})
+	registry, err := app.Registry(config.Config{StateDir: root, Path: filepath.Join(root, "server-man.yaml")}, jobs, monitoring, core.Runner{})
 	if err != nil {
 		return err
 	}
