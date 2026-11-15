@@ -174,11 +174,25 @@ func copyBackupHandles(ctx context.Context, srcF, dstF *os.File, mode os.FileMod
 }
 
 func hashBackupFile(ctx context.Context, f *os.File) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	before, err := f.Stat()
+	if err != nil || !before.Mode().IsRegular() || before.Size() < 0 {
+		return "", errors.New("backup checksum requires a stable regular file")
+	}
 	if _, err := f.Seek(0, 0); err != nil {
 		return "", err
 	}
 	hash := sha256.New()
-	if _, err := io.Copy(hash, contextReader{ctx, f}); err != nil {
+	if _, err := io.CopyN(hash, contextReader{ctx, f}, before.Size()); err != nil {
+		return "", err
+	}
+	after, err := f.Stat()
+	if err != nil || !stableBackupNode(before, after) {
+		return "", errors.New("backup file changed while checking its checksum")
+	}
+	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
@@ -464,18 +478,6 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	if err := c.verifyNativeCaptureBoundary(bCtx, snapshot.Config, inventory); err != nil {
 		return BackupSummary{}, err
 	}
-	if err := os.MkdirAll(filepath.Join(stagingDir, "data"), 0700); err != nil {
-		return BackupSummary{}, err
-	}
-	if err := os.MkdirAll(filepath.Join(stagingDir, "secrets"), 0700); err != nil {
-		return BackupSummary{}, err
-	}
-	if err := os.MkdirAll(filepath.Join(stagingDir, "assets"), 0700); err != nil {
-		return BackupSummary{}, err
-	}
-	if err := os.MkdirAll(filepath.Join(stagingDir, "native"), 0700); err != nil {
-		return BackupSummary{}, err
-	}
 
 	var manifestFiles []BackupManifestFile
 	var manifestNativeExports []BackupManifestNativeExport
@@ -597,6 +599,15 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	}
 
 	manifestChecksum := digest(manifestBytes)
+	verifyRoot, err := publication.parent.OpenRoot(publication.stage)
+	if err != nil {
+		return BackupSummary{}, errors.New("private capture could not be opened for verification")
+	}
+	_, verifyErr := verifyBackupBundle(bCtx, verifyRoot, manifestChecksum)
+	verifyRoot.Close()
+	if verifyErr != nil {
+		return BackupSummary{}, verifyErr
+	}
 
 	if err := bCtx.Err(); err != nil {
 		return BackupSummary{}, err
