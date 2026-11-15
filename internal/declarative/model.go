@@ -23,12 +23,18 @@ type Config struct {
 	Bindings map[string]Binding `yaml:"bindings,omitempty" json:"bindings"`
 	Secrets  map[string]string  `yaml:"secrets,omitempty" json:"secrets"`
 }
+type DiskSource struct {
+	Path   string `yaml:"path" json:"path"`
+	Format string `yaml:"format" json:"format"`
+	SHA256 string `yaml:"sha256" json:"sha256"`
+}
 type Storage struct {
-	Format   string `yaml:"format,omitempty" json:"format,omitempty"`
-	Path     string `yaml:"path" json:"path"`
-	External bool   `yaml:"external,omitempty" json:"external"`
-	Kind     string `yaml:"kind,omitempty" json:"kind"`
-	Mount    string `yaml:"mount,omitempty" json:"mount,omitempty"`
+	Source   *DiskSource `yaml:"source,omitempty" json:"source,omitempty"`
+	Format   string      `yaml:"format,omitempty" json:"format,omitempty"`
+	Path     string      `yaml:"path" json:"path"`
+	External bool        `yaml:"external,omitempty" json:"external"`
+	Kind     string      `yaml:"kind,omitempty" json:"kind"`
+	Mount    string      `yaml:"mount,omitempty" json:"mount,omitempty"`
 }
 type Binding struct {
 	Kind string `yaml:"kind" json:"kind"`
@@ -160,6 +166,22 @@ func (c *Config) Validate() error {
 		}
 		if (!s.External && !portablePath(s.Path)) || (s.External && (!filepath.IsAbs(s.Path) || filepath.Clean(s.Path) != s.Path)) || strings.ContainsAny(s.Path, "\x00\r\n") {
 			return errors.New("invalid storage path")
+		}
+		if s.Source != nil {
+			source := s.Source
+			if s.External || s.Kind != "file" || (s.Format != "raw" && s.Format != "qcow2") || !portablePath(source.Path) || !strings.HasPrefix(source.Path, "assets/") || source.Path == s.Path || (source.Format != "raw" && source.Format != "qcow2") || !revisionPattern.MatchString(source.SHA256) {
+				return errors.New("disk source requires an owned disk, relative assets path, raw/qcow2 format and SHA-256 checksum")
+			}
+			for _, other := range c.Storage {
+				if source.Path == other.Path || other.Kind != "file" && (other.Path == "." || strings.HasPrefix(source.Path, other.Path+"/")) {
+					return errors.New("disk source must not overlap managed storage")
+				}
+			}
+			for _, secret := range c.Secrets {
+				if source.Path == secret {
+					return errors.New("disk source overlaps a private-file reference")
+				}
+			}
 		}
 		if paths[s.Path] {
 			return errors.New("duplicate storage path")

@@ -110,6 +110,16 @@ func (s Store) CheckFiles(c Config) Health {
 			kind = "directory"
 		}
 		check("storage/"+id, "path", st.Path, kind, false)
+		if st.Source != nil {
+			firstIssue := len(h.Issues)
+			check("storage/"+id, "source.path", st.Source.Path, "file", false)
+			if info, e := os.Stat(s.Resolve(st.Path)); e == nil && info.Mode().IsRegular() {
+				for index := firstIssue; index < len(h.Issues); index++ {
+					h.Issues[index].Severity = "warning"
+					h.Issues[index].Remedy = "Restore the initial image asset before future provisioning or backup; the existing disk is never reinitialized."
+				}
+			}
+		}
 		if writable[id] {
 			if info, err := os.Stat(s.Resolve(st.Path)); err == nil && (info.IsDir() || info.Mode().IsRegular()) {
 				if err = syscall.Access(s.Resolve(st.Path), 2); err != nil {
@@ -152,6 +162,10 @@ func (s Store) CheckFiles(c Config) Health {
 		}
 		for _, issue := range initial {
 			if resources[issue.Resource] {
+				if issue.Severity == "warning" {
+					h.Issues = append(h.Issues, Issue{"warning", "service/" + id, issue.Resource, "initial_asset_unavailable", "An initial disk image asset needs attention; the existing disk remains authoritative data.", issue.Remedy})
+					continue
+				}
 				add("service/"+id, issue.Resource, "blocked_reference", "A required storage or private-file reference is blocked.", issue.Remedy)
 			}
 		}

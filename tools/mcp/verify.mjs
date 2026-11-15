@@ -97,6 +97,9 @@ async function exercise(client, label) {
   const configValidation = await client.callTool({ name: 'managed_config_validate', arguments: { content: 'version: 1\n' } })
   assert.equal(configValidation.isError, false)
   assert.equal(configValidation.structuredContent.valid, true)
+  const imageConfig = 'version: 1\nstorage:\n  disk:\n    kind: file\n    path: data/guest.qcow2\n    format: qcow2\n    source:\n      path: assets/base.raw\n      format: raw\n      sha256: '+ 'a'.repeat(64) +'\n'
+  const imageValidation = await client.callTool({name:'managed_config_validate',arguments:{content:imageConfig}})
+  assert.equal(imageValidation.structuredContent.valid,true)
   const invalidConfig = await client.callTool({ name: 'managed_config_validate', arguments: { content: 'version: 2\n' } })
   assert.equal(invalidConfig.structuredContent.error.code, 'invalid_arguments')
   for (const retired of ['compose_projects','compose_file_save','compose_env_read','compose_project_create','machines_list','lxd_launch','lxc_stop','kvm_define','kvm_undefine','samba_share_save','nfs_share_remove']) assert(!names.includes(retired), `${retired} must not bypass the central configuration`)

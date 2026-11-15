@@ -25,18 +25,20 @@ type Provisioner struct {
 	QemuImg     string
 }
 type ProvisionPlan struct {
-	Storage        string   `json:"storage"`
-	Revision       string   `json:"revision"`
-	Path           string   `json:"path"`
-	Kind           string   `json:"kind"`
-	Format         string   `json:"format,omitempty"`
-	SizeGiB        int      `json:"sizeGiB"`
-	AvailableBytes uint64   `json:"availableBytes"`
-	UID            int      `json:"uid"`
-	GID            int      `json:"gid"`
-	Mode           string   `json:"mode"`
-	Consumers      []string `json:"consumers"`
-	ReviewToken    string   `json:"reviewToken"`
+	Source             *DiskSource `json:"source,omitempty"`
+	SourceVirtualBytes int64       `json:"sourceVirtualBytes,omitempty"`
+	Storage            string      `json:"storage"`
+	Revision           string      `json:"revision"`
+	Path               string      `json:"path"`
+	Kind               string      `json:"kind"`
+	Format             string      `json:"format,omitempty"`
+	SizeGiB            int         `json:"sizeGiB"`
+	AvailableBytes     uint64      `json:"availableBytes"`
+	UID                int         `json:"uid"`
+	GID                int         `json:"gid"`
+	Mode               string      `json:"mode"`
+	Consumers          []string    `json:"consumers"`
+	ReviewToken        string      `json:"reviewToken"`
 }
 
 func NewProvisioner(c Coordinator, runner core.Executor) Provisioner {
@@ -108,7 +110,7 @@ func (p Provisioner) prepare(ctx context.Context, id, expected string, sizeGiB i
 	} else if sizeGiB < 1 || sizeGiB > 4096 || (storage.Format != "raw" && storage.Format != "qcow2") {
 		return ProvisionPlan{}, nil, errors.New("new disks require raw or qcow2 format and size from 1 to 4096 GiB")
 	}
-	if kind == "file" && storage.Format == "qcow2" && (p.QemuImg == "" || p.Runner == nil) {
+	if kind == "file" && (storage.Format == "qcow2" || storage.Source != nil) && (p.QemuImg == "" || p.Runner == nil) {
 		return ProvisionPlan{}, nil, errors.New("qemu-img is required to provision qcow2 disks; install it explicitly and restart server-man")
 	}
 	root, err := os.OpenRoot(filepath.Dir(c.Store.Path))
@@ -218,8 +220,26 @@ func (p Provisioner) prepare(ctx context.Context, id, expected string, sizeGiB i
 	if info.Mode()&os.ModeSetgid != 0 {
 		gid = int(stat.Gid)
 	}
-	plan := ProvisionPlan{Storage: id, Revision: expected, Path: c.Store.Resolve(storage.Path), Kind: kind, Format: storage.Format, SizeGiB: sizeGiB, AvailableBytes: available, UID: os.Geteuid(), GID: gid, Mode: mode, Consumers: consumers}
-	token, _ := json.Marshal([]any{expected, id, plan.Path, kind, storage.Format, sizeGiB, stat.Dev, stat.Ino, source, plan.UID, plan.GID, p.QemuImg})
+	plan := ProvisionPlan{Storage: id, Revision: expected, Path: c.Store.Resolve(storage.Path), Kind: kind, Format: storage.Format, SizeGiB: sizeGiB, AvailableBytes: available, UID: os.Geteuid(), GID: gid, Mode: mode, Consumers: consumers, Source: storage.Source}
+	var sourceIdentity any
+	if storage.Source != nil {
+		source, image, e := p.openSource(ctx, *storage.Source)
+		if e != nil {
+			return ProvisionPlan{}, nil, e
+		}
+		sourceInfo, e := source.Stat()
+		source.Close()
+		if e != nil {
+			return ProvisionPlan{}, nil, e
+		}
+		if image.VirtualSize > int64(sizeGiB)<<30 {
+			return ProvisionPlan{}, nil, errors.New("destination capacity is smaller than the source image")
+		}
+		plan.SourceVirtualBytes = image.VirtualSize
+		st := sourceInfo.Sys().(*syscall.Stat_t)
+		sourceIdentity = []any{st.Dev, st.Ino, sourceInfo.Size(), sourceInfo.ModTime().UnixNano(), storage.Source.SHA256}
+	}
+	token, _ := json.Marshal([]any{expected, id, plan.Path, kind, storage.Format, sizeGiB, stat.Dev, stat.Ino, source, plan.UID, plan.GID, p.QemuImg, sourceIdentity})
 	plan.ReviewToken = digest(token)
 	success = true
 	return plan, directory, nil
@@ -231,7 +251,7 @@ func (p Provisioner) Plan(ctx context.Context, id, revision string, sizeGiB int)
 	}
 	return plan, err
 }
-func (p Provisioner) Create(ctx context.Context, id, revision, reviewToken string, sizeGiB int) (ProvisionPlan, error) {
+func (p Provisioner) Create(ctx context.Context, id, revision, reviewToken string, sizeGiB int) (result ProvisionPlan, resultErr error) {
 	plan, parent, err := p.prepare(ctx, id, revision, sizeGiB)
 	if err != nil {
 		return plan, err
@@ -267,14 +287,23 @@ func (p Provisioner) Create(ctx context.Context, id, revision, reviewToken strin
 			return plan, errors.New("new disk staging file cannot be created")
 		}
 		defer f.Close()
-		defer parent.Remove(temp)
+		defer func() {
+			if cleanupErr := parent.Remove(temp); cleanupErr != nil && !os.IsNotExist(cleanupErr) {
+				resultErr = errors.Join(resultErr, errors.New("new disk staging cleanup failed; inspect the storage parent before retrying"))
+			}
+		}()
 		if plan.Format == "raw" {
 			err = f.Truncate(int64(sizeGiB) << 30)
 		} else {
 			err = p.createQCOW2(ctx, f, sizeGiB)
 		}
 		if err != nil {
-			return plan, errors.New("new disk creation failed; no destination was published")
+			return plan, errors.New("new disk creation or image verification failed; no destination was published")
+		}
+		if plan.Source != nil {
+			if err = p.cloneSource(ctx, f, plan); err != nil {
+				return plan, fmt.Errorf("image provisioning failed; no destination was published: %w", err)
+			}
 		}
 		if err = f.Sync(); err != nil {
 			return plan, errors.New("new disk could not be synced; no destination was published")
@@ -315,20 +344,12 @@ func (p Provisioner) verifyPlan(ctx context.Context, reviewed ProvisionPlan) err
 func (p Provisioner) createQCOW2(ctx context.Context, f *os.File, sizeGiB int) error {
 	// Native tools receive a held, newly created file descriptor through procfs.
 	// They never receive an existing user data path, even if directories move.
-	path := fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), f.Fd())
+	path := descriptorPath(f)
 	if err := p.Runner.Run(ctx, core.Command{Program: p.QemuImg, Args: []string{"create", "-f", "qcow2", "-o", "preallocation=off", path, fmt.Sprintf("%dG", sizeGiB)}, Timeout: 2 * time.Minute}, io.Discard); err != nil {
 		return err
 	}
-	raw, err := p.Runner.Capture(ctx, core.Command{Program: p.QemuImg, Args: []string{"info", "--output=json", "-f", "qcow2", path}, Timeout: 10 * time.Second})
-	if err != nil {
-		return err
-	}
-	var image struct {
-		Format      string `json:"format"`
-		VirtualSize int64  `json:"virtual-size"`
-		Backing     string `json:"backing-filename"`
-	}
-	if json.Unmarshal([]byte(raw), &image) != nil || image.Format != "qcow2" || image.VirtualSize != int64(sizeGiB)<<30 || image.Backing != "" {
+	image, err := p.inspectImage(ctx, f, "qcow2")
+	if err != nil || image.VirtualSize != int64(sizeGiB)<<30 {
 		return errors.New("new disk verification failed")
 	}
 	return nil

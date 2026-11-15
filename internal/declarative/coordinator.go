@@ -508,6 +508,11 @@ func runtimeFingerprint(c Config, key string) string {
 	s.Description = ""
 	c.Services = maps.Clone(c.Services)
 	c.Services[id] = s
+	c.Storage = maps.Clone(c.Storage)
+	for storageID, storage := range c.Storage {
+		storage.Source = nil
+		c.Storage[storageID] = storage
+	}
 	return resourceFingerprint(c, key)
 }
 

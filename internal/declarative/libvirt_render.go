@@ -104,6 +104,9 @@ func RenderLibvirt(store Store, c Config, key string) ([]byte, error) {
 		return nil, errors.New("resource is not a libvirt VM")
 	}
 	v := s.VM
+	if v.Image != "" {
+		return nil, errors.New("libvirt initial images must use disk storage source references")
+	}
 	if v.UUID == "" || v.MAC == "" {
 		return nil, errors.New("persistent VM identity is required")
 	}

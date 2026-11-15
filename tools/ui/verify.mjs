@@ -22,13 +22,13 @@ let fixtureMode = false
 let readinessScenario = 'blocked'
 
 const fixtures = {
-  managed_storage_plan: args => ({storage:args.storage,revision:args.revision,path:'/tmp/new-data',kind:'directory',sizeGiB:0,availableBytes:10737418240,uid:1000,gid:1000,mode:'0700',consumers:[],reviewToken:'d'.repeat(64)}),
+  managed_storage_plan: args => ({storage:args.storage,revision:args.revision,path:'/tmp/new-data',kind:args.storage === 'vm-root' ? 'file' : 'directory',sizeGiB:args.sizeGiB,format:args.storage === 'vm-root' ? 'qcow2' : undefined,...(args.storage === 'vm-root' ? {source:{path:'assets/base.qcow2',format:'qcow2',sha256:'e'.repeat(64)},sourceVirtualBytes:1073741824} : {}),availableBytes:10737418240,uid:1000,gid:1000,mode:'0700',consumers:[],reviewToken:'d'.repeat(64)}),
   managed_config_history: () => ({entries:[{revision:'c'.repeat(64),modifiedAt:new Date().toISOString(),valid:true}]}),
   managed_config_history_read: args => ({revision:args.target,content:'version: 1\n',valid:true}),
   managed_config_revert_plan: args => ({plan:{baseRevision:args.revision,desiredRevision:args.target,changes:[{resource:'service/website',backend:'podman/quadlet',operation:'update'}],files:{issues:[]}}}),
   managed_config_readiness: () => ({ configured: true, valid: readinessScenario !== 'invalid', ...(readinessScenario === 'invalid' ? {error:'Configuration is invalid or inaccessible; open Configuration to repair it.'} : {health: {checkedAt:new Date().toISOString(), runtimeCheckedAt:new Date().toISOString(), issues: readinessScenario === 'healthy' ? [] : readinessScenario === 'unknown' ? [{severity:'unknown',resource:'service/website',field:'runtime',code:'check_cancelled',message:'Backend checks could not complete.',remedy:'Restore backend access and retry.'}] : fixtures.managed_services().health.issues}}) }),
   managed_config_check: () => ({ checkedAt:new Date().toISOString(), issues:[] }),
-  managed_config_model: () => ({ revision: 'a'.repeat(64), config: { version: 1, services: {}, shares: {}, storage: { documents: {path:'data/documents',kind:'directory'} }, bindings: { lan:{kind:'network',name:'default'}, pool:{kind:'pool',name:'default'}, project:{kind:'project',name:'default'} }, secrets: {} } }),
+  managed_config_model: () => ({ revision: 'a'.repeat(64), config: { version: 1, services: {}, shares: {}, storage: { documents: {path:'data/documents',kind:'directory'}, 'vm-root': {path:'data/vm-root.qcow2',kind:'file',format:'qcow2',source:{path:'assets/base.qcow2',format:'qcow2',sha256:'e'.repeat(64)}} }, bindings: { lan:{kind:'network',name:'default'}, pool:{kind:'pool',name:'default'}, project:{kind:'project',name:'default'} }, secrets: {} } }),
   managed_config_read: () => ({ content: 'version: 1\n', revision: 'a'.repeat(64), valid: true }),
   managed_apply_status: () => ({ stage: 'complete' }),
   managed_shares: () => ({ configured: true, revision: 'a'.repeat(64), shares: [] }),
@@ -140,6 +140,34 @@ async function exerciseManagement(page) {
   const provisioned = managementCalls.find(call => call.tool === 'managed_storage_create')
   assert.deepEqual(provisioned.args,{storage:'documents',revision:'a'.repeat(64),sizeGiB:0,reviewToken:'d'.repeat(64),purpose:'new_data',confirm:true})
   await page.evaluate(({id,tool}) => window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool,state:'succeeded'}})),{id:`fixture-${managementCalls.length}`,tool:'managed_storage_create'})
+  await page.getByRole('button',{name:'Add storage',exact:true}).click()
+  const diskEditor = page.getByRole('region',{name:'Definition editor',exact:true})
+  await diskEditor.getByLabel('Resource ID',{exact:true}).fill('fixture-disk')
+  await diskEditor.getByLabel('Data path',{exact:true}).fill('data/new-vm.qcow2')
+  await diskEditor.getByLabel('Data type',{exact:true}).selectOption('file')
+  await diskEditor.getByLabel('Disk format',{exact:true}).selectOption('qcow2')
+  await diskEditor.getByRole('checkbox',{name:'Provision a new disk from a local image',exact:true}).check()
+  await diskEditor.getByLabel('Initial image asset path',{exact:true}).fill('assets/base.qcow2')
+  await diskEditor.getByLabel('Initial image SHA-256',{exact:true}).fill('e'.repeat(64))
+  assert.equal(await diskEditor.getByLabel('Initial image SHA-256',{exact:true}).getAttribute('pattern'),'[0-9a-f]{64}')
+  await diskEditor.getByRole('button',{name:'Review change',exact:true}).click()
+  await diskEditor.getByRole('heading',{name:'Review changes',exact:true}).waitFor()
+  await diskEditor.getByRole('button',{name:'Confirm and save',exact:true}).click()
+  await page.locator('.activity-button').click()
+  const imageDefinition = JSON.parse(managementCalls.find(call => call.tool === 'managed_resource_save' && call.args.id === 'fixture-disk').args.definition)
+  assert.deepEqual(imageDefinition.source,{path:'assets/base.qcow2',format:'qcow2',sha256:'e'.repeat(64)})
+  await page.evaluate(({id,tool}) => window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool,state:'succeeded'}})),{id:`fixture-${managementCalls.length}`,tool:'managed_resource_save'})
+  await page.getByRole('button',{name:'Provision image for vm-root',exact:true}).click()
+  const imageProvision = page.getByRole('region',{name:'New storage provisioning',exact:true})
+  await imageProvision.getByRole('button',{name:'Review new data creation',exact:true}).click()
+  await imageProvision.getByText(/Initial image: assets\/base.qcow2/).waitFor()
+  await imageProvision.getByRole('checkbox',{name:'I want a new disk from this image; I am not restoring missing guest data.',exact:true}).check()
+  await imageProvision.getByRole('button',{name:'Confirm new data creation',exact:true}).click()
+  await page.locator('.activity-button').click()
+  const cloned = managementCalls.find(call => call.tool === 'managed_storage_create' && call.args.storage === 'vm-root')
+  assert.equal(cloned.args.sizeGiB,20)
+  assert.equal(cloned.args.purpose,'new_data')
+  await page.evaluate(({id,tool}) => window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool,state:'succeeded'}})),{id:`fixture-${managementCalls.length}`,tool:'managed_storage_create'})
   const history = page.getByRole('region',{name:'Configuration history',exact:true})
   await history.getByRole('button',{name:'Inspect cccccccccccc',exact:true}).click()
   assert.equal(await history.getByLabel('Historical configuration',{exact:true}).inputValue(),'version: 1\n')
@@ -156,7 +184,7 @@ async function exerciseManagement(page) {
   assert.equal(submitted.services_stop?.unit, 'sshd.service')
   assert.equal(submitted.services_stop?.confirm, true)
   assert.equal(submitted.managed_resource_save?.revision, 'a'.repeat(64))
-  assert.deepEqual(JSON.parse(submitted.managed_resource_save.definition).users, ['alice'])
+  assert.deepEqual(JSON.parse(managementCalls.find(call => call.tool === 'managed_resource_save' && call.args.kind === 'share').args.definition).users, ['alice'])
   assert.equal(submitted.updates_install?.confirm, true)
   assert.equal(submitted.services_stop?.scope, 'system')
   assert.equal(submitted.packages_install?.packages, 'samba nfs-utils')
@@ -165,7 +193,7 @@ async function exerciseManagement(page) {
   assert.equal(submitted.shares_setup?.confirm, true)
   assert.equal(submitted.dependencies_install?.target, 'podman')
   assert.equal(submitted.dependencies_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
+  assert.deepEqual(deniedByServer.sort(), ['managed_resource_save', 'managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
   // The alert stays mounted on every page; rechecks clear only resolved issues.
   const beforeRepairCalls = managementCalls.length
   readinessScenario = 'unknown'
