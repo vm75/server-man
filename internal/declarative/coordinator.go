@@ -90,18 +90,15 @@ func resourceFingerprint(c Config, key string) string {
 			return ""
 		}
 		definition = s
-		for _, v := range s.Containers {
-			for _, m := range v.Mounts {
-				addStorage(m.Storage)
-			}
-			for _, f := range v.EnvFiles {
-				refs["secret/"+f] = c.Secrets[f]
+		for _, reference := range serviceDataReferences(s) {
+			kind, id, _ := strings.Cut(reference, "/")
+			if kind == "storage" {
+				addStorage(id)
+			} else {
+				refs[reference] = c.Secrets[id]
 			}
 		}
 		if s.VM != nil {
-			for _, d := range s.VM.Disks {
-				addStorage(d)
-			}
 			for _, b := range []string{s.VM.Network, s.VM.Pool, s.VM.Project} {
 				if b != "" {
 					refs["binding/"+b] = c.Bindings[b]

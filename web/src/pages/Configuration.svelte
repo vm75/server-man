@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import DefinitionEditor from '../lib/DefinitionEditor.svelte'
   import ConfigurationHistory from '../lib/ConfigurationHistory.svelte'
+  import BackupInventory from '../lib/BackupInventory.svelte'
   import StorageProvision from '../lib/StorageProvision.svelte'
   import { invokeTool, startJob, type Job } from '../lib/api'
   import type { ResourceKind, ModelSnapshot, ImpactPlan } from '../lib/managed'
@@ -64,6 +65,7 @@
     <ul>{#each entries(group.kind as ResourceKind) as [id,description]}<li><div><strong>{id}</strong><p>{description}</p></div><div class="actions"><button disabled={busy || activeJob !== null} onclick={() => { editor = {kind:group.kind as ResourceKind,id} }}>Edit {id}</button>{#if group.kind === 'storage' && !model?.config.storage?.[id]?.external}<button disabled={busy || activeJob !== null} onclick={() => { provisioning = id }}>{model?.config.storage?.[id]?.source ? 'Provision image' : 'Create empty data'} for {id}</button>{/if}</div></li>{/each}</ul>
     </section>
   {/each}{/if}
+  {#key revision}<BackupInventory disabled={busy || activeJob !== null} />{/key}
   {#key revision}<ConfigurationHistory {revision} disabled={busy || activeJob !== null} onStarted={(id) => { activeJob = id; feedback = 'Configuration revert started. Follow Activity for apply results.' }} onInspect={(historical) => { content = historical; rawOpen = true; plan = null }} />{/key}
   {#if rawOpen}<section class="panel"><h2>Authoritative YAML</h2><p>Use this for advanced settings or recovery. Saves validate the full configuration and reject stale revisions. Referenced private files are never read here.</p>
     {#if plan}<h3>Review YAML changes</h3><ul>{#each plan.changes as change}<li>{change.operation}: {change.resource} ({change.backend})</li>{/each}</ul>{#if plan.files.issues.length}<ul>{#each plan.files.issues as issue}<li><strong>{issue.resource}: {issue.message}</strong><p>{issue.remedy}</p></li>{/each}</ul>{/if}<label>Apply mode <select bind:value={mode}><option value="now">Apply now</option><option value="next_start">Save for next start</option></select></label><div class="actions"><button disabled={busy} onclick={() => { plan = null }}>Back to YAML</button><button disabled={busy || activeJob !== null} onclick={rawSave}>Confirm YAML save</button></div>

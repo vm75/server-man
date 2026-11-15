@@ -22,6 +22,7 @@ let fixtureMode = false
 let readinessScenario = 'blocked'
 
 const fixtures = {
+  managed_backup_inventory: () => ({stage:'inventory',revision:'a'.repeat(64),checkedAt:new Date().toISOString(),inputs:[{id:'storage/documents',kind:'directory',strategy:'bundle_copy',path:'/tmp/data/documents',bundlePath:'data/documents',resources:['storage/documents','share/files'],required:true,sensitive:true,inspection:'metadata_only'},{id:'native/guest',kind:'incus_instance_export',strategy:'native_export',resources:['service/guest'],required:true,sensitive:true,inspection:'native_dependencies_unchecked'}],requirements:[{resource:'storage/documents',kind:'tree_scan',description:'Recursively inventory links and metadata before copy.'}],exclusions:[{kind:'derived_native_state',reason:'Regenerate owned native definitions from the selected configuration.'}],issues:[{severity:'unknown',resource:'service/guest',field:'native_state',code:'backup_native_dependencies',message:'Native guest dependencies have not been enumerated.',remedy:'Inventory instance and attached volume exports before backup.'}]}),
   managed_storage_plan: args => ({storage:args.storage,revision:args.revision,path:'/tmp/new-data',kind:args.storage === 'vm-root' ? 'file' : 'directory',sizeGiB:args.sizeGiB,format:args.storage === 'vm-root' ? 'qcow2' : undefined,...(args.storage === 'vm-root' ? {source:{path:'assets/base.qcow2',format:'qcow2',sha256:'e'.repeat(64)},sourceVirtualBytes:1073741824} : {}),availableBytes:10737418240,uid:1000,gid:1000,mode:'0700',consumers:[],reviewToken:'d'.repeat(64)}),
   managed_config_history: () => ({entries:[{revision:'c'.repeat(64),modifiedAt:new Date().toISOString(),valid:true}]}),
   managed_config_history_read: args => ({revision:args.target,content:'version: 1\n',valid:true}),
@@ -128,6 +129,7 @@ async function exerciseManagement(page) {
   await page.locator('.activity-button').click()
 
   await page.getByRole('navigation').getByRole('button',{name:'Configuration',exact:true}).click()
+  await exerciseBackupInventory(page)
   await page.getByRole('button',{name:'Create empty data for documents',exact:true}).click()
   const provisioning = page.getByRole('region',{name:'New storage provisioning',exact:true})
   await provisioning.getByRole('button',{name:'Review new data creation',exact:true}).click()
@@ -211,6 +213,17 @@ async function exerciseManagement(page) {
   await page.getByRole('region',{name:'Configuration readiness',exact:true}).getByText('Workload configuration alert',{exact:true}).waitFor()
 
   fixtureMode = false
+}
+
+async function exerciseBackupInventory(page) {
+  const calls = managementCalls.length
+  const inventory = page.getByRole('region',{name:'Backup inventory',exact:true})
+  await inventory.getByRole('button',{name:'Review backup inventory',exact:true}).click()
+  await inventory.getByText(/Stage: inventory/).waitFor()
+  await inventory.getByText('Inventory instance and attached volume exports before backup.',{exact:true}).waitFor()
+  await inventory.getByText('storage/documents',{exact:true}).waitFor()
+  assert.equal(managementCalls.length,calls,'backup inventory must not mutate workloads or create a bundle')
+  assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'backup inventory overflows')
 }
 
 async function exerciseShareCreation(page, name) {
@@ -343,12 +356,18 @@ try {
       await exerciseShareCreation(page, 'mobile-documents')
       await page.getByRole('region',{name:'Configuration readiness',exact:true}).getByText('Workload configuration alert',{exact:true}).waitFor()
       assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'mobile configuration alert overflows')
+      await page.getByRole('button',{name:'Toggle navigation',exact:true}).click()
+      await page.getByRole('navigation').getByRole('button',{name:'Configuration',exact:true}).click()
+      await exerciseBackupInventory(page)
       fixtureMode = false
     } else {
       fixtureMode = true
       await page.reload()
       await page.getByRole('region',{name:'Configuration readiness',exact:true}).getByText('Workload configuration alert',{exact:true}).waitFor()
       assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'small-mobile configuration alert overflows')
+      await page.getByRole('button',{name:'Toggle navigation',exact:true}).click()
+      await page.getByRole('navigation').getByRole('button',{name:'Configuration',exact:true}).click()
+      await exerciseBackupInventory(page)
       fixtureMode = false
     }
     await page.getByRole('button', { name: 'Sign out' }).click()

@@ -147,18 +147,8 @@ func (s Store) CheckFiles(c Config) Health {
 	initial := slices.Clone(h.Issues)
 	for id, svc := range c.Services {
 		resources := map[string]bool{}
-		for _, v := range svc.Containers {
-			for _, m := range v.Mounts {
-				resources["storage/"+m.Storage] = true
-			}
-			for _, ref := range v.EnvFiles {
-				resources["secret/"+ref] = true
-			}
-		}
-		if svc.VM != nil {
-			for _, disk := range svc.VM.Disks {
-				resources["storage/"+disk] = true
-			}
+		for _, reference := range serviceDataReferences(svc) {
+			resources[reference] = true
 		}
 		for _, issue := range initial {
 			if resources[issue.Resource] {

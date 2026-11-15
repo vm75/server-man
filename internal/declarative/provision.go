@@ -49,15 +49,7 @@ func NewProvisioner(c Coordinator, runner core.Executor) Provisioner {
 func storageConsumers(cfg Config, id string) []string {
 	consumers := []string{}
 	for serviceID, service := range cfg.Services {
-		found := false
-		for _, container := range service.Containers {
-			for _, mount := range container.Mounts {
-				found = found || mount.Storage == id
-			}
-		}
-		if service.VM != nil {
-			found = found || slices.Contains(service.VM.Disks, id)
-		}
+		found := slices.Contains(serviceDataReferences(service), "storage/"+id)
 		if found {
 			consumers = append(consumers, "service/"+serviceID)
 		}

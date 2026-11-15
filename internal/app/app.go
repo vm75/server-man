@@ -67,25 +67,23 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 				}
 				coordinator.Adapters[protocol] = adapter
 			}
-			err = declarative.RegisterCoordinator(registry, coordinator)
-			if err == nil {
-				err = declarative.RegisterLifecycle(registry, coordinator)
-				if err == nil {
-					err = declarative.RegisterStatus(registry, coordinator)
-					if err == nil {
-						err = declarative.RegisterShareStatus(registry, coordinator)
-						if err == nil {
-							err = declarative.RegisterEditing(registry, coordinator)
-							if err == nil {
-								err = declarative.RegisterHistory(registry, coordinator)
-								if err == nil {
-									err = declarative.RegisterProvisioning(registry, declarative.NewProvisioner(coordinator, runner))
-								}
-							}
-						}
-					}
+			for _, register := range []func(*core.Registry, declarative.Coordinator) error{
+				declarative.RegisterCoordinator,
+				declarative.RegisterLifecycle,
+				declarative.RegisterStatus,
+				declarative.RegisterShareStatus,
+				declarative.RegisterEditing,
+				declarative.RegisterHistory,
+				declarative.RegisterBackup,
+			} {
+				if err = register(registry, coordinator); err != nil {
+					break
 				}
 			}
+			if err == nil {
+				err = declarative.RegisterProvisioning(registry, declarative.NewProvisioner(coordinator, runner))
+			}
+
 		}
 	}
 	if err == nil && monitoring != nil {
