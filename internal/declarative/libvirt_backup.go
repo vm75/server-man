@@ -21,8 +21,15 @@ type libvirtBackupStore struct {
 	Backing *libvirtBackupStore `xml:"backingStore"`
 }
 type libvirtBackupXML struct {
-	OS struct {
-		Loader *struct {
+	Commandline    *struct{} `xml:"commandline"`
+	LaunchSecurity *struct{} `xml:"launchSecurity"`
+	Sysinfo        *struct{} `xml:"sysinfo"`
+	OS             struct {
+		Kernel   string    `xml:"kernel"`
+		Initrd   string    `xml:"initrd"`
+		DTB      string    `xml:"dtb"`
+		Varstore *struct{} `xml:"varstore"`
+		Loader   *struct {
 			Path string `xml:",chardata"`
 		} `xml:"loader"`
 		NVRAM *struct {
@@ -51,6 +58,8 @@ type libvirtBackupXML struct {
 		Filesystems []struct{} `xml:"filesystem"`
 		HostDevices []struct{} `xml:"hostdev"`
 		Memory      []struct{} `xml:"memory"`
+		Shmem       []struct{} `xml:"shmem"`
+		Crypto      []struct{} `xml:"crypto"`
 	} `xml:"devices"`
 }
 
@@ -75,7 +84,15 @@ func (l *Libvirt) BackupDependencies(ctx context.Context, c Config, key string) 
 	if err != nil {
 		return result, err
 	}
-	result.State = state
+	switch state {
+	case "shut off":
+		result.State = "stopped"
+	case "running":
+		result.State = "running"
+	default:
+		result.State = "unknown"
+		result.issue(key, "backup_native_state", "The native libvirt guest is paused, transitional or in an unknown state.", "Inspect and stabilize the guest before capture.")
+	}
 	_, raw, err := l.readDomainXML(ctx, c, key, true)
 	if err != nil {
 		return result, err
@@ -137,6 +154,9 @@ func (l *Libvirt) BackupDependencies(ctx context.Context, c Config, key string) 
 		if xml.Unmarshal(rawDefinition, &actual) != nil {
 			return result, errors.New("unsupported libvirt backup XML")
 		}
+		if actual.Commandline != nil || actual.LaunchSecurity != nil || actual.Sysinfo != nil || actual.OS.Kernel != "" || actual.OS.Initrd != "" || actual.OS.DTB != "" || actual.OS.Varstore != nil {
+			result.issue(key, "backup_native_boot_state", "Native boot/security settings reference state outside the supported managed profile.", "Preserve and explicitly account for native boot/security dependencies before capture.")
+		}
 		if len(actual.Devices.Disks) > 64 || len(actual.Devices.TPMs) > 8 {
 			return result, errors.New("libvirt backup device limit exceeded")
 		}
@@ -151,6 +171,7 @@ func (l *Libvirt) BackupDependencies(ctx context.Context, c Config, key string) 
 			}
 			if disk.Encryption != nil {
 				result.require(key, "disk_encryption_credentials", "Encrypted native disk keys remain an explicit protected requirement; never expose secret values in inventory.")
+				result.issue(key, "backup_disk_credentials", "Native disk encryption requires protected credentials outside the supported capture contract.", "Preserve encryption credentials through an explicitly reviewed native backup; never assume encrypted disk bytes alone are restorable.")
 			}
 			visitStore(disk.Source.DataStore, 0)
 			visitStore(disk.Backing, 0)
@@ -184,7 +205,7 @@ func (l *Libvirt) BackupDependencies(ctx context.Context, c Config, key string) 
 				result.require(key, "tpm_credentials", "TPM state encryption credentials remain an explicit protected native requirement; do not expose them through inventory.")
 			}
 		}
-		if len(actual.Devices.Filesystems)+len(actual.Devices.HostDevices)+len(actual.Devices.Memory) > 0 {
+		if len(actual.Devices.Filesystems)+len(actual.Devices.HostDevices)+len(actual.Devices.Memory)+len(actual.Devices.Shmem)+len(actual.Devices.Crypto) > 0 {
 			result.issue(key, "backup_native_devices", "Native shared/passthrough/persistent-memory devices require an explicit backup policy.", "Inventory these resources before completing a guest backup; they are not covered by ordinary disk references.")
 		}
 	}

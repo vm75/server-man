@@ -59,7 +59,7 @@ func validateBackupRecovery(j BackupRecovery) error {
 			return errors.New("invalid backup recovery service")
 		}
 		switch state {
-		case "untouched", "stop_attempted", "stopped", "resumed", "failed":
+		case "untouched", "stop_attempted", "stop_uncertain", "stopped", "resumed", "failed":
 		default:
 			return errors.New("invalid backup recovery state")
 		}
@@ -167,11 +167,23 @@ func (c Coordinator) resumeBackupWorkloads(ctx context.Context, cfg Config, j *B
 		adapter := c.Adapters[backend(cfg, key)]
 		life, ok := adapter.(LifecycleAdapter)
 		success := false
+		stopSettled := state != "stop_attempted" && state != "stop_uncertain"
 		if ok && ctx.Err() == nil {
 			observed, err := adapter.Inspect(ctx, cfg, key)
-			if err == nil && observed.Active {
+			if err == nil && observed.Registered && !observed.Active {
+				stopSettled = true
+				if state == "stop_attempted" || state == "stop_uncertain" {
+					j.Services[id] = "stopped"
+					if err := c.writeBackupRecovery(j); err != nil {
+						return resumed, failed, err
+					}
+				}
+			}
+			// A timed-out shutdown can still complete after an active observation.
+			// Do not claim recovery until that stop has been observed settled.
+			if err == nil && observed.Active && stopSettled {
 				success = true
-			} else if err == nil && observed.Matches && observed.Registered {
+			} else if err == nil && !observed.Active && observed.Matches && observed.Registered {
 				ready := true
 				for _, dependency := range cfg.Services[id].DependsOn {
 					depKey := "service/" + dependency
@@ -181,7 +193,7 @@ func (c Coordinator) resumeBackupWorkloads(ctx context.Context, cfg Config, j *B
 						break
 					}
 					dep, e := depAdapter.Inspect(ctx, cfg, depKey)
-					if e != nil || !dep.Active || j.Services[dependency] == "failed" {
+					if e != nil || !dep.Active || j.Services[dependency] == "failed" || j.Services[dependency] == "stop_uncertain" {
 						ready = false
 						break
 					}
@@ -202,6 +214,9 @@ func (c Coordinator) resumeBackupWorkloads(ctx context.Context, cfg Config, j *B
 			resumed = append(resumed, id)
 		} else {
 			j.Services[id] = "failed"
+			if !stopSettled {
+				j.Services[id] = "stop_uncertain"
+			}
 			failed = append(failed, id)
 		}
 		if err := c.writeBackupRecovery(j); err != nil {

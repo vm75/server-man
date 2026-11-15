@@ -21,9 +21,10 @@ import (
 const maxSourceBytes = int64(4096) << 30
 
 type imageInfo struct {
-	Format      string `json:"format"`
-	VirtualSize int64  `json:"virtual-size"`
-	Backing     string `json:"backing-filename"`
+	Format      string            `json:"format"`
+	VirtualSize int64             `json:"virtual-size"`
+	Backing     string            `json:"backing-filename"`
+	Snapshots   []json.RawMessage `json:"snapshots"`
 }
 
 func descriptorPath(f *os.File) string { return fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), f.Fd()) }
@@ -48,9 +49,12 @@ func checkStandaloneImage(f *os.File, format string) error {
 	return nil
 }
 func (p Provisioner) inspectImage(ctx context.Context, f *os.File, format string) (imageInfo, error) {
-	raw, err := p.Runner.Capture(ctx, core.Command{Program: p.QemuImg, Args: []string{"info", "--output=json", "-f", format, descriptorPath(f)}, Timeout: 10 * time.Second})
+	return inspectStandaloneImage(ctx, p.Runner, p.QemuImg, f, format, maxSourceBytes)
+}
+func inspectStandaloneImage(ctx context.Context, runner core.Executor, program string, f *os.File, format string, maxVirtualSize int64) (imageInfo, error) {
+	raw, err := runner.Capture(ctx, core.Command{Program: program, Args: []string{"info", "--output=json", "-f", format, descriptorPath(f)}, Timeout: 10 * time.Second})
 	var image imageInfo
-	if err != nil || json.Unmarshal([]byte(raw), &image) != nil || image.Format != format || image.VirtualSize <= 0 || image.VirtualSize > maxSourceBytes || image.Backing != "" {
+	if err != nil || json.Unmarshal([]byte(raw), &image) != nil || image.Format != format || image.VirtualSize <= 0 || image.VirtualSize > maxVirtualSize || image.Backing != "" {
 		return imageInfo{}, errors.New("disk image cannot be verified as a supported standalone disk")
 	}
 	return image, nil

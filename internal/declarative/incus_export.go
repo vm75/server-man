@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -36,13 +35,7 @@ func (i *Incus) BackupExport(ctx context.Context, cfg Config, input BackupInput,
 	}
 	// Recheck scope, ownership, attachments and stopped consumers after streaming.
 	if err := i.verifyExportConsumers(ctx, cfg, input); err != nil {
-		root, openErr := os.OpenRoot(directory)
-		if openErr != nil {
-			return BackupExport{}, errors.Join(err, openErr)
-		}
-		removeErr := root.Remove(path)
-		root.Close()
-		return BackupExport{}, errors.Join(err, removeErr)
+		return BackupExport{}, errors.Join(err, discardBackupArtifact(directory, path))
 	}
 	return export, nil
 }

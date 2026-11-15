@@ -90,7 +90,7 @@
       <p role="alert">A backup capture was interrupted or workloads still need recovery. Managed changes are blocked until recovery completes.</p>
       <p>Configuration {recovery.journal.revision.slice(0,12)} · destination {recovery.journal.destination} · updated {new Date(recovery.journal.updatedAt).toLocaleString()}</p>
       <ul>{#each Object.entries(recovery.journal.services) as [id,state]}<li>{id}: {state.replaceAll('_',' ')}</li>{/each}</ul>
-      <p>Resume only workloads whose stop was attempted. This does not replay capture or restore data. “Leave workloads as they are” acknowledges the interruption and releases managed controls without changing runtime state. If the configuration changed outside server-man, restore the recorded revision before recovery.</p>
+      <p>Resume only workloads whose stop was attempted. An uncertain stop may still complete later; inspect native state before releasing recovery. This does not replay capture or restore data. “Leave workloads as they are” acknowledges the interruption and releases managed controls without changing runtime state. If the configuration changed outside server-man, restore the recorded revision before recovery.</p>
       <label><input type="checkbox" bind:checked={recoveryConfirm} disabled={disabled||!!recoveryJob} /> I reviewed the interrupted capture and selected a recovery action</label>
       <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(true)}>{recoveryJob?'Recovering workloads…':'Resume backup workloads'}</button>
       <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(false)}>Leave workloads as they are</button>
@@ -105,7 +105,7 @@
     <details><summary>Explicit exclusions ({inventory.exclusions.length})</summary><ul>{#each inventory.exclusions as exclusion}<li><strong>{exclusion.kind.replaceAll('_',' ')}</strong><p>{exclusion.reason}</p></li>{/each}</ul></details>
     <div class="prepare-section">
       <h3>Capture backup inputs</h3>
-      <p>Capture supported inputs into a private checksummed bundle. This initial capture is not a prepared or restorable backup: full metadata preservation, libvirt capture and restore validation remain unfinished. Initial Incus instance and custom-volume exports are supported. Published shares and unresolved prerequisites block capture.</p>
+      <p>Capture supported inputs into a private checksummed bundle. This initial capture is not a prepared or restorable backup: full metadata preservation, advanced VM state and restore validation remain unfinished. Initial Incus and basic libvirt native collection is supported for the documented profiles. Published shares and unresolved prerequisites block capture.</p>
       {#if prepareError}<p class="form-error" role="alert">{prepareError}</p>{/if}
       {#if summary}
         <div class="summary-box" role="status">

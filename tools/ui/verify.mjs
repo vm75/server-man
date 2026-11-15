@@ -25,7 +25,7 @@ let backupRecoveryPending = false
 let backupRecoveryCurrentRevision = 'a'.repeat(64)
 
 const fixtures = {
-  managed_backup_recovery_status: () => backupRecoveryPending ? {currentRevision:backupRecoveryCurrentRevision,journal:{version:1,stage:'recovering',revision:'a'.repeat(64),destination:'/tmp/interrupted-capture',updatedAt:new Date().toISOString(),services:{app:'failed',db:'resumed'}},reviewToken:'c'.repeat(64)} : {},
+  managed_backup_recovery_status: () => backupRecoveryPending ? {currentRevision:backupRecoveryCurrentRevision,journal:{version:1,stage:'recovering',revision:'a'.repeat(64),destination:'/tmp/interrupted-capture',updatedAt:new Date().toISOString(),services:{app:'failed',db:'resumed',guest:'stop_uncertain'}},reviewToken:'c'.repeat(64)} : {},
   managed_backup_inventory: () => ({stage:'inventory',revision:'a'.repeat(64),checkedAt:new Date().toISOString(),inputs:[{id:'storage/documents',kind:'directory',strategy:'bundle_copy',path:'/tmp/data/documents',bundlePath:'data/documents',resources:['storage/documents','share/files'],required:true,sensitive:true,inspection:'metadata_only'},{id:'native/guest',kind:'incus_instance_export',strategy:'native_export',native:{backend:'incus',name:'sm-guest',project:'managed',pool:'default'},runtimeState:'stopped',resources:['service/guest'],required:true,sensitive:true,inspection:'native_dependencies_unchecked'}],requirements:[{resource:'storage/documents',kind:'tree_scan',description:'Recursively inventory links and metadata before copy.'}],exclusions:[{kind:'derived_native_state',reason:'Regenerate owned native definitions from the selected configuration.'}],issues:[{severity:'unknown',resource:'service/guest',field:'native_state',code:'backup_native_dependencies',message:'Native guest dependencies have not been enumerated.',remedy:'Inventory instance and attached volume exports before backup.'}]}),
   managed_storage_plan: args => ({storage:args.storage,revision:args.revision,path:'/tmp/new-data',kind:args.storage === 'vm-root' ? 'file' : 'directory',sizeGiB:args.sizeGiB,format:args.storage === 'vm-root' ? 'qcow2' : undefined,...(args.storage === 'vm-root' ? {source:{path:'assets/base.qcow2',format:'qcow2',sha256:'e'.repeat(64)},sourceVirtualBytes:1073741824} : {}),availableBytes:10737418240,uid:1000,gid:1000,mode:'0700',consumers:[],reviewToken:'d'.repeat(64)}),
   managed_config_history: () => ({entries:[{revision:'c'.repeat(64),modifiedAt:new Date().toISOString(),valid:true}]}),
@@ -251,6 +251,7 @@ async function exerciseBackupInventory(page) {
   await recovery.getByRole('button',{name:'Review recovery',exact:true}).click()
   await recovery.getByText('A backup capture was interrupted or workloads still need recovery. Managed changes are blocked until recovery completes.',{exact:true}).waitFor()
   await recovery.getByText('app: failed',{exact:true}).waitFor()
+  await recovery.getByText('guest: stop uncertain',{exact:true}).waitFor()
   await recovery.getByLabel('I reviewed the interrupted capture and selected a recovery action',{exact:true}).check()
   await recovery.getByRole('button',{name:'Resume backup workloads',exact:true}).click()
   await recovery.getByRole('button',{name:'Recovering workloads…',exact:true}).waitFor()

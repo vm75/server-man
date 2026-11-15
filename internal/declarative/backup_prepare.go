@@ -502,7 +502,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 	}
 
-	if err := c.verifyNativeCaptureBoundary(bCtx, inventory); err != nil {
+	if err := c.verifyNativeCaptureBoundary(bCtx, snapshot.Config, inventory); err != nil {
 		return BackupSummary{}, err
 	}
 	if err := os.MkdirAll(filepath.Join(stagingDir, "data"), 0700); err != nil {
@@ -599,7 +599,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 		manifestNativeExports = append(manifestNativeExports, BackupManifestNativeExport{Resources: slices.Clone(input.Resources), Backend: expected.Backend, Kind: exp.Kind, BundlePath: exp.BundlePath, SizeBytes: exp.SizeBytes, SHA256: exp.SHA256, Native: exp.Native})
 	}
-	if err := c.verifyNativeCaptureBoundary(bCtx, inventory); err != nil {
+	if err := c.verifyNativeCaptureBoundary(bCtx, snapshot.Config, inventory); err != nil {
 		return BackupSummary{}, err
 	}
 

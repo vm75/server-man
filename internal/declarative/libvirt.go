@@ -16,18 +16,19 @@ import (
 )
 
 type Libvirt struct {
-	Store                            Store
-	URI, Virsh, Validator, Directory string
-	Runner                           core.Executor
+	Store                                     Store
+	URI, Virsh, Validator, QemuImg, Directory string
+	Runner                                    core.Executor
 }
 
 func NewLibvirt(store Store, uri string, runner core.Executor) *Libvirt {
 	v, _ := exec.LookPath("virsh")
 	validator, _ := exec.LookPath("virt-xml-validate")
-	return &Libvirt{Store: store, URI: uri, Virsh: v, Validator: validator, Directory: store.Path + ".generated/libvirt", Runner: runner}
+	qemuImg, _ := exec.LookPath("qemu-img")
+	return &Libvirt{Store: store, URI: uri, Virsh: v, Validator: validator, QemuImg: qemuImg, Directory: store.Path + ".generated/libvirt", Runner: runner}
 }
 func (l *Libvirt) command(args ...string) core.Command {
-	return core.Command{Program: l.Virsh, Args: append([]string{"--connect", l.URI}, args...), Timeout: 5 * time.Second}
+	return core.Command{Program: l.Virsh, Args: append([]string{"--connect", l.URI}, args...), Timeout: 5 * time.Second, Env: []string{"LC_ALL=C"}}
 }
 func (l *Libvirt) resourceDir(key string) string {
 	_, id, _ := strings.Cut(key, "/")
@@ -84,11 +85,17 @@ func (l *Libvirt) readDomain(ctx context.Context, c Config, key string, inactive
 	return domain, err
 }
 func (l *Libvirt) readDomainXML(ctx context.Context, c Config, key string, inactive bool) (domainXML, []byte, error) {
+	return l.readDomainXMLFlags(ctx, c, key, inactive, false)
+}
+func (l *Libvirt) readDomainXMLFlags(ctx context.Context, c Config, key string, inactive, securityInfo bool) (domainXML, []byte, error) {
 	_, id, _ := strings.Cut(key, "/")
 	uuid := c.Services[id].VM.UUID
 	args := []string{"dumpxml", "--domain", uuid}
 	if inactive {
 		args = append(args, "--inactive")
+	}
+	if securityInfo {
+		args = append(args, "--security-info")
 	}
 	output, err := l.Runner.Capture(ctx, l.command(args...))
 	if err != nil {

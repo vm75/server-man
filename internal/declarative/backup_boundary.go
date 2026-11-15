@@ -24,7 +24,7 @@ func nativeCaptureSignature(inventory BackupInventory) string {
 	raw, _ := json.Marshal(objects)
 	return digest(raw)
 }
-func (c Coordinator) verifyNativeCaptureBoundary(ctx context.Context, expected BackupInventory) error {
+func (c Coordinator) verifyNativeCaptureBoundary(ctx context.Context, cfg Config, expected BackupInventory) error {
 	needed := false
 	for _, input := range expected.Inputs {
 		needed = needed || input.Strategy == "native_export"
@@ -51,6 +51,22 @@ func (c Coordinator) verifyNativeCaptureBoundary(ctx context.Context, expected B
 	}
 	if nativeCaptureSignature(current) != nativeCaptureSignature(expected) {
 		return errors.New("native backup attachments changed; review inventory again")
+	}
+
+	for _, input := range current.Inputs {
+		if input.Strategy != "native_export" || input.IncludedBy != "" {
+			continue
+		}
+		if input.Native == nil {
+			return errors.New("native capture identity became unresolved")
+		}
+		adapter, ok := c.Adapters[input.Native.Backend].(BackupExporter)
+		if !ok {
+			return errors.New("native capture validation is unavailable")
+		}
+		if err := adapter.ValidateBackupExport(ctx, cfg, input); err != nil {
+			return err
+		}
 	}
 	return nil
 }

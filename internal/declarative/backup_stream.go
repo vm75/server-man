@@ -19,6 +19,9 @@ import (
 // Native archives stream to an exclusively created held private file, never to
 // text capture or job output. No native command receives a destination path.
 func streamBackupArtifact(ctx context.Context, command core.Command, directory, path, kind string, object *NativeBackupObject, stream core.StreamingExecutor) (BackupExport, error) {
+	return writeBackupArtifact(ctx, directory, path, kind, object, func(writer io.Writer) error { return stream.Stream(ctx, command, writer, io.Discard) })
+}
+func writeBackupArtifact(ctx context.Context, directory, path, kind string, object *NativeBackupObject, transfer func(io.Writer) error) (BackupExport, error) {
 	if !portablePath(path) || !strings.HasPrefix(path, "native/") {
 		return BackupExport{}, errors.New("invalid native export path")
 	}
@@ -78,7 +81,7 @@ func streamBackupArtifact(ctx context.Context, command core.Command, directory, 
 		budget = math.MaxInt64
 	}
 	writer := &backupStreamWriter{ctx: ctx, file: f, hash: sha256.New(), remaining: int64(budget)}
-	err = stream.Stream(ctx, command, writer, io.Discard)
+	err = transfer(writer)
 	if writer.failure != nil {
 		return BackupExport{}, writer.failure
 	}
@@ -138,4 +141,13 @@ func (w *backupStreamWriter) Write(data []byte) (int, error) {
 		w.failure = errors.New("native export storage write failed")
 	}
 	return n, err
+}
+
+func discardBackupArtifact(directory, path string) error {
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return root.Remove(path)
 }
