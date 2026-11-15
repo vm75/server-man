@@ -41,3 +41,11 @@ The shared readiness fix is verified with temporary fixtures: pending-server-res
 Deployed `598b55d` using the shared installer with existing packages. The reviewed host-unit list explicitly includes Docker's socket before its daemon. This host's socket was already persistently enabled; native ordering shows it before sockets.target, sockets.target before basic.target, and the workload account's user manager after basic.target. The installer rerun preserved the Docker daemon PID and exact unified configuration bytes. HTTP health and the refreshed release checksum passed. No Docker daemon restart, host reboot, workload mutation or Incus initialization was performed.
 
 Temporary command fixtures prove that Docker Compose boot readiness distinguishes persistent enablement, disabled/runtime-only/missing socket states and unreadable/malformed probes. Autostart blockers prevent boot enablement while leaving current-run readiness available when the engine is reachable. This verifies prerequisite reporting, not the full real reboot/daemon-restart matrix.
+
+## Delegated libvirt readiness follow-up (2026-11-15)
+
+Deployed `79859c0`, preserving the exact unified configuration and existing groups. The prior readiness code tried to open `/dev/kvm` as the app account, which incorrectly rejected this host's working system connection. The device is visible outside the sandbox, but is inaccessible directly to shasak. Native system libvirt nevertheless reports the supported KVM profile through its daemon; the session connection does not.
+
+Direct execution of the revised server-man prerequisite function under UID 1000 returned zero issues for qemu:///system and the expected KVM blocker for qemu:///session. Fixed-query, locale, timeout, native XML shape/profile and sanitized failure handling are covered by fixtures and the full Go race suite. Native inspection created no VM and granted no direct KVM permission.
+
+The installer update completed and the service remained active. An immediate ad hoc HTTP probe raced process startup; rechecking the same service confirmed running state and HTTP 200 without reinstalling/restarting it. The refreshed release archive checksum passed. Native guest lifecycle/reboot acceptance remains open; no disposable guest was provisioned by this increment.
