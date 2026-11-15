@@ -45,15 +45,19 @@ func readBackupPrivateFile(ctx context.Context, root *os.Root, path string, limi
 	if err != nil || statErr != nil || pathErr != nil || len(raw) > limit || int64(len(raw)) != before.Size() || !stableBackupNode(before, after) || !stableBackupNode(before, current) || checksum != "" && digest(raw) != checksum {
 		return nil, invalid
 	}
+	if !backupParentStillReal(root, path, parent) {
+		return nil, invalid
+	}
+	return raw, nil
+}
+
+func backupParentStillReal(root *os.Root, path string, parent *os.Root) bool {
 	currentParent, _, err := backupRealParent(root, path, false)
 	if err != nil {
-		return nil, invalid
+		return false
 	}
 	defer currentParent.Close()
 	held, heldErr := parent.Stat(".")
 	resolved, resolvedErr := currentParent.Stat(".")
-	if heldErr != nil || resolvedErr != nil || !os.SameFile(held, resolved) {
-		return nil, invalid
-	}
-	return raw, nil
+	return heldErr == nil && resolvedErr == nil && os.SameFile(held, resolved)
 }

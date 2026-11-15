@@ -20,12 +20,13 @@ import (
 type incusExportRecorder struct {
 	extraInstances map[string]incusInstanceInfo
 	*incusBackupRecorder
-	payload []byte
-	streams []core.Command
-	help    []core.Command
-	fail    bool
-	legacy  bool
-	after   func()
+	payload     []byte
+	lastPayload []byte
+	streams     []core.Command
+	help        []core.Command
+	fail        bool
+	legacy      bool
+	after       func()
 }
 
 func (r *incusExportRecorder) Capture(ctx context.Context, c core.Command) (string, error) {
@@ -65,9 +66,37 @@ func (r *incusExportRecorder) Capture(ctx context.Context, c core.Command) (stri
 func (r *incusExportRecorder) Stream(ctx context.Context, c core.Command, stdout, stderr io.Writer) error {
 	r.streams = append(r.streams, c)
 	stderr.Write([]byte("PRIVATE_NATIVE_DIAGNOSTIC_SENTINEL"))
-	for offset := 0; offset < len(r.payload); offset += 65536 {
-		end := min(offset+65536, len(r.payload))
-		if _, err := stdout.Write(r.payload[offset:end]); err != nil {
+	r.lastPayload = r.payload
+	if len(r.payload) > 0 {
+		at := slices.Index(c.Args, "export")
+		object := NativeBackupObject{Backend: "incus", Project: c.Args[2]}
+		kind, id, uuid := "incus_custom_volume", "", ""
+		if slices.Contains(c.Args, "volume") {
+			object.Pool, object.Name, object.ContentType = strings.TrimPrefix(c.Args[at+1], "local:"), c.Args[at+2], r.volumeContentType
+			if object.ContentType == "" {
+				object.ContentType = "filesystem"
+			}
+		} else {
+			kind = "incus_instance_export"
+			object.Name = strings.TrimPrefix(c.Args[at+1], "local:")
+			actual := r.actual
+			for _, candidate := range r.extraInstances {
+				if candidate.Name == object.Name {
+					actual = candidate
+				}
+			}
+			object.Pool, object.ContentType = actual.Devices["root"]["pool"], "block"
+			id, uuid = actual.Config["user.server-man.id"], actual.Config["user.server-man.identity"]
+		}
+		var err error
+		r.lastPayload, err = fixtureIncusArchive(object, kind, id, uuid, r.payload)
+		if err != nil {
+			return err
+		}
+	}
+	for offset := 0; offset < len(r.lastPayload); offset += 65536 {
+		end := min(offset+65536, len(r.lastPayload))
+		if _, err := stdout.Write(r.lastPayload[offset:end]); err != nil {
 			return err
 		}
 		if r.fail {
@@ -117,14 +146,14 @@ func TestIncusExportsPortableInstanceAndCompleteVolumeToPrivateStreams(t *testin
 		if err != nil {
 			t.Fatal(err)
 		}
-		if exp.Native == nil || *exp.Native != *input.Native || exp.Kind != input.Kind || exp.SizeBytes != int64(len(r.payload)) || exp.SHA256 != digest(r.payload) {
+		if exp.Native == nil || *exp.Native != *input.Native || exp.Kind != input.Kind || exp.SizeBytes != int64(len(r.lastPayload)) || exp.SHA256 != digest(r.lastPayload) {
 			t.Fatal("incorrect export record", exp)
 		}
 		if err := verifyBackupExport(context.Background(), directory, exp); err != nil {
 			t.Fatal(err)
 		}
 		got, err := os.ReadFile(filepath.Join(directory, exp.BundlePath))
-		if err != nil || !bytes.Equal(got, r.payload) {
+		if err != nil || !bytes.Equal(got, r.lastPayload) {
 			t.Fatal("binary archive changed", err)
 		}
 		raw, _ := json.Marshal(exp)

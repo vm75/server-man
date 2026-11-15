@@ -3,8 +3,8 @@ package declarative
 
 import (
 	"bytes"
+	"context"
 	"errors"
-	"fmt"
 	"io"
 	"path/filepath"
 	"regexp"
@@ -109,29 +109,7 @@ func Parse(data []byte) (Config, error) {
 	if len(node.Content) != 1 || node.Content[0].Kind != yaml.MappingNode {
 		return c, errors.New("configuration must be one mapping")
 	}
-	var check func(*yaml.Node) error
-	check = func(n *yaml.Node) error {
-		if n.Kind == yaml.AliasNode || n.Anchor != "" || n.Style&yaml.TaggedStyle != 0 {
-			return fmt.Errorf("unsupported YAML construct at line %d", n.Line)
-		}
-		if n.Kind == yaml.MappingNode {
-			seen := map[string]bool{}
-			for i := 0; i < len(n.Content); i += 2 {
-				k := n.Content[i]
-				if k.Kind != yaml.ScalarNode || k.Tag != "!!str" || seen[k.Value] {
-					return fmt.Errorf("invalid or duplicate mapping key at line %d", k.Line)
-				}
-				seen[k.Value] = true
-			}
-		}
-		for _, v := range n.Content {
-			if err := check(v); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if err := check(&node); err != nil {
+	if err := checkYAMLStructure(context.Background(), &node, 128, 1<<20); err != nil {
 		return c, err
 	}
 	var extra yaml.Node

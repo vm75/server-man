@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -35,6 +36,15 @@ func (i *Incus) BackupExport(ctx context.Context, cfg Config, input BackupInput,
 	}
 	// Recheck scope, ownership, attachments and stopped consumers after streaming.
 	if err := i.verifyExportConsumers(ctx, cfg, input); err != nil {
+		return BackupExport{}, errors.Join(err, discardBackupArtifact(directory, path))
+	}
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return BackupExport{}, errors.Join(errors.New("Incus capture cannot be opened for archive checks"), discardBackupArtifact(directory, path))
+	}
+	err = verifyIncusArchive(ctx, root, BackupManifestNativeExport{Backend: "incus", Kind: export.Kind, Native: export.Native, Resources: input.Resources, BundlePath: export.BundlePath, SizeBytes: export.SizeBytes, SHA256: export.SHA256}, cfg)
+	root.Close()
+	if err != nil {
 		return BackupExport{}, errors.Join(err, discardBackupArtifact(directory, path))
 	}
 	return export, nil

@@ -21,11 +21,16 @@ func payloadFixture(t *testing.T) (string, string) {
 			t.Fatal(err)
 		}
 	}
-	configBytes, err := Encode(Config{Version: 1, Storage: map[string]Storage{"files": {Path: "data"}}, Bindings: map[string]Binding{"pool": {Kind: "pool", Name: "pool"}, "project": {Kind: "project", Name: "default"}, "net": {Kind: "network", Name: "default"}}, Services: map[string]Service{"example": {Kind: "vm", Backend: "incus", VM: &VM{Image: "base", CPUs: 1, MemoryMiB: 128, Network: "net", Pool: "pool", Project: "project"}}}})
+	configBytes, err := Encode(Config{Version: 1, Storage: map[string]Storage{"files": {Path: "data"}}, Bindings: map[string]Binding{"pool": {Kind: "pool", Name: "pool"}, "project": {Kind: "project", Name: "default"}, "net": {Kind: "network", Name: "default"}}, Services: map[string]Service{"example": {Kind: "vm", Backend: "incus", VM: &VM{UUID: "00000000-0000-4000-8000-000000000001", MAC: "02:00:00:00:00:01", Image: "base", CPUs: 1, MemoryMiB: 128, Network: "net", Pool: "pool", Project: "project"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, data := range map[string]string{"server-man.yaml": string(configBytes), "data/file\nname": "private payload", "native/incus/export.tar": "private native export"} {
+	object := NativeBackupObject{Backend: "incus", Name: "sm-example", Project: "default", Pool: "pool", ContentType: "block"}
+	nativeBytes, err := fixtureIncusArchive(object, "incus_instance_export", "example", "00000000-0000-4000-8000-000000000001", []byte("private native export"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string]string{"server-man.yaml": string(configBytes), "data/file\nname": "private payload", "native/incus/export.tar": string(nativeBytes)} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -50,7 +55,7 @@ func payloadFixture(t *testing.T) (string, string) {
 	m.Files = append(m.Files, f)
 	f.Type, f.BundlePath, f.LinkTarget = "symlink", "data/link", "file\nname"
 	m.Files = append(m.Files, f)
-	m.NativeExports = []BackupManifestNativeExport{{Backend: "incus", Kind: "incus_instance_export", BundlePath: "native/incus/export.tar", SizeBytes: int64(len("private native export")), SHA256: digest([]byte("private native export")), Native: &NativeBackupObject{Backend: "incus", Name: "sm-example", Project: "default", Pool: "pool", ContentType: "block"}, Resources: []string{"service/example"}}}
+	m.NativeExports = []BackupManifestNativeExport{{Backend: "incus", Kind: "incus_instance_export", BundlePath: "native/incus/export.tar", SizeBytes: int64(len(nativeBytes)), SHA256: digest(nativeBytes), Native: &NativeBackupObject{Backend: "incus", Name: "sm-example", Project: "default", Pool: "pool", ContentType: "block"}, Resources: []string{"service/example"}}}
 	raw, err := json.Marshal(m)
 	if err != nil {
 		t.Fatal(err)

@@ -81,6 +81,12 @@ func validateBackupCoverage(ctx context.Context, root *os.Root, m BackupManifest
 		return err
 	}
 	for _, export := range m.NativeExports {
+		if export.Backend == "incus" {
+			if err := verifyIncusArchive(ctx, root, export, cfg); err != nil {
+				return err
+			}
+			continue
+		}
 		if export.Kind != "libvirt_guest_state" {
 			continue
 		}

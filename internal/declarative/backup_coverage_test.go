@@ -66,8 +66,13 @@ func coverageAddFile(t *testing.T, dir, path, contents string, m *BackupManifest
 func coverageAddVolume(t *testing.T, dir string, m *BackupManifest) {
 	t.Helper()
 	path := "native/incus/volume.tar"
-	mustBackupWrite(t, filepath.Join(dir, path), "volume")
-	m.NativeExports = append(m.NativeExports, BackupManifestNativeExport{Backend: "incus", Kind: "incus_custom_volume", BundlePath: path, SizeBytes: 6, SHA256: digest([]byte("volume")), Resources: []string{"service/example"}, Native: &NativeBackupObject{Backend: "incus", Name: "volume", Project: "default", Pool: "pool", ContentType: "filesystem"}})
+	object := NativeBackupObject{Backend: "incus", Name: "volume", Project: "default", Pool: "pool", ContentType: "filesystem"}
+	raw, err := fixtureIncusArchive(object, "incus_custom_volume", "", "", []byte("volume"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustBackupWrite(t, filepath.Join(dir, path), string(raw))
+	m.NativeExports = append(m.NativeExports, BackupManifestNativeExport{Backend: "incus", Kind: "incus_custom_volume", BundlePath: path, SizeBytes: int64(len(raw)), SHA256: digest(raw), Resources: []string{"service/example"}, Native: &object})
 }
 
 func TestBackupCoverageRejectsSelfConsistentIncompleteBundles(t *testing.T) {
@@ -152,7 +157,11 @@ func TestBackupCoverageRejectsSelfConsistentIncompleteBundles(t *testing.T) {
 				case "duplicate export":
 					export := m.NativeExports[0]
 					export.BundlePath = "native/incus/duplicate.tar"
-					mustBackupWrite(t, filepath.Join(dir, export.BundlePath), "private native export")
+					data, err := os.ReadFile(filepath.Join(dir, m.NativeExports[0].BundlePath))
+					if err != nil {
+						t.Fatal(err)
+					}
+					mustBackupWrite(t, filepath.Join(dir, export.BundlePath), string(data))
 					m.NativeExports = append(m.NativeExports, export)
 				case "volume consumer":
 					coverageAddVolume(t, dir, m)
