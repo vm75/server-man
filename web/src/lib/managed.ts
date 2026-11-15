@@ -9,3 +9,7 @@ export interface ManagedConfig { version: number; services: Record<string, Servi
 export interface ModelSnapshot { revision: string; config: ManagedConfig }
 export type ResourceKind = 'service' | 'storage' | 'share' | 'binding' | 'secret'
 export interface ImpactPlan { baseRevision: string; desiredRevision: string; changes: { resource: string; backend: string; operation: string }[]; files: { issues: { resource: string; message: string; remedy: string }[] } }
+
+export interface ConfigurationIssue { severity: string; field: string; resource: string; code: string; message: string; remedy: string }
+export interface ConfigurationHealth { checkedAt: string; runtimeCheckedAt?: string; issues: ConfigurationIssue[] }
+export interface ConfigurationReadiness { configured: boolean; valid: boolean; error?: string; health?: ConfigurationHealth }

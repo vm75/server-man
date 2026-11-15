@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import Icon from './lib/Icon.svelte'
   import Login from './lib/Login.svelte'
+  import ConfigurationHealth from './lib/ConfigurationHealth.svelte'
   import Jobs from './lib/Jobs.svelte'
   import Overview from './pages/Overview.svelte'
   import AgentAccess from './pages/AgentAccess.svelte'
@@ -83,6 +84,7 @@
     </header>
     <main id="main">
       <div class="page-heading"><div><div class="eyebrow">SERVER WORKSPACE</div><h1>{page.name}</h1><p>{page.subtitle}</p></div><span class="badge">{status?.allowWrites ? 'Management enabled' : 'Read only'}</span></div>
+      {#if status && !loading && !error}<ConfigurationHealth navigate={(target) => { selected = target; menuOpen = false }} />{/if}
       {#if error}
         <div class="notice error" role="alert"><div><strong>Could not connect</strong><p>{error}</p></div><button onclick={connect} disabled={loading}>Try again</button></div>
       {:else if loading}

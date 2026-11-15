@@ -2,11 +2,12 @@
   import { onMount } from 'svelte'
   import DefinitionEditor from '../lib/DefinitionEditor.svelte'
   import ConfirmDialog from '../lib/ConfirmDialog.svelte'
+  import type { ConfigurationIssue, ConfigurationHealth } from '../lib/managed'
   import { invokeTool, startJob, type Job } from '../lib/api'
   let { allowWrites }: { allowWrites: boolean } = $props()
-  interface Issue { severity: string; field: string; resource: string; code: string; message: string; remedy: string }
+  type Issue = ConfigurationIssue
   interface Service { id: string; name: string; kind: string; backend: string; enabled: boolean; state: string; registered: boolean; configuration: string; issues: Issue[] }
-  interface Inventory { configured: boolean; valid?: boolean; error?: string; services: Service[]; health?: { checkedAt: string; runtimeCheckedAt?: string; issues: Issue[] } }
+  interface Inventory { configured: boolean; valid?: boolean; error?: string; services: Service[]; health?: ConfigurationHealth }
   let inventory = $state<Inventory | null>(null)
   let error = $state('')
   let loading = $state(false)

@@ -20,6 +20,27 @@ type ServiceStatus struct {
 	Issues        []Issue `json:"issues"`
 }
 
+type ReadinessStatus struct {
+	Configured bool    `json:"configured"`
+	Valid      bool    `json:"valid"`
+	Error      string  `json:"error,omitempty"`
+	Health     *Health `json:"health,omitempty"`
+}
+
+// ConfigurationReadiness does not inspect running workloads. It supplies the
+// same bounded prerequisites to global UI alerts and MCP clients.
+func (c Coordinator) ConfigurationReadiness(ctx context.Context) ReadinessStatus {
+	snapshot, err := c.Store.Read()
+	if os.IsNotExist(err) {
+		return ReadinessStatus{}
+	}
+	if err != nil {
+		return ReadinessStatus{Configured: true, Error: "Configuration is invalid or inaccessible; open Configuration to repair it."}
+	}
+	health := c.Preflight(ctx, snapshot.Config, false)
+	return ReadinessStatus{Configured: true, Valid: true, Health: &health}
+}
+
 func (c Coordinator) ServiceStatuses(ctx context.Context) (any, error) {
 	snapshot, err := c.Store.Read()
 	if os.IsNotExist(err) {
@@ -71,6 +92,9 @@ func (c Coordinator) ServiceStatuses(ctx context.Context) (any, error) {
 }
 func RegisterStatus(r *core.Registry, c Coordinator) error {
 	return r.AddModule(core.Module{ID: "managed_status", Title: "Managed application status", Available: true},
+		core.Tool{Name: "managed_config_readiness", Title: "Configuration readiness", Description: "Read cached backend prerequisites and fresh file/mount checks without inspecting running workloads or changing host state. Missing or invalid configurations remain inspectable.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			return c.ConfigurationReadiness(ctx), nil
+		}},
 		core.Tool{Name: "managed_services", Title: "Managed applications", Description: "Read configuration health and selected runtime status without secret values or backend mutations.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) { return c.ServiceStatuses(ctx) }},
 		core.Tool{Name: "managed_config_check", Title: "Recheck configuration readiness", Description: "Refresh native prerequisites and file/mount checks. Never installs packages or creates missing data.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
 			snapshot, err := c.Store.Read()

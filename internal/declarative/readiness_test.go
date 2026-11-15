@@ -2,6 +2,8 @@ package declarative
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -97,5 +99,57 @@ func TestDependencyUnknownIsNotReportedReady(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("unchecked fixture backend reported ready", h)
+	}
+}
+
+func TestConfigurationReadinessSurvivesRelocationAndRepairWithoutActivation(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	if status := c.ConfigurationReadiness(context.Background()); status.Configured || status.Health != nil {
+		t.Fatal(status)
+	}
+	if err := os.WriteFile(c.Store.Path, []byte("secret-value: ["), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if status := c.ConfigurationReadiness(context.Background()); !status.Configured || status.Valid || strings.Contains(status.Error, "secret-value") {
+		t.Fatal(status)
+	}
+	if err := os.Remove(c.Store.Path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Store.Save(cfg, "missing"); err != nil {
+		t.Fatal(err)
+	}
+	probe := &probeAdapter{fakeAdapter: fakeAdapter{matches: map[string]bool{}}}
+	c.Adapters["podman/quadlet"] = probe
+	c.HealthCache = &HealthCache{}
+	folder := filepath.Join(filepath.Dir(c.Store.Path), "data", "content")
+	if err := os.Remove(folder); err != nil {
+		t.Fatal(err)
+	}
+	status := c.ConfigurationReadiness(context.Background())
+	if !status.Configured || !status.Valid || status.Health == nil {
+		t.Fatal(status)
+	}
+	blocked := false
+	for _, issue := range status.Health.Issues {
+		if issue.Resource == "service/website" && issue.Code == "blocked_reference" {
+			blocked = true
+		}
+	}
+	if !blocked {
+		t.Fatal("missing data did not block affected service", status)
+	}
+	if _, err := os.Stat(folder); !os.IsNotExist(err) {
+		t.Fatal("check created absent data", err)
+	}
+	if err := os.Mkdir(folder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// Re-assembly after a process restart must derive issues from the current
+	// manifest/host, not persist old readiness as another source of truth.
+	restarted := Coordinator{Store: c.Store, Adapters: c.Adapters, HealthCache: &HealthCache{}}
+	repaired := restarted.ConfigurationReadiness(context.Background())
+	if repaired.Health == nil || len(repaired.Health.Issues) != 0 || len(probe.calls) != 0 {
+		t.Fatal("repair did not clear blockers or check applied resources", repaired, probe.calls)
 	}
 }

@@ -19,8 +19,11 @@ const sampleTimes = new Set()
 const managementCalls = []
 const deniedByServer = []
 let fixtureMode = false
+let readinessScenario = 'blocked'
 
 const fixtures = {
+  managed_config_readiness: () => ({ configured: true, valid: readinessScenario !== 'invalid', ...(readinessScenario === 'invalid' ? {error:'Configuration is invalid or inaccessible; open Configuration to repair it.'} : {health: {checkedAt:new Date().toISOString(), runtimeCheckedAt:new Date().toISOString(), issues: readinessScenario === 'healthy' ? [] : readinessScenario === 'unknown' ? [{severity:'unknown',resource:'service/website',field:'runtime',code:'check_cancelled',message:'Backend checks could not complete.',remedy:'Restore backend access and retry.'}] : fixtures.managed_services().health.issues}}) }),
+  managed_config_check: () => ({ checkedAt:new Date().toISOString(), issues:[] }),
   managed_config_model: () => ({ revision: 'a'.repeat(64), config: { version: 1, services: {}, shares: {}, storage: { documents: {path:'data/documents',kind:'directory'} }, bindings: { lan:{kind:'network',name:'default'}, pool:{kind:'pool',name:'default'}, project:{kind:'project',name:'default'} }, secrets: {} } }),
   managed_config_read: () => ({ content: 'version: 1\n', revision: 'a'.repeat(64), valid: true }),
   managed_apply_status: () => ({ stage: 'complete' }),
@@ -48,7 +51,12 @@ async function exerciseManagement(page) {
   await page.getByRole('heading', { name: 'Overview', exact: true }).waitFor()
   await page.getByText('Management enabled', { exact: true }).waitFor()
 
+  const globalHealth = page.getByRole('region', {name:'Configuration readiness',exact:true})
+  await globalHealth.getByText('Workload configuration alert',{exact:true}).waitFor()
+  await globalHealth.getByText('View all configuration issues (1)',{exact:true}).click()
+  await globalHealth.getByText('Restore the data folder before starting.',{exact:true}).waitFor()
   await page.getByRole('navigation').getByRole('button', { name: 'Applications', exact: true }).click()
+  await globalHealth.getByText('Workload configuration alert',{exact:true}).waitFor()
   await page.getByRole('heading', { name: 'Configuration needs attention', exact: true }).waitFor()
   await page.getByText('Restore the data folder before starting.', { exact: true }).first().waitFor()
   assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
@@ -129,6 +137,22 @@ async function exerciseManagement(page) {
   assert.equal(submitted.dependencies_install?.target, 'podman')
   assert.equal(submitted.dependencies_install?.confirm, true)
   assert.deepEqual(deniedByServer.sort(), ['managed_resource_save', 'managed_resource_save', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
+  // The alert stays mounted on every page; rechecks clear only resolved issues.
+  const beforeRepairCalls = managementCalls.length
+  readinessScenario = 'unknown'
+  await globalHealth.getByRole('button',{name:'Recheck requirements',exact:true}).click()
+  await globalHealth.getByText('Configuration readiness is uncertain',{exact:true}).waitFor()
+  readinessScenario = 'invalid'
+  await globalHealth.getByRole('button',{name:'Recheck requirements',exact:true}).click()
+  await globalHealth.getByText('Workload configuration needs repair',{exact:true}).waitFor()
+  readinessScenario = 'healthy'
+  await globalHealth.getByRole('button',{name:'Recheck requirements',exact:true}).click()
+  await globalHealth.waitFor({state:'detached'})
+  assert.equal(managementCalls.length,beforeRepairCalls,'readiness checks must not start or modify workloads')
+  readinessScenario = 'blocked'
+  await page.reload()
+  await page.getByRole('region',{name:'Configuration readiness',exact:true}).getByText('Workload configuration alert',{exact:true}).waitFor()
+
   fixtureMode = false
 }
 
@@ -260,6 +284,14 @@ try {
       await page.getByRole('button', { name: 'Toggle navigation' }).click()
       await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
       await exerciseShareCreation(page, 'mobile-documents')
+      await page.getByRole('region',{name:'Configuration readiness',exact:true}).getByText('Workload configuration alert',{exact:true}).waitFor()
+      assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'mobile configuration alert overflows')
+      fixtureMode = false
+    } else {
+      fixtureMode = true
+      await page.reload()
+      await page.getByRole('region',{name:'Configuration readiness',exact:true}).getByText('Workload configuration alert',{exact:true}).waitFor()
+      assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'small-mobile configuration alert overflows')
       fixtureMode = false
     }
     await page.getByRole('button', { name: 'Sign out' }).click()
