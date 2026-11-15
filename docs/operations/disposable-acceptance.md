@@ -37,7 +37,7 @@ bindings:
     name: server-man-test
   server-man-test-incus-network:
     kind: network
-    name: server-man-test0
+    name: smtest0
 ```
 
 The directory must already exist, with DAC permissions for the workload account and share daemons. The libvirt fixture must be a standalone bootable raw/qcow2 x86 BIOS guest compatible with the current adapter, with working graceful ACPI shutdown and access for both the manager and QEMU accounts. Do not use an important disk or a host path. Native virtualization must be available inside the disposable guest (nested KVM or supported software emulation).

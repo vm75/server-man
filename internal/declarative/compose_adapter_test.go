@@ -318,3 +318,43 @@ func TestDockerBootSocketReadinessIsBoundedAndNotARuntimeBlocker(t *testing.T) {
 		})
 	}
 }
+
+func TestComposeRuntimeAndBootShareProviderArgumentsAndDirectory(t *testing.T) {
+	p, cfg, _ := composeFixture(t)
+	p.Directory = filepath.Join(t.TempDir(), "generated with $dollar %percent")
+	file := p.file("service/website")
+	command := p.command(file, "website", "up", "--detach", "--no-build")
+	if command.Dir != filepath.Dir(file) || slices.Contains(command.Args, "--project-directory") {
+		t.Fatal(command)
+	}
+	if !slices.Equal(command.Args, []string{"compose", "--project-name", composeProject("website"), "--env-file", "/dev/null", "--file", file, "up", "--detach", "--no-build"}) {
+		t.Fatal(command.Args)
+	}
+	boot, err := RenderComposeBoot(cfg, "service/website", p.Program, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(boot)
+	if !strings.Contains(text, "WorkingDirectory="+strings.ReplaceAll(command.Dir, "%", "%%")+"\n") || strings.Contains(text, "--project-directory") {
+		t.Fatal(text)
+	}
+	parts := []string{systemdExecArg(p.Program)}
+	for _, arg := range command.Args {
+		parts = append(parts, systemdExecArg(arg))
+	}
+	if !strings.Contains(text, "ExecStart="+strings.Join(parts, " ")+"\n") {
+		t.Fatal("boot and normal Compose arguments differ", text)
+	}
+	if !strings.Contains(text, "COMPOSE_DISABLE_ENV_FILE=1") || strings.Contains(text, "Restart=") {
+		t.Fatal("Compose environment/startup policy changed", text)
+	}
+}
+
+func TestComposeBootRejectsAmbiguousDirectoryDirectives(t *testing.T) {
+	p, cfg, _ := composeFixture(t)
+	for _, directory := range []string{"/tmp/injected\nExecStart=/bin/false", "/tmp/back\\slash", "/tmp/trailing ", "/tmp/tab\tpath"} {
+		if _, err := RenderComposeBoot(cfg, "service/website", p.Program, filepath.Join(directory, "compose.yaml")); err == nil {
+			t.Fatal("ambiguous directory accepted")
+		}
+	}
+}

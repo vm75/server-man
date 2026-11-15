@@ -50,6 +50,8 @@ Saving a definition publishes native configuration without creating or starting 
 
 Tests currently use command fixtures for both native inventory shapes (Docker newline objects/string labels and Podman arrays/map labels), literal rendering, boot-policy separation, ownership rejection and recreation semantics. Docker is unavailable and live Podman initialization is restricted in this environment; no real Compose workloads or boot integration were tested. Provider feature/version validation, complete removal recovery, crash-policy support and disposable-host lifecycle/boot tests remain open gates.
 
+Both Compose adapters and their boot launchers share one argument builder and run from the generated definition's directory. They use an absolute `--file`, explicit project identity and `/dev/null` environment input, without `--project-directory`, which the packaged Podman Compose provider does not accept. Boot units use a single unquoted WorkingDirectory path with literal percent escaping; ambiguous control/backslash/trailing-whitespace paths fail validation rather than producing an invalid unit.
+
 Docker Compose readiness separately probes the system `docker.socket` load/enable state with a bounded read-only command. Persistent socket enablement is required for boot policy; disabled/runtime-only/missing states are blockers and failed/malformed checks remain unknown. These `autostart` issues propagate to affected services without blocking current-run startup when Docker is accessible. The host installer enables the socket and daemon explicitly; native boot/daemon-restart verification is still required before claiming the full policy matrix.
 
 ## Initial libvirt VM adapter

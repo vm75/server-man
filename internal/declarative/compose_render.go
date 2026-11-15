@@ -87,6 +87,12 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 }
 func systemdExecArg(s string) string { return unitValue(strings.ReplaceAll(s, "$", "$$")) }
 
+// Both Compose providers resolve generated definitions from the explicit cwd.
+// --project-directory is unnecessary here and is not supported by podman-compose.
+func composeArguments(file, id string, args ...string) []string {
+	return append([]string{"compose", "--project-name", composeProject(id), "--env-file", "/dev/null", "--file", file}, args...)
+}
+
 // RenderComposeBoot creates a boot-only launcher. It never supervises containers
 // and never restarts them at daemon restart; the generated Compose restart policy
 // is explicitly "no". This keeps disabled boot policy independent of prior runs.
@@ -106,7 +112,14 @@ func RenderComposeBoot(c Config, key, program, file string) ([]byte, error) {
 		fmt.Fprintf(&b, "Requires=%s\nAfter=%s\n", composeUnit(dep), composeUnit(dep))
 	}
 	b.WriteString("\n[Service]\nType=oneshot\nRemainAfterExit=no\nTimeoutStartSec=900\nEnvironment=COMPOSE_DISABLE_ENV_FILE=1\nEnvironment=COMPOSE_ANSI=never\nEnvironment=PODMAN_COMPOSE_WARNING_LOGS=false\n")
-	args := []string{program, "compose", "--project-name", composeProject(id), "--project-directory", filepath.Dir(file), "--env-file", "/dev/null", "--file", file, "up", "--detach", "--no-build"}
+	directory := filepath.Dir(file)
+	// WorkingDirectory is a single path directive, not an Exec argument: quotes
+	// would become part of the path. Reject ambiguous line/path escapes.
+	if !literal(directory) || strings.TrimSpace(directory) != directory || strings.Contains(directory, "\\") {
+		return nil, errors.New("Compose working directory contains unsupported whitespace or path escapes")
+	}
+	b.WriteString("WorkingDirectory=" + strings.ReplaceAll(directory, "%", "%%") + "\n")
+	args := append([]string{program}, composeArguments(file, id, "up", "--detach", "--no-build")...)
 	b.WriteString("ExecStart=")
 	for i, arg := range args {
 		if i > 0 {

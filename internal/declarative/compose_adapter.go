@@ -37,8 +37,7 @@ func (p *Compose) unitFile(key string) string {
 	return filepath.Join(p.UnitDirectory, id, composeUnit(id))
 }
 func (p *Compose) command(file, id string, args ...string) core.Command {
-	fixed := []string{"compose", "--project-name", composeProject(id), "--project-directory", filepath.Dir(file), "--env-file", "/dev/null", "--file", file}
-	return core.Command{Program: p.Program, Args: append(fixed, args...), Dir: filepath.Dir(file), Env: []string{"COMPOSE_ANSI=never", "COMPOSE_DISABLE_ENV_FILE=1", "PODMAN_COMPOSE_WARNING_LOGS=false"}, Timeout: 20 * time.Minute}
+	return core.Command{Program: p.Program, Args: composeArguments(file, id, args...), Dir: filepath.Dir(file), Env: []string{"COMPOSE_ANSI=never", "COMPOSE_DISABLE_ENV_FILE=1", "PODMAN_COMPOSE_WARNING_LOGS=false"}, Timeout: 20 * time.Minute}
 }
 func (p *Compose) userCommand(args ...string) core.Command {
 	return userSystemdCommand(p.Systemctl, args...)
