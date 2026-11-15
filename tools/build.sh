@@ -26,4 +26,4 @@ case "$version" in
 	''|*[!A-Za-z0-9._+-]*) echo "invalid SERVER_MAN_VERSION: $version" >&2; exit 2 ;;
 esac
 mkdir -p "$(dirname "$output")"
-go build -trimpath -ldflags "-s -w -X server-man/internal/buildinfo.Version=$version" -o "$output" ./cmd/server-man
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X server-man/internal/buildinfo.Version=$version" -o "$output" ./cmd/server-man

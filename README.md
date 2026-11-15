@@ -12,6 +12,16 @@ File shares derives owned Samba/NFS fragments from central definitions, validate
 
 HTTP and MCP share authentication/write policy, validated operations, serialized jobs and bounded output/audit. See [installation](docs/installation.md), [architecture](ARCHITECTURE.md), and [monitoring](docs/design/monitoring.md).
 
+## Install
+
+From source, run as your normal account:
+
+```sh
+./install.sh --user YOUR_ACCOUNT --backends all
+```
+
+Or extract a release archive and run the same command; releases include binaries and do not need build tools. Use `--dry-run` to review changes, or choose a subset with `--backends podman,docker,virtualization,incus,samba,nfs`. The installer configures native dependencies, the privileged helper, backend groups and a system service running as your workload account. Existing configuration is preserved. Incus storage/network and workloads/shares remain explicit setup. See [installation](docs/installation.md). Build release bundles with `make release`.
+
 ## Build and run
 
 Requires Linux, Go 1.26 or newer, Node.js 22.12 or newer, npm, and Make. Node is needed to build the UI, and is not needed to run the resulting executable.

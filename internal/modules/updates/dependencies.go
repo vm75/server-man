@@ -4,21 +4,34 @@ import (
 	"context"
 	"io"
 	"server-man/internal/core"
+	"strings"
 )
 
 // dependencyPackages resolves only native distribution packages. It never adds
 // repositories, downloads installer scripts, or substitutes another engine.
 func (b *Backend) dependencyPackages(target string) (string, error) {
+	packages, err := DependencyPackages(b.manager.ID, b.distributionID, target)
+	return strings.Join(packages, " "), err
+}
+
+// DependencyPackages is shared by interactive management and host installation.
+// It returns only native repository package names.
+func DependencyPackages(manager, distribution, target string) ([]string, error) {
+	packages, err := dependencyPackageNames(manager, distribution, target)
+	return strings.Fields(packages), err
+}
+
+func dependencyPackageNames(manager, distribution, target string) (string, error) {
 	switch target {
 	case "podman":
-		if b.manager.ID == "apt" {
+		if manager == "apt" {
 			return "podman podman-compose uidmap slirp4netns", nil
 		}
 		return "podman podman-compose", nil
 	case "docker":
-		switch b.manager.ID {
+		switch manager {
 		case "apt":
-			if b.distributionID == "ubuntu" {
+			if distribution == "ubuntu" {
 				return "docker.io docker-compose-v2", nil
 			}
 			return "docker.io docker-compose", nil
@@ -27,15 +40,19 @@ func (b *Backend) dependencyPackages(target string) (string, error) {
 		case "pacman", "zypper":
 			return "docker docker-compose", nil
 		}
+	case "incus":
+		if manager == "apt" || manager == "pacman" {
+			return "incus", nil
+		}
 	case "samba":
 		return "samba", nil
 	case "nfs":
-		if b.manager.ID == "apt" || b.manager.ID == "zypper" {
+		if manager == "apt" || manager == "zypper" {
 			return "nfs-kernel-server", nil
 		}
 		return "nfs-utils", nil
 	case "virtualization":
-		switch b.manager.ID {
+		switch manager {
 		case "apt":
 			return "qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-daemon-driver-qemu libvirt-clients", nil
 		case "dnf":

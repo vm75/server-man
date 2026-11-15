@@ -5,6 +5,7 @@ server-man is a Linux administration application built with Go, Svelte 5, TypeSc
 ## Repository map and commands
 
 - `cmd/server-man/`: entry point and process lifecycle.
+- `cmd/server-man-install/`, `internal/installation/`: shared reviewed host bootstrap for source and release installs; `install.sh` builds as the normal account before sudo. See [installation](docs/installation.md).
 - `internal/config/`, `internal/httpapi/`, `internal/webui/`: configuration, HTTP routes, and embedded assets.
 - `internal/core/`: shared schemas, registry, execution, jobs, and audit. `internal/auth/`: token/session authentication. `internal/app/`: module assembly.
 - `internal/modules/monitor/`: Linux collector, sampler, and tools; see [monitoring design](docs/design/monitoring.md) for units and bounds. `web/src/pages/Overview.svelte` renders the dashboard.
@@ -18,7 +19,8 @@ server-man is a Linux administration application built with Go, Svelte 5, TypeSc
 - `make api` and `make dev`: backend and frontend development servers, in separate terminals.
 - `make check`: Go vet and frontend type checking. `make test`: Go race tests.
 - `make mcp-test`: build and verify stdio/HTTP MCP using the official SDK; requires `make setup` dependencies. The helper disables writes and does not listen on TCP.
-- `make build`: production UI and Go binary at `bin/server-man`.
+- `make build`: production UI and static application/helper/installer binaries in `bin/`.
+- `make release`: native-architecture binary archive and SHA256 sidecar in `dist/`; no publication. `make install DESTDIR=...` remains copy-only staging.
 - Generated frontend assets and dependencies are ignored; do not edit them.
 
 ## Scope and tracking

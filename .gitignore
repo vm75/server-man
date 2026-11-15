@@ -12,3 +12,5 @@
 .env.*
 !.env.example
 .server-man/
+
+/dist/

@@ -6,10 +6,13 @@ The canonical identifier is `server-man`: Go module/imports, executables, servic
 
 The current delivery priority is a single-host deployment of the existing container/VM and share management paths, first on Ubuntu, with Debian and Arch Linux as support targets. Backup/restore development is deferred; its partial implementation and recovery safeguards remain present. This scope decision does not establish native backend or cross-distribution acceptance. See the [release checklist](docs/plans/single-server-release.md).
 
+Host bootstrap is separate from workload configuration. `install.sh` builds from source without root or uses an extracted binary bundle, then invokes `cmd/server-man-install`. `internal/installation` shares native dependency package selection with Updates, reviews package/account/helper changes and installs a workload-account system service. Root-owned binaries and a validated no-argument sudo rule provide the helper boundary; systemd supplies fresh supplementary groups, the account home and its user bus. Existing bootstrap configuration is preserved. Incus storage/network and workload/share definitions are not created by bootstrap. `make release` packages static native-architecture binaries, the shared entry script and instructions; it does not publish artifacts.
+
 ## Components
 
 | Path | Responsibility |
 | --- | --- |
+| `internal/installation/`, `cmd/server-man-install/` | Reviewed native host bootstrap shared by source and release installation |
 | `cmd/server-man/` | Configuration, module assembly, HTTP listener, shutdown |
 | `internal/app/` | Register the application's modules and tools |
 | `internal/auth/` | Private access token, browser sessions, host/origin restrictions |

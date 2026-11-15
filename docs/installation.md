@@ -1,5 +1,45 @@
 # Install and operate server-man
 
+## Guided installation
+
+There are two supported entry points, using the same installer. Both require an existing non-root workload account, systemd and configured native repositories on Ubuntu, Debian or Arch Linux. Build tools are needed only for source installation.
+
+From source, as your normal account (Linux, Go 1.26+, Node.js 22.12+, npm and Make):
+
+```sh
+./install.sh --user YOUR_ACCOUNT --backends all
+```
+
+The script builds without root, then invokes sudo for host setup. To inspect without changing the host, add `--dry-run` (the source build still runs). Build prerequisites must already be installed; this does not download or replace Go/Node toolchains.
+
+From a release, verify its checksum and extract the matching Linux architecture archive:
+
+```sh
+sha256sum -c server-man-VERSION-linux-ARCH.tar.gz.sha256
+tar -xzf server-man-VERSION-linux-ARCH.tar.gz
+cd server-man-VERSION-linux-ARCH
+./install.sh --user YOUR_ACCOUNT --backends all --dry-run
+./install.sh --user YOUR_ACCOUNT --backends all
+```
+
+The release includes static `server-man`, `server-man-admin` and `server-man-install` binaries plus `install.sh`; no Go, Node, npm or Make is needed. `make release` produces the native-architecture archive and checksum in `dist/`; it does not publish a release. Verify the checksum against a trusted distribution source; a checksum alone does not authenticate a publisher.
+
+Choose `--backends podman,docker,virtualization,incus,samba,nfs` or a subset. `--skip-packages` skips repository refresh/install; required backend groups must already exist. `--yes` explicitly accepts the displayed plan without prompting. Without it, the tool asks before mutations. The plan includes packages, group grants, helper sudo policy, service and lingering. Installation may start native daemons. Arch package installation performs a full system upgrade to avoid partial upgrades. No repositories are added and package signature checks remain enabled. Missing repository packages fail explicitly.
+
+The installer installs root-owned executables, validates the exact helper rule, adds selected Docker/Incus/libvirt groups, creates initial private bootstrap configuration and enables lingering. Existing configuration is preserved and validated, including listen address/write policy. A new configuration enables writes and privileged operations on loopback. Selected Docker, libvirt and Incus daemon/socket units are enabled; Samba/NFS exposure remains explicit. The helper and Docker/Incus groups provide broad host administration privileges.
+
+The installed **system service runs as the selected workload account**, with its home and user bus, so rootless Podman still belongs to that account. Systemd obtains current supplementary groups at service start without restarting the account's desktop session. The installer stops/disables an existing server-man user service to avoid duplicate listeners. It never restarts the user manager or logs you out.
+
+```sh
+sudo systemctl status server-man.service
+sudo journalctl -u server-man.service
+```
+
+Open `http://127.0.0.1:8080` for a new configuration and sign in using the private `~/.config/server-man/token`. Workload YAML defaults to `~/.local/state/server-man/server-man.yaml`. No workloads, VM pools/networks, images or shares are created. Initialize Incus storage/network explicitly, then use the UI to review readiness and define resources. No reboot is requested. Rerunning preserves configuration and updates the application/service policy; a failed step reports an error without claiming rollback of completed package or account changes.
+
+## Manual installation and packaging
+
+
 server-man is a native Linux binary. Node is needed only to build or run the verification tools. Build with `make setup build`, then install the built binary and examples with `sudo make install`. Installation copies files beneath `/usr/local` (or `PREFIX`) and honors `DESTDIR`; it does not enable or start a service, create accounts, or replace an active configuration. For packaging checks, use a temporary staging root such as `make install DESTDIR="$PWD/.cache/install-root"`.
 
 Copy `/usr/local/share/server-man/config.example.json` (or `packaging/server-man.example.json` from the source tree) to `/etc/server-man/config.json`, then set ownership to root and mode 0600. Set `manifestPath` to the absolute location of your authoritative workload YAML. Relative workload paths resolve against its directory. Create the token file as a random private secret, for example:
@@ -12,7 +52,7 @@ sudo chmod 0600 /etc/server-man/token
 
 ## Run as your workload account
 
-Recommended: run the user unit as account X so rootless containers and user
+For manual installation, run the user unit as account X so rootless containers and user
 services belong to that account. Install the application and helper once using
 `sudo make install`. Both executables and their parent directories must be
 root-owned and not writable by X. The helper is an ordinary executable, not a
@@ -57,11 +97,11 @@ native package-manager detection, `/etc/samba/smb.conf`, the owned Samba fragmen
 Root-owned helper state is separate at `/var/lib/server-man-admin`.
 
 The Updates page also offers module dependency installation for Podman/Compose,
-Docker/Compose, Samba, NFS, x86 QEMU/libvirt only. These are native
+Docker/Compose, Samba, NFS, x86 QEMU/libvirt and Incus (APT/pacman). These are native
 repository packages; missing repository packages fail explicitly. Restart the
 app after installing a provider to refresh discovery. Dependency installation
 does not change group memberships or container ownership. Use the separate share
-setup action to configure and enable Samba/NFS. Incus requires a separately installed and initialized local daemon with the configured project, pool and network; automatic Incus package setup is not yet provided.
+setup action to configure and enable Samba/NFS. Incus still requires explicit daemon initialization with the configured project, pool and network.
 
 The helper requires the default `/usr/local` installation prefix. For custom
 prefixes, update the compiled helper path and sudoers rule together. Do not enable

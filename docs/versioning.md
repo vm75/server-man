@@ -45,3 +45,7 @@ The `.github/workflows/ci.yml` workflow runs only for:
 Feature-branch pushes without a PR, PRs targeting other branches, and tag pushes do **not** trigger this CI workflow. Merging a PR normally produces one `push` run on `main`; the workflow does not also run on the PR's closed event. Manual runs may target the selected ref. Checkout fetches tag history so a tagged build is recognized.
 
 The workflow verifies Go, frontend, MCP, browser checks and staged installation; it does not deploy, tag, or publish releases.
+
+## Installable release bundles
+
+`make release` builds static Linux binaries for the native architecture and writes `dist/server-man-<VERSION>-linux-<ARCH>.tar.gz` plus its SHA256 sidecar. The archive includes application, privileged helper and installer binaries, `install.sh` and installation instructions. It shares the guided setup path with source installation; see [installation](installation.md). The command creates local artifacts only. Follow the existing manual release policy for tagging/publication and distribute the matching checksum; cross-distribution native acceptance remains separate from successful packaging.
