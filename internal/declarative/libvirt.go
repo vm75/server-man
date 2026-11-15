@@ -125,13 +125,17 @@ func domainMatches(want, actual domainXML) bool {
 		actual.Memory.Value /= 1024
 		actual.Memory.Unit = "MiB"
 	}
-	if want.OS.Type.Machine == "q35" && strings.HasPrefix(actual.OS.Type.Machine, "pc-q35-") {
-		actual.OS.Type.Machine = "q35"
+	if libvirtMachineMatches(want.OS.Type.Machine, actual.OS.Type.Machine) {
+		actual.OS.Type.Machine = want.OS.Type.Machine
 	}
 	// Compare managed hardware fields, allowing libvirt to retain its generated
 	// addresses, controllers, aliases and other native defaults outside this model.
 	return want.UUID == actual.UUID && want.Name == actual.Name && want.Type == actual.Type && want.VCPU == actual.VCPU && reflect.DeepEqual(want.Memory, actual.Memory) && reflect.DeepEqual(want.OS, actual.OS) && reflect.DeepEqual(want.Devices.Disks, actual.Devices.Disks) && reflect.DeepEqual(want.Devices.Interface, actual.Devices.Interface)
 }
+func libvirtMachineMatches(want, actual string) bool {
+	return want == actual || (want == "q35" && strings.HasPrefix(actual, "pc-q35-") && len(actual) > len("pc-q35-") && machineTypePattern.MatchString(actual))
+}
+
 func (l *Libvirt) state(ctx context.Context, uuid string) (string, error) {
 	output, err := l.Runner.Capture(ctx, l.command("domstate", "--domain", uuid))
 	if err != nil {
@@ -341,6 +345,10 @@ func (l *Libvirt) runStart(ctx context.Context, uuid string) error {
 	}
 	return nil
 }
+
+// KVM belongs to the configured libvirt connection. In system scope, the
+// daemon's QEMU account opens the device; requiring direct app-account access
+// would reject valid delegated deployments.
 func (l *Libvirt) Prerequisites(ctx context.Context) []Issue {
 	issues := []Issue{}
 	add := func(field, code, message, remedy string) {
@@ -350,17 +358,53 @@ func (l *Libvirt) Prerequisites(ctx context.Context) []Issue {
 		add("virsh", "missing_dependency", "virsh is missing.", "Install the libvirt client through Software.")
 	} else if _, err := l.Runner.Capture(ctx, l.command("uri")); err != nil {
 		add("connection", "libvirt_unavailable", "The configured libvirt connection is unavailable.", "Check the local daemon, connection URI and account permissions.")
+	} else {
+		command := l.command("domcapabilities", "--virttype", "kvm", "--arch", "x86_64", "--machine", "q35")
+		output, err := l.Runner.Capture(ctx, command)
+		if err != nil {
+			add("kvm", "kvm_unavailable", "The configured libvirt connection cannot provide the supported KVM guest profile.", "Check host virtualization and the libvirt daemon's QEMU device access; session connections require the account's own KVM access.")
+		} else if !validKVMCapabilities(output) {
+			issues = append(issues, Issue{"unknown", "backend/libvirt", "kvm", "kvm_unknown", "The configured libvirt connection returned unrecognized KVM capabilities.", "Check libvirt/QEMU capabilities and recheck before starting guests."})
+		}
 	}
 	if l.Validator == "" {
 		add("validator", "missing_dependency", "virt-xml-validate is missing.", "Install native libvirt XML validation tools.")
 	}
-	f, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
-	if err != nil {
-		add("kvm", "kvm_unavailable", "Hardware virtualization is unavailable to the service account.", "Enable virtualization and grant deliberate access to /dev/kvm.")
-	} else {
-		f.Close()
-	}
 	return issues
+}
+
+func validKVMCapabilities(output string) bool {
+	if len(output) > 1<<20 {
+		return false
+	}
+	var caps struct {
+		XMLName       xml.Name `xml:"domainCapabilities"`
+		Domains       []string `xml:"domain"`
+		Architectures []string `xml:"arch"`
+		Machines      []string `xml:"machine"`
+	}
+	decoder := xml.NewDecoder(strings.NewReader(output))
+	if decoder.Decode(&caps) != nil || len(caps.Domains) != 1 || strings.TrimSpace(caps.Domains[0]) != "kvm" || len(caps.Architectures) != 1 || strings.TrimSpace(caps.Architectures[0]) != "x86_64" || len(caps.Machines) != 1 || !libvirtMachineMatches("q35", strings.TrimSpace(caps.Machines[0])) {
+		return false
+	}
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return true
+		}
+		if err != nil {
+			return false
+		}
+		switch value := token.(type) {
+		case xml.CharData:
+			if strings.TrimSpace(string(value)) != "" {
+				return false
+			}
+		case xml.Comment, xml.ProcInst:
+		default:
+			return false
+		}
+	}
 }
 
 func (l *Libvirt) VerifyRemoved(ctx context.Context, previous Config, key string) (bool, error) {

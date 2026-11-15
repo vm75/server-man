@@ -7,8 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"server-man/internal/core"
 )
@@ -270,5 +272,84 @@ func TestLibvirtRejectsUnsupportedProvisioningBeforeNativeMutation(t *testing.T)
 	}
 	if len(r.commands) != 0 {
 		t.Fatal("unsupported source reached native commands")
+	}
+}
+
+type libvirtCapabilityRecorder struct {
+	libvirtRecorder
+	output                        string
+	uriFailure, capabilityFailure error
+}
+
+func (r *libvirtCapabilityRecorder) Capture(ctx context.Context, c core.Command) (string, error) {
+	if len(c.Args) > 2 && (c.Args[2] == "uri" || c.Args[2] == "domcapabilities") {
+		r.commands = append(r.commands, c)
+		if c.Args[2] == "uri" {
+			return "qemu:///system\n", r.uriFailure
+		}
+		return r.output, r.capabilityFailure
+	}
+	return r.libvirtRecorder.Capture(ctx, c)
+}
+
+func TestLibvirtReadinessUsesConfiguredDaemonCapabilities(t *testing.T) {
+	valid := `<domainCapabilities><path>/usr/bin/qemu-system-x86_64</path><domain>kvm</domain><machine>pc-q35-10.1</machine><arch>x86_64</arch><cpu><mode name="host-model" supported="yes"/></cpu></domainCapabilities>`
+	for _, uri := range []string{"qemu:///system", "qemu:///session"} {
+		recorder := &libvirtCapabilityRecorder{output: valid}
+		backend := &Libvirt{URI: uri, Virsh: "/usr/bin/virsh", Validator: "/usr/bin/virt-xml-validate", Runner: recorder}
+		if issues := backend.Prerequisites(context.Background()); len(issues) != 0 {
+			t.Fatal(uri, issues)
+		}
+		if len(recorder.commands) != 2 {
+			t.Fatal(recorder.commands)
+		}
+		probe := recorder.commands[1]
+		if !slices.Equal(probe.Args, []string{"--connect", uri, "domcapabilities", "--virttype", "kvm", "--arch", "x86_64", "--machine", "q35"}) || probe.Timeout <= 0 || probe.Timeout > 5*time.Second || !slices.Contains(probe.Env, "LC_ALL=C") {
+			t.Fatal(probe)
+		}
+	}
+}
+
+func TestLibvirtCapabilityFailuresAreBoundedRedactedAndBlockGuests(t *testing.T) {
+	for _, tc := range []struct {
+		name, output, code            string
+		uriFailure, capabilityFailure error
+	}{
+		{name: "connection", uriFailure: errors.New("private-native-output"), code: "libvirt_unavailable"},
+		{name: "KVM unsupported", capabilityFailure: errors.New("private-native-output"), code: "kvm_unavailable"},
+		{name: "malformed", output: "private-native-output", code: "kvm_unknown"},
+		{name: "wrong domain", output: `<domainCapabilities><domain>qemu</domain><arch>x86_64</arch></domainCapabilities>`, code: "kvm_unknown"},
+		{name: "wrong machine", output: `<domainCapabilities><domain>kvm</domain><arch>x86_64</arch><machine>pc</machine></domainCapabilities>`, code: "kvm_unknown"},
+		{name: "missing machine", output: `<domainCapabilities><domain>kvm</domain><arch>x86_64</arch></domainCapabilities>`, code: "kvm_unknown"},
+		{name: "duplicate machine", output: `<domainCapabilities><domain>kvm</domain><arch>x86_64</arch><machine>q35</machine><machine>pc</machine></domainCapabilities>`, code: "kvm_unknown"},
+		{name: "wrong architecture", output: `<domainCapabilities><domain>kvm</domain><arch>aarch64</arch></domainCapabilities>`, code: "kvm_unknown"},
+		{name: "duplicate domain", output: `<domainCapabilities><domain>qemu</domain><domain>kvm</domain><arch>x86_64</arch></domainCapabilities>`, code: "kvm_unknown"},
+		{name: "duplicate architecture", output: `<domainCapabilities><domain>kvm</domain><arch>x86_64</arch><arch>x86_64</arch></domainCapabilities>`, code: "kvm_unknown"},
+		{name: "trailing document", output: `<domainCapabilities><domain>kvm</domain><arch>x86_64</arch></domainCapabilities><other/>`, code: "kvm_unknown"},
+		{name: "trailing text", output: `<domainCapabilities><domain>kvm</domain><arch>x86_64</arch></domainCapabilities>unexpected`, code: "kvm_unknown"},
+		{name: "oversized", output: strings.Repeat("x", (1<<20)+1), code: "kvm_unknown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := &libvirtCapabilityRecorder{output: tc.output, uriFailure: tc.uriFailure, capabilityFailure: tc.capabilityFailure}
+			backend := &Libvirt{URI: "qemu:///system", Virsh: "/usr/bin/virsh", Validator: "/usr/bin/virt-xml-validate", Runner: recorder}
+			issues := backend.Prerequisites(context.Background())
+			if len(issues) != 1 || issues[0].Code != tc.code || issues[0].Severity == "warning" {
+				t.Fatal(issues)
+			}
+			if strings.Contains(issues[0].Message+issues[0].Remedy, "private-native-output") {
+				t.Fatal("native diagnostic exposed")
+			}
+			if tc.uriFailure != nil && len(recorder.commands) != 1 {
+				t.Fatal("probed capabilities after connection failure")
+			}
+			fixtureBackend, cfg, _ := libvirtFixture(t)
+			c := Coordinator{Store: fixtureBackend.Store, Adapters: map[string]Adapter{"libvirt": &probeAdapter{issues: issues}}}
+			if health := c.Store.CheckFiles(cfg); len(health.Issues) != 0 {
+				t.Fatal("fixture prerequisites were not healthy", health.Issues)
+			}
+			if err := c.readinessError(context.Background(), cfg, "guest", false); err == nil {
+				t.Fatal("unverified KVM allowed current startup")
+			}
+		})
 	}
 }

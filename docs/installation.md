@@ -155,3 +155,7 @@ See the [current deployment record](operations/ubuntu-first-deployment.md) for a
 ## Docker boot readiness
 
 Managed Docker Compose boot launchers run in the workload account's user manager. The installer explicitly enables `docker.socket` at the system sockets target as well as `docker.service`, so the local API socket participates in early host startup. It does not restart an already active Docker daemon. Readiness checks treat a missing, disabled, runtime-only or unreadable socket unit as a boot prerequisite to resolve. This blocks Enable boot startup while keeping current-run Start available when the engine is reachable. Rerun the installer with Docker selected or enable the native socket through host service setup, then recheck. Native reboot/daemon-restart acceptance remains a separate validation gate.
+
+## Libvirt hardware access
+
+The system connection (`server.libvirt_uri: qemu:///system`) uses the libvirt daemon's QEMU account for `/dev/kvm`. The workload account needs authorized libvirt access, not direct KVM device access just to administer system guests. For `qemu:///session`, that account's own daemon must be able to use KVM. Configuration readiness queries the selected connection's supported x86_64/q35 KVM profile; it does not infer system-daemon capability from the web process's device permissions. Missing/unknown capability remains a startup blocker.
