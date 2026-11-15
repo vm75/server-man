@@ -254,6 +254,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	if !revisionPattern.MatchString(opts.Revision) {
 		return BackupSummary{}, core.Invalid("a reviewed configuration revision is required")
 	}
+	if err := c.checkBackupIdle(); err != nil {
+		return BackupSummary{}, err
+	}
 	if opts.Destination == "" {
 		return BackupSummary{}, core.Invalid("missing destination path")
 	}
@@ -319,12 +322,8 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	bCtx, cancel := context.WithTimeout(ctx, time.Duration(deadline)*time.Second)
 	defer cancel()
 
-	j, err := c.ReadJournal()
-	if err != nil && !os.IsNotExist(err) {
-		return BackupSummary{}, errors.New("apply journal must be valid before backup preparation")
-	}
-	if err == nil && j.Stage != "complete" && j.Stage != "aborted" {
-		return BackupSummary{}, errors.New("cannot prepare backup while an incomplete apply is pending")
+	if err := c.checkApplyIdle(); err != nil {
+		return BackupSummary{}, err
 	}
 
 	snapshot, err := c.Store.Read()
@@ -448,55 +447,29 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 	}
 
-	quiesced := map[string]bool{}
-	var resumed []string
-	var failedResume []string
-	resumeFailed := map[string]bool{}
-
-	resumeWorkloads := func() {
-		if len(quiesced) == 0 {
-			return
+	var recovery *BackupRecovery
+	if len(toStop) > 0 {
+		recovery = &BackupRecovery{Version: 1, Revision: snapshot.Revision, Destination: cleanDest, Stage: "capturing", Services: map[string]string{}}
+		for _, id := range runningWorkloads {
+			recovery.Services[id] = "untouched"
 		}
-		resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer resumeCancel()
-		for _, res := range ordered {
-			if strings.HasPrefix(res, "service/") {
-				id := strings.TrimPrefix(res, "service/")
-				if quiesced[id] {
-					key := "service/" + id
-					adapter := c.Adapters[backend(snapshot.Config, key)]
-					blocked := false
-					for _, dependency := range snapshot.Config.Services[id].DependsOn {
-						blocked = blocked || resumeFailed[dependency]
-					}
-					life, ok := adapter.(LifecycleAdapter)
-					var resumeErr error
-					if !blocked && ok {
-						resumeErr = life.Action(resumeCtx, snapshot.Config, key, "start")
-						if resumeErr == nil {
-							observed, err := adapter.Inspect(resumeCtx, snapshot.Config, key)
-							if err != nil || !observed.Active {
-								resumeErr = errors.New("resumed workload active state did not verify")
-							}
-						}
-					}
-					if blocked || !ok || resumeErr != nil {
-						failedResume = append(failedResume, id)
-						resumeFailed[id] = true
-					} else {
-						resumed = append(resumed, id)
-					}
-					delete(quiesced, id)
-				}
-			}
+		if err := c.writeBackupRecovery(recovery); err != nil {
+			return BackupSummary{}, err
 		}
 	}
-	defer func() {
-		resumeWorkloads()
-		if len(failedResume) > 0 {
-			resultErr = errors.Join(resultErr, fmt.Errorf("previously running workloads need recovery: %s", strings.Join(failedResume, ", ")))
+	var resumed, failedResume []string
+	var recoveryErr error
+	recoveryDone := false
+	resumeWorkloads := func() {
+		if recovery == nil || recoveryDone {
+			return
 		}
-	}()
+		recoveryDone = true
+		resumeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		resumed, failedResume, recoveryErr = c.resumeBackupWorkloads(resumeCtx, snapshot.Config, recovery)
+	}
+	defer func() { resumeWorkloads(); resultErr = errors.Join(resultErr, recoveryErr) }()
 
 	if opts.Quiesce {
 		for _, id := range toStop {
@@ -511,13 +484,20 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 			}
 			// A failed/cancelled stop may already have changed runtime state.
 			// Include the attempted workload in recovery before issuing it.
-			quiesced[id] = true
+			recovery.Services[id] = "stop_attempted"
+			if err := c.writeBackupRecovery(recovery); err != nil {
+				return BackupSummary{}, err
+			}
 			if err := life.Action(bCtx, snapshot.Config, key, "stop"); err != nil {
 				return BackupSummary{}, fmt.Errorf("failed to quiesce service %s: %w", id, err)
 			}
 			observed, e := adapter.Inspect(bCtx, snapshot.Config, key)
 			if e != nil || observed.Active {
 				return BackupSummary{}, errors.New("workload did not reach a verified stopped state for backup")
+			}
+			recovery.Services[id] = "stopped"
+			if err := c.writeBackupRecovery(recovery); err != nil {
+				return BackupSummary{}, err
 			}
 		}
 	}
@@ -637,6 +617,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		return BackupSummary{}, ErrConflict
 	}
 	resumeWorkloads()
+	if recoveryErr != nil && len(failedResume) == 0 {
+		return BackupSummary{}, recoveryErr
+	}
 
 	manifest := BackupManifest{
 		VerificationRequired:     []string{"Owner/group, ACL, xattr/SELinux, directory and link metadata require complete capture/validation before this bundle can be marked prepared."},

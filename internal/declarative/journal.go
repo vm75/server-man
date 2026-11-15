@@ -1,51 +1,35 @@
 package declarative
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
-	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 )
 
 var revisionPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
+func (c Coordinator) checkApplyIdle() error {
+	j, err := c.ReadJournal()
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return errors.New("apply journal must be valid before backup operations")
+	}
+	if j.Stage != "complete" && j.Stage != "aborted" {
+		return errors.New("an incomplete apply must be resolved before backup operations")
+	}
+	return nil
+}
+
 func (c Coordinator) ReadJournal() (Journal, error) {
 	var j Journal
-	f, err := os.OpenFile(c.Store.Path+".apply.json", os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
-	if err != nil {
+	if err := readPrivateJournal(c.Store.Path+".apply.json", &j); err != nil {
 		return j, err
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		return j, err
-	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return j, errors.New("apply journal must be an owner-only regular file")
-	}
-	raw, err := io.ReadAll(io.LimitReader(f, MaxConfigBytes+1))
-	if err != nil {
-		return j, err
-	}
-	if len(raw) > MaxConfigBytes {
-		return j, errors.New("apply journal too large")
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&j) != nil || j.Version != 1 {
-		return j, errors.New("invalid apply journal")
-	}
-	var extra any
-	if decoder.Decode(&extra) != io.EOF {
-		return j, errors.New("invalid apply journal")
-	}
-	if err = validateJournal(j); err != nil {
+	if err := validateJournal(j); err != nil {
 		return j, err
 	}
 	return j, nil
@@ -91,40 +75,5 @@ func validateJournal(j Journal) error {
 
 func (c Coordinator) writeJournal(j *Journal) error {
 	j.UpdatedAt = time.Now().UTC()
-	data, err := json.Marshal(j)
-	if err != nil {
-		return err
-	}
-	path := c.Store.Path + ".apply.json"
-	if info, e := os.Lstat(path); e == nil {
-		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-			return errors.New("unsafe apply journal")
-		}
-	} else if !os.IsNotExist(e) {
-		return e
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".server-man-apply-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err = f.Write(data); err == nil {
-		err = f.Sync()
-	}
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if err = os.Rename(f.Name(), path); err != nil {
-		return err
-	}
-	dir, err := os.Open(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
+	return writePrivateJournal(c.Store.Path+".apply.json", j)
 }

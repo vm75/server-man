@@ -20,6 +20,7 @@ import (
 )
 
 type backupTestAdapter struct {
+	actionHook      func(string, string)
 	mu              sync.Mutex
 	actions         []string
 	activeStates    map[string]bool
@@ -52,6 +53,9 @@ func (a *backupTestAdapter) Action(_ context.Context, _ Config, key, action stri
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.actions = append(a.actions, action+":"+key)
+	if a.actionHook != nil {
+		a.actionHook(key, action)
+	}
 	if a.failAction == action+":"+key && !a.failAfterChange {
 		return errors.New("action failed: " + action + " on " + key)
 	}

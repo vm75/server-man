@@ -111,6 +111,9 @@ func RegisterCoordinator(r *core.Registry, c Coordinator) error {
 	)
 }
 func managedError(err error) error {
+	if err == nil {
+		return nil
+	}
 	var structured *core.Error
 	if errors.As(err, &structured) {
 		return structured

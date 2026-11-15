@@ -10,6 +10,27 @@ import (
 
 func RegisterBackup(r *core.Registry, c Coordinator) error {
 	return r.AddModule(core.Module{ID: "managed_backup", Title: "Portable backup planning", Available: true},
+		core.Tool{Name: "managed_backup_release", Title: "Leave backup workloads as they are", Description: "Acknowledge the reviewed interrupted capture and release its management blocker without starting/stopping workloads or replaying capture. Requires the current configuration revision and recovery token; retained journal states do not claim successful resumption.", Destructive: true, Fields: map[string]core.Field{
+			"revision":    core.StringField("Current configuration revision from recovery status", true, 64),
+			"reviewToken": core.StringField("Current recovery review token", true, 64),
+		}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			status, err := c.ReleaseBackup(in.String("revision"), in.String("reviewToken"))
+			return status, managedError(err)
+		}},
+		core.Tool{Name: "managed_backup_recovery_status", Title: "Review backup recovery", Description: "Read the private durable record of previously running workloads and capture stop/resume progress. Does not activate workloads.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			if !r.AllowWrites {
+				return nil, &core.Error{Code: "writes_disabled", Status: 403, Message: "Private backup recovery is disabled with management writes."}
+			}
+			status, err := c.ReadBackupRecovery()
+			return status, managedError(err)
+		}},
+		core.Tool{Name: "managed_backup_recover", Title: "Resume interrupted backup workloads", Description: "Explicitly recover only previously running workloads whose stop was attempted during the reviewed capture. Rechecks configuration revision, definitions and runtime state; never replays capture or restores data.", Destructive: true, Fields: map[string]core.Field{
+			"revision":    core.StringField("Pinned configuration revision", true, 64),
+			"reviewToken": core.StringField("Token from current recovery status", true, 64),
+		}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+			status, err := c.RecoverBackup(ctx, in.String("revision"), in.String("reviewToken"))
+			return status, managedError(err)
+		}},
 		core.Tool{Name: "managed_backup_inventory", Title: "Review backup inputs", Description: "Inventory private configuration, data, image/private-file references and native/external requirements. Metadata only: never reads referenced private files, exposes native configuration contents, copies data, exports guests or produces a completed backup.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
 			if !r.AllowWrites {
 				return nil, &core.Error{Code: "writes_disabled", Status: 403, Message: "Private backup inventory is disabled with management writes."}

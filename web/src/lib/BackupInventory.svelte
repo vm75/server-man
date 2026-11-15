@@ -16,6 +16,27 @@
   let activeJob=$state<string|null>(null)
   let prepareError=$state('')
   let summary=$state<BackupSummary|null>(null)
+  interface Recovery {currentRevision?:string;journal?:{revision:string;destination:string;stage:string;updatedAt:string;services:Record<string,string>};reviewToken?:string}
+  let recovery=$state<Recovery|null>(null)
+  let recoveryError=$state('')
+  let recoveryActionError=$state('')
+  let recoveryChecking=$state(false)
+  let recoveryConfirm=$state(false)
+  let recoveryJob=$state<string|null>(null)
+  const recoveryPending=$derived(!!recovery?.journal && recovery.journal.stage!=='complete' && recovery.journal.stage!=='released')
+  async function loadRecovery(){
+    if(disabled)return
+    recoveryChecking=true;recoveryConfirm=false
+    try{const value=await invokeTool<Recovery>('managed_backup_recovery_status');if(!stopped){recovery=value;recoveryError=''}}
+    catch(e){if(!stopped)recoveryError=e instanceof Error?e.message:'Could not read backup recovery'}
+    finally{if(!stopped)recoveryChecking=false}
+  }
+  async function recover(resume=true){
+    if(!recovery?.journal||!recovery.reviewToken||!recoveryConfirm)return
+    recoveryActionError=''
+    try{const job=await startJob(resume?'managed_backup_recover':'managed_backup_release',{revision:resume?recovery.journal.revision:recovery.currentRevision,reviewToken:recovery.reviewToken,confirm:true});if(!stopped)recoveryJob=job.id}
+    catch(e){if(!stopped)recoveryActionError=e instanceof Error?e.message:'Could not resume backup workloads'}
+  }
   let controller:AbortController|undefined
   let stopped=false
   async function review(){
@@ -37,6 +58,8 @@
   onMount(()=>{
     const finished=async(event:Event)=>{
       const job=(event as CustomEvent<Job>).detail
+      if(job.id===recoveryJob){recoveryJob=null;if(job.state!=='succeeded')recoveryActionError=job.error||'Backup recovery did not complete'}
+      void loadRecovery()
       if(job.id!==activeJob)return
       activeJob=null
       try{
@@ -49,6 +72,7 @@
       }catch(e){if(!stopped)prepareError=e instanceof Error?e.message:'Could not read capture result'}
       finally{if(!stopped)preparing=false}
     }
+    void loadRecovery()
     window.addEventListener('server-man:job-finished',finished)
     return ()=>{stopped=true;controller?.abort();window.removeEventListener('server-man:job-finished',finished)}
   })
@@ -57,6 +81,22 @@
   <header><h2>Portable backup inventory</h2><button disabled={disabled||busy} onclick={review}>{busy?'Inspecting…':'Review backup inventory'}</button></header>
   <p>Review required inputs and host dependencies before preparing a portable backup. This inspection creates no bundle, reads no referenced secret files and changes no workloads. Directory trees and native VM state need further collection; this is not a completed backup.</p>
   {#if error}<p class="form-error" role="alert">{error}</p>{/if}
+  <section aria-label="Backup recovery">
+    <h3>Backup recovery</h3>
+    <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob} onclick={loadRecovery}>Review recovery</button>
+    {#if recoveryError}<p class="form-error" role="alert">{recoveryError}</p>{/if}
+    {#if recoveryActionError}<p class="form-error" role="alert">{recoveryActionError}</p>{/if}
+    {#if recoveryPending && recovery?.journal}
+      <p role="alert">A backup capture was interrupted or workloads still need recovery. Managed changes are blocked until recovery completes.</p>
+      <p>Configuration {recovery.journal.revision.slice(0,12)} · destination {recovery.journal.destination} · updated {new Date(recovery.journal.updatedAt).toLocaleString()}</p>
+      <ul>{#each Object.entries(recovery.journal.services) as [id,state]}<li>{id}: {state.replaceAll('_',' ')}</li>{/each}</ul>
+      <p>Resume only workloads whose stop was attempted. This does not replay capture or restore data. “Leave workloads as they are” acknowledges the interruption and releases managed controls without changing runtime state. If the configuration changed outside server-man, restore the recorded revision before recovery.</p>
+      <label><input type="checkbox" bind:checked={recoveryConfirm} disabled={disabled||!!recoveryJob} /> I reviewed the interrupted capture and selected a recovery action</label>
+      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(true)}>{recoveryJob?'Recovering workloads…':'Resume backup workloads'}</button>
+      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(false)}>Leave workloads as they are</button>
+    {:else if recovery}<p>No pending backup recovery.</p>{/if}
+  </section>
+
   {#if inventory}
     <p>Stage: {inventory.stage} · Configuration {inventory.revision.slice(0,12)} · checked {new Date(inventory.checkedAt).toLocaleString()}.</p>
     {#if inventory.issues.length}<details open><summary>Unresolved backup inputs ({inventory.issues.length})</summary><ul>{#each inventory.issues as issue}<li><strong>{issue.resource} · {issue.severity}</strong><p>{issue.message}</p><p>{issue.remedy}</p></li>{/each}</ul></details>{/if}
@@ -93,7 +133,7 @@
             <input type="checkbox" bind:checked={confirm} disabled={disabled || preparing} />
             I acknowledge this writes private backup inputs and may stop running workloads
           </label>
-          <button disabled={disabled || preparing || !destination.trim() || !confirm} onclick={prepareBundle}>
+          <button disabled={disabled || preparing || recoveryPending || !!recoveryJob || !destination.trim() || !confirm} onclick={prepareBundle}>
             {preparing ? 'Capturing inputs…' : 'Capture backup inputs'}
           </button>
         </div>

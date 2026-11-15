@@ -219,6 +219,9 @@ func (c Coordinator) SaveApply(ctx context.Context, candidate Config, expected, 
 }
 
 func (c Coordinator) saveApply(ctx context.Context, candidate Config, expected, mode string, revert bool) (Journal, error) {
+	if err := c.checkBackupIdle(); err != nil {
+		return Journal{}, err
+	}
 	if mode != "now" && mode != "next_start" {
 		return Journal{}, errors.New("unsupported apply mode")
 	}
@@ -396,6 +399,9 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 // Retry inspects a durable transition; it never automatically starts workloads
 // or blindly repeats resource removals after an interrupted native operation.
 func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
+	if err := c.checkBackupIdle(); err != nil {
+		return Journal{}, err
+	}
 	j, err := c.ReadJournal()
 	if err != nil {
 		return j, err
