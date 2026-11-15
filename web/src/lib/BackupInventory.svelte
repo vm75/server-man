@@ -4,7 +4,7 @@
   import type { ConfigurationIssue } from './managed'
   interface Input {native?:{backend:string;name:string;project?:string;pool?:string;contentType?:string};runtimeState?:string;id:string;kind:string;strategy:string;path?:string;bundlePath?:string;resources:string[];required:boolean;sensitive:boolean;includedBy?:string;inspection:string;logicalBytes?:number;allocatedBytes?:number}
   interface Inventory {stage:string;revision:string;checkedAt:string;inputs:Input[];requirements:{resource:string;kind:string;description:string}[];exclusions:{kind:string;reason:string}[];issues:ConfigurationIssue[]}
-  interface BackupSummary {stage:string;destination:string;revision:string;preparedAt:string;totalFiles:number;totalBytes:number;manifestChecksum:string;quiesced:boolean;resumedServices?:string[];failedResume?:string[]}
+  interface BackupSummary {stage:string;destination:string;revision:string;preparedAt:string;totalEntries:number;totalBytes:number;manifestChecksum:string;quiesced:boolean;resumedServices?:string[];failedResume?:string[]}
   let {disabled}:{disabled:boolean}=$props()
   let inventory=$state<Inventory|null>(null)
   let busy=$state(false)
@@ -111,7 +111,7 @@
         <div class="summary-box" role="status">
           <p><strong>Backup inputs captured. Restore readiness remains unverified.</strong></p>
           <p>Destination: {summary.destination}</p>
-          <p>{summary.totalFiles} files · {summary.totalBytes} bytes · manifest checksum {summary.manifestChecksum.slice(0, 16)}…</p>
+          <p>{summary.totalEntries} entries · {summary.totalBytes} bytes · manifest checksum {summary.manifestChecksum.slice(0, 16)}…</p>
           {#if summary.resumedServices && summary.resumedServices.length > 0}
             <p>Resumed services: {summary.resumedServices.join(', ')}</p>
           {/if}

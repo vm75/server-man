@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"server-man/internal/core"
@@ -645,13 +647,23 @@ func TestBackupTreeLimitsDirectoriesAndRejectsAbsoluteLinks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := copyDirectory(context.Background(), source, filepath.Join(t.TempDir(), "limited"), "data", 1); err == nil {
+	limited, e := newBackupFilesystem(context.Background(), filepath.Dir(source), privateExportDirectory(t), 1)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer limited.close()
+	if _, err := limited.capture(filepath.Base(source), "data", "directory"); err == nil {
 		t.Fatal("directory entries bypassed copy limit")
 	}
 	if err := os.Symlink(filepath.Join(source, "a"), filepath.Join(source, "absolute")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := copyDirectory(context.Background(), source, filepath.Join(t.TempDir(), "links"), "data", 10); err == nil {
+	linked, e := newBackupFilesystem(context.Background(), filepath.Dir(source), privateExportDirectory(t), 10)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer linked.close()
+	if _, err := linked.capture(filepath.Base(source), "data", "directory"); err == nil {
 		t.Fatal("absolute link retained source-host binding")
 	}
 }
@@ -716,4 +728,29 @@ func TestBackupCaptureIncludesAndVerifiesInitialImageAssets(t *testing.T) {
 			}
 		})
 	}
+}
+
+func copyBackupFile(ctx context.Context, src, dst string, mode os.FileMode) (BackupManifestFile, error) {
+	srcF, err := os.OpenFile(src, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return BackupManifestFile{}, err
+	}
+	defer srcF.Close()
+	info, err := srcF.Stat()
+	if err != nil {
+		return BackupManifestFile{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return BackupManifestFile{}, fmt.Errorf("source %s is not a regular file", src)
+	}
+	if mode == 0 {
+		mode = info.Mode().Perm() & 0777
+	}
+	dstF, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_EXCL|syscall.O_NOFOLLOW, mode)
+	if err != nil {
+		return BackupManifestFile{}, err
+	}
+	defer dstF.Close()
+
+	return copyBackupHandles(ctx, srcF, dstF, mode)
 }

@@ -241,7 +241,7 @@ async function exerciseBackupInventory(page) {
   await inventory.getByRole('button',{name:'Capture backup inputs',exact:true}).click()
   await inventory.getByRole('button',{name:'Capturing inputs…',exact:true}).waitFor()
   const completedID=`fixture-${managementCalls.length}`
-  backupJobResults.set(completedID,{id:completedID,tool:'managed_backup_prepare',state:'succeeded',result:{stage:'captured',destination:'/tmp/server-man-ui-capture',revision:'a'.repeat(64),preparedAt:new Date().toISOString(),totalFiles:3,totalBytes:123,manifestChecksum:'b'.repeat(64),quiesced:true,resumedServices:['app']}})
+  backupJobResults.set(completedID,{id:completedID,tool:'managed_backup_prepare',state:'succeeded',result:{stage:'captured',destination:'/tmp/server-man-ui-capture',revision:'a'.repeat(64),preparedAt:new Date().toISOString(),totalEntries:3,totalBytes:123,manifestChecksum:'b'.repeat(64),quiesced:true,resumedServices:['app']}})
   // Production list events omit results; the component must fetch jobs_get.
   await page.evaluate(id=>window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool:'managed_backup_prepare',state:'succeeded'}})),completedID)
   await inventory.getByText('Backup inputs captured. Restore readiness remains unverified.',{exact:true}).waitFor()

@@ -64,19 +64,10 @@ func writeBackupArtifact(ctx context.Context, directory, path, kind string, obje
 			root.Remove(path)
 		}
 	}()
-	var fs syscall.Statfs_t
-	if err := syscall.Fstatfs(int(f.Fd()), &fs); err != nil || fs.Bsize <= 0 || fs.Flags&1 != 0 {
-		return BackupExport{}, errors.New("native export capacity could not be verified")
+	budget, err := backupAvailableSpace(f)
+	if err != nil {
+		return BackupExport{}, err
 	}
-	const reserve = 16 << 20
-	if fs.Bavail > math.MaxUint64/uint64(fs.Bsize) {
-		return BackupExport{}, errors.New("invalid native export capacity")
-	}
-	budget := fs.Bavail * uint64(fs.Bsize)
-	if budget <= reserve {
-		return BackupExport{}, errors.New("insufficient space for native export")
-	}
-	budget -= reserve
 	if budget > math.MaxInt64 {
 		budget = math.MaxInt64
 	}
@@ -150,4 +141,19 @@ func discardBackupArtifact(directory, path string) error {
 	}
 	defer root.Close()
 	return root.Remove(path)
+}
+
+func backupAvailableSpace(file *os.File) (uint64, error) {
+	var fs syscall.Statfs_t
+	if err := syscall.Fstatfs(int(file.Fd()), &fs); err != nil || fs.Bsize <= 0 || fs.Flags&1 != 0 {
+		return 0, errors.New("capture filesystem capacity could not be verified")
+	}
+	if fs.Bavail > math.MaxUint64/uint64(fs.Bsize) {
+		return 0, errors.New("invalid capture filesystem capacity")
+	}
+	available := fs.Bavail * uint64(fs.Bsize)
+	if available <= backupMetadataReserve {
+		return 0, errors.New("insufficient free space reserved for private capture metadata")
+	}
+	return available - backupMetadataReserve, nil
 }

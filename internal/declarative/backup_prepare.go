@@ -27,6 +27,18 @@ type BackupPrepareOptions struct {
 }
 
 type BackupManifestFile struct {
+	CapturedLinks  uint64            `json:"capturedLinkCount,omitempty"`
+	Type           string            `json:"type"`
+	UID            uint32            `json:"uid"`
+	GID            uint32            `json:"gid"`
+	ATime          string            `json:"atime,omitempty"`
+	LinkTarget     string            `json:"linkTarget,omitempty"`
+	HardlinkTo     string            `json:"hardlinkTo,omitempty"`
+	LinkCount      uint64            `json:"sourceLinkCount"`
+	AllocatedBytes int64             `json:"sourceAllocatedBytes"`
+	Xattrs         map[string][]byte `json:"xattrs,omitempty"`
+	XattrCoverage  string            `json:"xattrCoverage"`
+
 	BundlePath string `json:"bundlePath"`
 	SizeBytes  int64  `json:"sizeBytes"`
 	SHA256     string `json:"sha256"`
@@ -45,6 +57,7 @@ type BackupManifestNativeExport struct {
 }
 
 type BackupManifest struct {
+	Principal                BackupPrincipal              `json:"principal"`
 	VerificationRequired     []string                     `json:"verificationRequired"`
 	Version                  int                          `json:"version"`
 	Stage                    string                       `json:"stage"`
@@ -63,7 +76,7 @@ type BackupSummary struct {
 	Destination      string    `json:"destination"`
 	Revision         string    `json:"revision"`
 	PreparedAt       time.Time `json:"preparedAt"`
-	TotalFiles       int       `json:"totalFiles"`
+	TotalEntries     int       `json:"totalEntries"`
 	TotalBytes       int64     `json:"totalBytes"`
 	ManifestChecksum string    `json:"manifestChecksum"`
 	Quiesced         bool      `json:"quiesced"`
@@ -84,28 +97,17 @@ type BackupExporter interface {
 	BackupExport(ctx context.Context, c Config, input BackupInput, bundleDir string) (BackupExport, error)
 }
 
-func copyBackupFile(ctx context.Context, src, dst string, mode os.FileMode) (BackupManifestFile, error) {
-	srcF, err := os.OpenFile(src, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
-	if err != nil {
-		return BackupManifestFile{}, err
-	}
-	defer srcF.Close()
+func copyBackupHandles(ctx context.Context, srcF, dstF *os.File, mode os.FileMode) (BackupManifestFile, error) {
 	info, err := srcF.Stat()
-	if err != nil {
-		return BackupManifestFile{}, err
+	if err != nil || !info.Mode().IsRegular() {
+		return BackupManifestFile{}, errors.New("source is not a regular file")
 	}
-	if !info.Mode().IsRegular() {
-		return BackupManifestFile{}, fmt.Errorf("source %s is not a regular file", src)
-	}
-	if mode == 0 {
-		mode = info.Mode().Perm() & 0777
-	}
-	dstF, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_EXCL|syscall.O_NOFOLLOW, mode)
-	if err != nil {
-		return BackupManifestFile{}, err
-	}
-	defer dstF.Close()
 
+	budget, err := backupAvailableSpace(dstF)
+	if err != nil {
+		return BackupManifestFile{}, err
+	}
+	reader := io.LimitReader(srcF, info.Size())
 	hasher := sha256.New()
 	buf := make([]byte, 128*1024)
 	var sparseOffset int64
@@ -115,7 +117,7 @@ func copyBackupFile(ctx context.Context, src, dst string, mode os.FileMode) (Bac
 		if err := ctx.Err(); err != nil {
 			return BackupManifestFile{}, err
 		}
-		n, rErr := srcF.Read(buf)
+		n, rErr := reader.Read(buf)
 		copied += int64(n)
 		if n > 0 {
 			chunk := buf[:n]
@@ -137,6 +139,10 @@ func copyBackupFile(ctx context.Context, src, dst string, mode os.FileMode) (Bac
 					}
 					sparseOffset = 0
 				}
+				if uint64(n) > budget {
+					return BackupManifestFile{}, errors.New("capture data exceeds available storage budget")
+				}
+				budget -= uint64(n)
 				if _, err := dstF.Write(chunk); err != nil {
 					return BackupManifestFile{}, err
 				}
@@ -165,68 +171,6 @@ func copyBackupFile(ctx context.Context, src, dst string, mode os.FileMode) (Bac
 		Mode:      fmt.Sprintf("%04o", mode.Perm()),
 		MTime:     info.ModTime().UTC().Format(time.RFC3339Nano),
 	}, nil
-}
-
-func copyDirectory(ctx context.Context, srcDir, dstDir, bundlePrefix string, maxFiles int) ([]BackupManifestFile, error) {
-	if err := os.MkdirAll(dstDir, 0700); err != nil {
-		return nil, err
-	}
-	var files []BackupManifestFile
-	count := 0
-	err := filepath.WalkDir(srcDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-		rel, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		count++
-		if count > maxFiles {
-			return errors.New("directory entry limit exceeded during backup copy")
-		}
-		dstPath := filepath.Join(dstDir, rel)
-		if d.IsDir() {
-			return os.MkdirAll(dstPath, 0700)
-		}
-		if d.Type()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			if filepath.IsAbs(target) {
-				return errors.New("absolute symlinks cannot be relocated in a portable capture")
-			}
-			resolved := target
-			if !filepath.IsAbs(target) {
-				resolved = filepath.Join(filepath.Dir(path), target)
-			}
-			rRel, rErr := filepath.Rel(srcDir, resolved)
-			if rErr != nil || strings.HasPrefix(rRel, "..") {
-				return fmt.Errorf("symlink %s escapes declared directory", path)
-			}
-			_ = os.MkdirAll(filepath.Dir(dstPath), 0700)
-			return os.Symlink(target, dstPath)
-		}
-		if !d.Type().IsRegular() {
-			return fmt.Errorf("unsupported file type for %s", path)
-		}
-		_ = os.MkdirAll(filepath.Dir(dstPath), 0700)
-		fileEntry, err := copyBackupFile(ctx, path, dstPath, 0)
-		if err != nil {
-			return err
-		}
-		fileEntry.BundlePath = filepath.ToSlash(filepath.Join(bundlePrefix, rel))
-		files = append(files, fileEntry)
-		return nil
-	})
-	return files, err
 }
 
 func hashBackupFile(ctx context.Context, f *os.File) (string, error) {
@@ -323,7 +267,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	if snapshot.Revision != opts.Revision {
 		return BackupSummary{}, ErrConflict
 	}
-	rawBytes, rev, err := c.Store.ReadRaw()
+	_, rev, err := c.Store.ReadRaw()
 	if err != nil || rev != snapshot.Revision {
 		return BackupSummary{}, ErrConflict
 	}
@@ -373,7 +317,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	}
 	var requiredBytes uint64
 	for _, input := range inventory.Inputs {
-		if input.LogicalBytes != nil {
+		if input.AllocatedBytes != nil {
+			requiredBytes += uint64(*input.AllocatedBytes)
+		} else if input.LogicalBytes != nil {
 			requiredBytes += uint64(*input.LogicalBytes)
 		}
 	}
@@ -389,7 +335,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 			return BackupSummary{}, errors.New("destination filesystem is read-only")
 		}
 		avail := fs.Bavail * uint64(fs.Bsize)
-		if avail < requiredBytes+(16<<20) {
+		if avail < requiredBytes+backupMetadataReserve {
 			return BackupSummary{}, errors.New("insufficient disk space at destination")
 		}
 	}
@@ -521,21 +467,18 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	var manifestFiles []BackupManifestFile
 	var manifestNativeExports []BackupManifestNativeExport
 
-	configDst := filepath.Join(stagingDir, "server-man.yaml")
-	if err := writeBackupMetadata(configDst, rawBytes); err != nil {
-		return BackupSummary{}, fmt.Errorf("write bundle configuration: %w", err)
-	}
-	configInfo, err := os.Stat(configDst)
+	filesystem, err := newBackupFilesystem(bCtx, filepath.Dir(c.Store.Path), stagingDir, maxBackupEntries)
 	if err != nil {
 		return BackupSummary{}, err
 	}
-	manifestFiles = append(manifestFiles, BackupManifestFile{
-		BundlePath: "server-man.yaml",
-		SizeBytes:  configInfo.Size(),
-		SHA256:     snapshot.Revision,
-		Mode:       "0600",
-		MTime:      configInfo.ModTime().UTC().Format(time.RFC3339Nano),
-	})
+	defer filesystem.close()
+	configEntry, err := filesystem.capture(filepath.Base(c.Store.Path), "server-man.yaml", "file")
+	if err != nil {
+		return BackupSummary{}, errors.New("private configuration could not be captured")
+	}
+	if configEntry.SHA256 != snapshot.Revision {
+		return BackupSummary{}, ErrConflict
+	}
 
 	for _, input := range inventory.Inputs {
 		if err := bCtx.Err(); err != nil {
@@ -544,36 +487,30 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		if input.IncludedBy != "" {
 			continue
 		}
-		if input.Strategy == "bundle_copy" {
-			targetDst := filepath.Join(stagingDir, input.BundlePath)
+
+		if input.Strategy == "bundle_copy" && input.Kind != "configuration" {
+			sourcePath, e := filepath.Rel(filepath.Dir(c.Store.Path), input.Path)
+			if e != nil || !portablePath(sourcePath) {
+				return BackupSummary{}, errors.New("backup input is outside its source root")
+			}
+			kind := "file"
 			if input.Kind == "directory" {
-				dirFiles, err := copyDirectory(bCtx, input.Path, targetDst, input.BundlePath, 50000)
-				if err != nil {
-					return BackupSummary{}, fmt.Errorf("copy directory %s: %w", input.ID, err)
+				kind = "directory"
+			}
+			entry, e := filesystem.capture(sourcePath, input.BundlePath, kind)
+			if e != nil {
+				return BackupSummary{}, fmt.Errorf("capture %s: %w", input.ID, e)
+			}
+			if input.Kind == "image_asset" {
+				_, storageID, _ := strings.Cut(input.ID, "/")
+				source := snapshot.Config.Storage[storageID].Source
+				if source == nil || entry.SHA256 != source.SHA256 {
+					return BackupSummary{}, errors.New("initial image checksum does not match configuration")
 				}
-				manifestFiles = append(manifestFiles, dirFiles...)
-			} else if input.Kind == "file" || input.Kind == "private_file" || input.Kind == "image_asset" {
-				mode := os.FileMode(0)
-				if input.Kind == "private_file" {
-					mode = 0600
-				}
-				_ = os.MkdirAll(filepath.Dir(targetDst), 0700)
-				fileEntry, err := copyBackupFile(bCtx, input.Path, targetDst, mode)
-				if err != nil {
-					return BackupSummary{}, fmt.Errorf("copy file %s: %w", input.ID, err)
-				}
-				if input.Kind == "image_asset" {
-					_, storageID, _ := strings.Cut(input.ID, "/")
-					source := snapshot.Config.Storage[storageID].Source
-					if source == nil || fileEntry.SHA256 != source.SHA256 {
-						return BackupSummary{}, errors.New("initial image checksum does not match configuration")
-					}
-				}
-				fileEntry.BundlePath = filepath.ToSlash(input.BundlePath)
-				manifestFiles = append(manifestFiles, fileEntry)
 			}
 		}
 	}
+	manifestFiles = filesystem.finish()
 
 	for _, input := range inventory.Inputs {
 		if input.Strategy != "native_export" || input.IncludedBy != "" {
@@ -611,8 +548,13 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		return BackupSummary{}, recoveryErr
 	}
 
+	principal, err := captureBackupPrincipal()
+	if err != nil {
+		return BackupSummary{}, err
+	}
 	manifest := BackupManifest{
-		VerificationRequired:     []string{"Owner/group, ACL, xattr/SELinux, directory and link metadata require complete capture/validation before this bundle can be marked prepared."},
+		Principal:                principal,
+		VerificationRequired:     []string{"UID/GID mapping, privileged attribute visibility, inode flags, full durability and native/restore validation require review before this bundle can be marked prepared."},
 		Version:                  1,
 		Stage:                    "captured",
 		Revision:                 snapshot.Revision,
@@ -625,13 +567,16 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		FailedResume:             failedResume,
 	}
 
-	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
+	manifestBytes, err := json.Marshal(manifest)
 	if err != nil {
 		return BackupSummary{}, fmt.Errorf("serialize manifest: %w", err)
 	}
 	manifestPath := filepath.Join(stagingDir, "manifest.json")
 	if err := writeBackupMetadata(manifestPath, manifestBytes); err != nil {
 		return BackupSummary{}, fmt.Errorf("write manifest: %w", err)
+	}
+	if len(manifestBytes) > backupMetadataReserve {
+		return BackupSummary{}, errors.New("private manifest exceeds capture size limit")
 	}
 	manifestChecksum := digest(manifestBytes)
 
@@ -656,10 +601,12 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 
 	success = true
 
-	totalFiles := len(manifest.Files) + len(manifest.NativeExports) + 1
+	totalEntries := len(manifest.Files) + len(manifest.NativeExports) + 1
 	var totalBytes int64 = int64(len(manifestBytes))
 	for _, f := range manifest.Files {
-		totalBytes += f.SizeBytes
+		if f.Type == "file" {
+			totalBytes += f.SizeBytes
+		}
 	}
 	for _, e := range manifest.NativeExports {
 		totalBytes += e.SizeBytes
@@ -670,7 +617,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		Destination:      cleanDest,
 		Revision:         snapshot.Revision,
 		PreparedAt:       manifest.CreatedAt,
-		TotalFiles:       totalFiles,
+		TotalEntries:     totalEntries,
 		TotalBytes:       totalBytes,
 		ManifestChecksum: manifestChecksum,
 		Quiesced:         opts.Quiesce,
