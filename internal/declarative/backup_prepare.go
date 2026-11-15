@@ -57,6 +57,7 @@ type BackupManifestNativeExport struct {
 }
 
 type BackupManifest struct {
+	SourceRoot               string                       `json:"sourceRoot"`
 	Principal                BackupPrincipal              `json:"principal"`
 	VerificationRequired     []string                     `json:"verificationRequired"`
 	Version                  int                          `json:"version"`
@@ -565,6 +566,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		return BackupSummary{}, err
 	}
 	manifest := BackupManifest{
+		SourceRoot:               filepath.Dir(c.Store.Path),
 		Principal:                principal,
 		VerificationRequired:     []string{"UID/GID mapping, privileged attribute visibility, inode flags, full durability and native/restore validation require review before this bundle can be marked prepared."},
 		Version:                  1,

@@ -3,13 +3,11 @@ package declarative
 import (
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 )
 
 // Coverage is derived from the bundled authoritative configuration, never the
@@ -17,27 +15,9 @@ import (
 // interpretation must additionally establish discovered volume dependencies.
 func validateBackupCoverage(ctx context.Context, root *os.Root, m BackupManifest) error {
 	invalid := errors.New("backup configuration or declared payload coverage did not verify")
-	before, err := root.Lstat("server-man.yaml")
-	if err != nil || !before.Mode().IsRegular() || before.Size() > MaxConfigBytes {
-		return invalid
-	}
-	f, err := root.OpenFile("server-man.yaml", os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	raw, err := readBackupPrivateFile(ctx, root, "server-man.yaml", MaxConfigBytes, m.Revision)
 	if err != nil {
-		return invalid
-	}
-	defer f.Close()
-	opened, err := f.Stat()
-	if err != nil || !stableBackupNode(before, opened) {
-		return invalid
-	}
-	raw, err := io.ReadAll(io.LimitReader(contextReader{ctx, f}, MaxConfigBytes+1))
-	after, statErr := f.Stat()
-	current, pathErr := root.Lstat("server-man.yaml")
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if err != nil || statErr != nil || pathErr != nil || len(raw) > MaxConfigBytes || !stableBackupNode(before, after) || !stableBackupNode(before, current) || digest(raw) != m.Revision {
-		return invalid
+		return err
 	}
 	cfg, err := Parse(raw)
 	if err != nil {
@@ -99,6 +79,19 @@ func validateBackupCoverage(ctx context.Context, root *os.Root, m BackupManifest
 	}
 	if err := validateBackupNativeCoverage(ctx, cfg, m.NativeExports); err != nil {
 		return err
+	}
+	for _, export := range m.NativeExports {
+		if export.Kind != "libvirt_guest_state" {
+			continue
+		}
+		raw, err := readBackupPrivateFile(ctx, root, export.BundlePath, MaxConfigBytes, export.SHA256)
+		if err != nil {
+			return err
+		}
+		id := strings.TrimPrefix(export.Resources[0], "service/")
+		if err := validateLibvirtBackupXML(ctx, raw, cfg, id, m.SourceRoot); err != nil {
+			return err
+		}
 	}
 	running, resumed := map[string]bool{}, map[string]bool{}
 	if len(m.RunningWorkloadsAtBackup) > len(cfg.Services) || len(m.ResumedWorkloads) > len(cfg.Services) || len(m.FailedResume) > len(cfg.Services) {

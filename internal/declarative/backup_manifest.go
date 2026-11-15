@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -24,24 +23,9 @@ func readBackupManifest(ctx context.Context, root *os.Root) (BackupManifest, str
 	if err := ctx.Err(); err != nil {
 		return manifest, "", err
 	}
-	before, err := root.Lstat("manifest.json")
-	if err != nil || !before.Mode().IsRegular() || before.Mode().Perm()&0077 != 0 || before.Size() <= 0 || before.Size() > backupMetadataReserve {
-		return manifest, "", invalid
-	}
-	f, err := root.OpenFile("manifest.json", os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	raw, err := readBackupPrivateFile(ctx, root, "manifest.json", backupMetadataReserve, "")
 	if err != nil {
-		return manifest, "", invalid
-	}
-	defer f.Close()
-	opened, err := f.Stat()
-	if err != nil || !stableBackupNode(before, opened) {
-		return manifest, "", invalid
-	}
-	raw, err := io.ReadAll(io.LimitReader(f, backupMetadataReserve+1))
-	after, statErr := f.Stat()
-	current, pathErr := root.Lstat("manifest.json")
-	if err != nil || statErr != nil || pathErr != nil || len(raw) > backupMetadataReserve || int64(len(raw)) != before.Size() || !stableBackupNode(before, after) || !stableBackupNode(before, current) {
-		return manifest, "", invalid
+		return manifest, "", err
 	}
 	if err := ctx.Err(); err != nil {
 		return manifest, "", err
@@ -110,7 +94,7 @@ func uniqueBackupJSON(ctx context.Context, decoder *json.Decoder, depth int) err
 // Keep errors independent of private paths, attributes and configuration data.
 func validateBackupManifest(ctx context.Context, m BackupManifest) error {
 	invalid := errors.New("invalid private backup manifest")
-	if m.Version != 1 || m.Stage != "captured" || !revisionPattern.MatchString(m.Revision) || m.CreatedAt.IsZero() || len(m.Files) == 0 || len(m.Files) > maxBackupEntries || len(m.NativeExports) > 2048 {
+	if m.Version != 1 || m.Stage != "captured" || !revisionPattern.MatchString(m.Revision) || m.CreatedAt.IsZero() || len(m.Files) == 0 || len(m.Files) > maxBackupEntries || len(m.NativeExports) > 2048 || !filepath.IsAbs(m.SourceRoot) || filepath.Clean(m.SourceRoot) != m.SourceRoot || len(m.SourceRoot) > 4096 || strings.ContainsAny(m.SourceRoot, "\x00\r\n") {
 		return invalid
 	}
 	entries := make(map[string]BackupManifestFile, len(m.Files))

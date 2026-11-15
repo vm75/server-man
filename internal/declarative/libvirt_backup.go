@@ -154,7 +154,7 @@ func (l *Libvirt) BackupDependencies(ctx context.Context, c Config, key string) 
 		if xml.Unmarshal(rawDefinition, &actual) != nil {
 			return result, errors.New("unsupported libvirt backup XML")
 		}
-		if actual.Commandline != nil || actual.LaunchSecurity != nil || actual.Sysinfo != nil || actual.OS.Kernel != "" || actual.OS.Initrd != "" || actual.OS.DTB != "" || actual.OS.Varstore != nil {
+		if libvirtBackupUnsupportedBoot(actual) {
 			result.issue(key, "backup_native_boot_state", "Native boot/security settings reference state outside the supported managed profile.", "Preserve and explicitly account for native boot/security dependencies before capture.")
 		}
 		if len(actual.Devices.Disks) > 64 || len(actual.Devices.TPMs) > 8 {

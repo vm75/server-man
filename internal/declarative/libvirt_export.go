@@ -3,7 +3,6 @@ package declarative
 import (
 	"bytes"
 	"context"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -41,17 +40,12 @@ func (l *Libvirt) ValidateBackupExport(ctx context.Context, c Config, input Back
 	if err != nil {
 		return err
 	}
-	desired, err := RenderLibvirt(l.Store, c, input.Resources[0])
-	if err != nil {
-		return errors.New("libvirt hardware profile is not supported for capture")
-	}
-	actual, _, err := l.readDomainXMLFlags(ctx, c, input.Resources[0], true, true)
+	actual, privateXML, err := l.readDomainXMLFlags(ctx, c, input.Resources[0], true, true)
 	if err != nil {
 		return err
 	}
-	var want domainXML
-	if xml.Unmarshal(desired, &want) != nil || !reflect.DeepEqual(want.Devices.Disks, actual.Devices.Disks) {
-		return errors.New("libvirt disk definitions differ from declared storage; reconcile them before capture")
+	if err := validateLibvirtBackupXML(ctx, privateXML, c, id, filepath.Dir(l.Store.Path)); err != nil {
+		return err
 	}
 	ordinary, err := l.readDomain(ctx, c, input.Resources[0], true)
 	if err != nil {

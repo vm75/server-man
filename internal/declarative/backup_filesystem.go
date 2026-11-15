@@ -107,7 +107,7 @@ func backupMountID(file *os.File) (string, error) {
 	}
 	return "", errors.New("source mount identity is unavailable")
 }
-func (b *backupFilesystem) realParent(root *os.Root, path string, create bool) (*os.Root, string, error) {
+func backupRealParent(root *os.Root, path string, create bool) (*os.Root, string, error) {
 	if !portablePath(path) || !utf8.ValidString(path) || path == "." {
 		return nil, "", errors.New("invalid capture path")
 	}
@@ -155,7 +155,7 @@ func (b *backupFilesystem) capture(sourcePath, targetPath, kind string) (BackupM
 	if len(b.entries) >= b.limit {
 		return BackupManifestFile{}, errors.New("capture-wide filesystem entry limit exceeded")
 	}
-	source, name, err := b.realParent(b.source, sourcePath, false)
+	source, name, err := backupRealParent(b.source, sourcePath, false)
 	if err != nil {
 		return BackupManifestFile{}, err
 	}
@@ -208,7 +208,7 @@ func (b *backupFilesystem) capture(sourcePath, targetPath, kind string) (BackupM
 	return b.entries[index], nil
 }
 func (b *backupFilesystem) ensureTargetParent(path string) error {
-	root, _, err := b.realParent(b.target, path, true)
+	root, _, err := backupRealParent(b.target, path, true)
 	if root != nil {
 		root.Close()
 	}

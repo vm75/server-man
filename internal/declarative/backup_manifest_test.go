@@ -11,7 +11,7 @@ import (
 )
 
 func manifestFixture() BackupManifest {
-	return BackupManifest{Version: 1, Stage: "captured", Revision: digest([]byte("config")), CreatedAt: time.Now().UTC(), Files: []BackupManifestFile{{
+	return BackupManifest{SourceRoot: "/source", Version: 1, Stage: "captured", Revision: digest([]byte("config")), CreatedAt: time.Now().UTC(), Files: []BackupManifestFile{{
 		Type: "file", BundlePath: "server-man.yaml", SizeBytes: 6, SHA256: digest([]byte("config")), Mode: "0600", MTime: time.Now().UTC().Format(time.RFC3339Nano), ATime: time.Now().UTC().Format(time.RFC3339Nano), LinkCount: 1, CapturedLinks: 1, XattrCoverage: "visible",
 	}}}
 }
@@ -19,6 +19,10 @@ func manifestFixture() BackupManifest {
 func TestBackupManifestRejectsInvalidGraphs(t *testing.T) {
 	for name, mutate := range map[string]func(*BackupManifest){
 		"version":                       func(m *BackupManifest) { m.Version++ },
+		"missing source root":           func(m *BackupManifest) { m.SourceRoot = "" },
+		"relative source root":          func(m *BackupManifest) { m.SourceRoot = "relative" },
+		"unclean source root":           func(m *BackupManifest) { m.SourceRoot = "/source/../other" },
+		"invalid source root":           func(m *BackupManifest) { m.SourceRoot = "/source\x00" },
 		"prepared without verification": func(m *BackupManifest) { m.Stage = "prepared" },
 		"revision":                      func(m *BackupManifest) { m.Revision = digest([]byte("wrong")) },
 		"duplicate":                     func(m *BackupManifest) { m.Files = append(m.Files, m.Files[0]) },
