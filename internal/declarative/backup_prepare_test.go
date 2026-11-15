@@ -195,6 +195,15 @@ func TestPrepareBackupSuccess(t *testing.T) {
 	if summary.ManifestChecksum != calculatedDigest {
 		t.Fatalf("manifest checksum mismatch: %s != %s", summary.ManifestChecksum, calculatedDigest)
 	}
+	bundleRoot, err := os.OpenRoot(backupDest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bundleRoot.Close()
+	verifiedManifest, verifiedChecksum, err := readBackupManifest(context.Background(), bundleRoot)
+	if err != nil || verifiedChecksum != summary.ManifestChecksum || verifiedManifest.Revision != summary.Revision {
+		t.Fatalf("private metadata read: checksum=%s error=%v", verifiedChecksum, err)
+	}
 
 	var manifest BackupManifest
 	if err := json.Unmarshal(mBytes, &manifest); err != nil {

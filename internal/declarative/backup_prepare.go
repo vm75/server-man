@@ -580,6 +580,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		FailedResume:             failedResume,
 	}
 
+	if err := validateBackupManifest(bCtx, manifest); err != nil {
+		return BackupSummary{}, err
+	}
 	manifestBytes, err := json.Marshal(manifest)
 	if err != nil {
 		return BackupSummary{}, fmt.Errorf("serialize manifest: %w", err)
