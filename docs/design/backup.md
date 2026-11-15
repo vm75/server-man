@@ -1,6 +1,6 @@
-# Portable backup input inventory
+# Portable backup planning and preparation
 
-Backup/restore implementation is in progress. The current delivered operation is metadata inventory, exposed as `managed_backup_inventory` and through Configuration. It produces stage `inventory`, never a completed/prepared backup, and creates no archive, export, journal or workload changes. See the [implementation plan](../plans/declarative-management.md#10-portable-backup-preparation-and-restore) for the full acceptance gates.
+Backup/restore implementation is in progress. Delivered operations cover metadata inventory (`managed_backup_inventory`) and manual bundle preparation (`managed_backup_prepare`), accessible via the shared registry, MCP and Configuration UI. Completed preparation produces stage `prepared` bundles with checksummed manifests. See the [implementation plan](../plans/declarative-management.md#10-portable-backup-preparation-and-restore) for the full acceptance gates and restore progress.
 
 The inventory pins the authoritative current configuration revision and rechecks it before returning. It includes all declared storage, even unused storage, private-file references, initial image assets and required backend guest-state entries. Each input identifies its logical resources, strategy, bundle path, sensitivity and inspection state. File size/allocation figures are top-level filesystem metadata; they are neither recursive totals nor a backup-size estimate. Current YAML maps to `server-man.yaml` in the eventual bundle.
 
@@ -28,3 +28,18 @@ Inventory is bounded to 2,048 combined inputs/requirements and at most 1 MiB of 
 Native-command fixtures verify ownership, local/project scope, libvirt live/persistent dependencies, TPM uncertainty, shared-volume users/deduplication and timeout behavior, without guest mutations. Temporary-directory tests verify resource coverage, shared-path coverage, no private-content disclosure, missing paths, root escapes, special files, cancellation and bounds. Official SDK tests enforce private-read policy and transport discovery parity; browser fixtures verify honest inventory-stage output and responsive layouts. No real workloads or guest data were backed up or restored.
 
 Native semantics reference the upstream [libvirt domain format](https://libvirt.org/formatdomain.html), [Incus disk devices](https://linuxcontainers.org/incus/docs/main/reference/devices_disk/), [project volume isolation](https://linuxcontainers.org/incus/docs/main/reference/projects/) and [custom-volume export](https://linuxcontainers.org/incus/docs/main/reference/manpages/incus/storage/volume/export/). Those references do not establish installed-version or live-export acceptance.
+
+## Backup bundle preparation
+
+Manual backup preparation is exposed through `managed_backup_prepare` and the Configuration UI. It requires write authorization, an explicit acknowledgement (`confirm: true`), and an absolute destination directory. The destination must be outside the source configuration tree and, if pre-existing, empty. Staging occurs in a private temporary directory and is published to the destination only after all parts succeed; failed or cancelled operations clean up staging and never present partial bundles as complete.
+
+Preparation runs with a configurable bounded deadline (default 900 seconds) and checks for sufficient free disk space before streaming. When quiescence is enabled (the default), running workloads are gracefully stopped in reverse dependency order prior to data capture. Resumption is guaranteed: only workloads that were running before the backup are resumed (in forward dependency order), and stopped workloads remain stopped. If any workload fails to resume, the error is recorded in the manifest and summary while preserving the created bundle.
+
+Bundles contain:
+- `manifest.json`: version 1 metadata, configuration revision, timestamps, server-man version, relative file paths with SHA-256 and permissions, native export records, and the list of active/resumed workloads.
+- `server-man.yaml`: authoritative configuration matching the snapshot revision (mode 0600).
+- `data/`: declared storage directories and files, streamed with SHA-256 calculation, sparse-file block preservation and symlink containment checks.
+- `secrets/`: referenced private files copied with owner-only (0600) permissions.
+- `assets/`: initial disk images and image assets.
+- `native/`: libvirt domain XML and state, and Incus portable instance and custom-volume tarball exports.
+

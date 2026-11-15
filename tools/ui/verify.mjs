@@ -221,6 +221,7 @@ async function exerciseBackupInventory(page) {
   await inventory.getByRole('button',{name:'Review backup inventory',exact:true}).click()
   await inventory.getByText(/Stage: inventory/).waitFor()
   await inventory.getByText('Inventory instance and attached volume exports before backup.',{exact:true}).waitFor()
+  await inventory.getByRole('heading',{name:'Prepare backup bundle',exact:true}).waitFor()
   await inventory.getByText('storage/documents',{exact:true}).waitFor()
   await inventory.getByText('Native object: incus · sm-guest · project managed · pool default',{exact:true}).waitFor()
   await inventory.getByText('Observed state: stopped',{exact:true}).waitFor()

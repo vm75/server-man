@@ -3,10 +3,16 @@ package declarative
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"time"
+
+	"server-man/internal/core"
 )
 
 func (i *Incus) BackupDependencies(ctx context.Context, c Config, key string) (NativeBackupDependencies, error) {
@@ -190,3 +196,78 @@ func (i *Incus) BackupDependencies(ctx context.Context, c Config, key string) (N
 	result.require(key, "instance_export", "Validate native export capabilities and prepare a stopped portable instance export, retaining guest identity/state; never use internal daemon storage copies or optimized driver-specific exports implicitly.")
 	return result, nil
 }
+
+func (i *Incus) BackupExport(ctx context.Context, c Config, key string, bundleDir string) ([]BackupExport, error) {
+	_, id, _ := strings.Cut(key, "/")
+	service, ok := c.Services[id]
+	if !ok || service.VM == nil || service.Backend != "incus" {
+		return nil, nil
+	}
+	if i.Program == "" || i.Runner == nil {
+		return nil, errors.New("Incus export is unavailable")
+	}
+	project, err := incusProject(c, id)
+	if err != nil {
+		return nil, err
+	}
+	var exports []BackupExport
+	instName := incusInstance(id)
+	tarRel := filepath.ToSlash(filepath.Join("native", "incus", instName+".tar.gz"))
+	tarDst := filepath.Join(bundleDir, "native", "incus", instName+".tar.gz")
+	_ = os.MkdirAll(filepath.Dir(tarDst), 0700)
+
+	args := []string{"export", instName, tarDst}
+	if project != "" {
+		args = append(args, "--project", project)
+	}
+	cmd := core.Command{Program: i.Program, Args: args, Timeout: 10 * time.Minute}
+	if _, err := i.Runner.Capture(ctx, cmd); err != nil {
+		return nil, fmt.Errorf("Incus instance export failed: %w", err)
+	}
+	info, err := os.Stat(tarDst)
+	if err != nil {
+		return nil, err
+	}
+	h, err := fileHash(tarDst)
+	if err != nil {
+		return nil, err
+	}
+	exports = append(exports, BackupExport{
+		BundlePath: tarRel,
+		SizeBytes:  info.Size(),
+		SHA256:     h,
+		Kind:       "incus_instance_export",
+		Native:     &NativeBackupObject{Backend: "incus", Name: instName, Project: project},
+	})
+
+	deps, err := i.BackupDependencies(ctx, c, key)
+	if err == nil {
+		for _, input := range deps.Inputs {
+			if input.Strategy == "native_export" && input.Native != nil && input.Native.Pool != "" {
+				volRel := filepath.ToSlash(filepath.Join("native", "incus", "volumes", input.Native.Pool, input.Native.Name+".tar.gz"))
+				volDst := filepath.Join(bundleDir, volRel)
+				_ = os.MkdirAll(filepath.Dir(volDst), 0700)
+				vArgs := []string{"storage", "volume", "export", input.Native.Pool, input.Native.Name, volDst}
+				if input.Native.Project != "" {
+					vArgs = append(vArgs, "--project", input.Native.Project)
+				}
+				vCmd := core.Command{Program: i.Program, Args: vArgs, Timeout: 10 * time.Minute}
+				if _, err := i.Runner.Capture(ctx, vCmd); err == nil {
+					if vInfo, err := os.Stat(volDst); err == nil {
+						if vH, err := fileHash(volDst); err == nil {
+							exports = append(exports, BackupExport{
+								BundlePath: volRel,
+								SizeBytes:  vInfo.Size(),
+								SHA256:     vH,
+								Kind:       "incus_volume_export",
+								Native:     input.Native,
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+	return exports, nil
+}
+
