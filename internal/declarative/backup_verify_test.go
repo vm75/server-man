@@ -21,7 +21,11 @@ func payloadFixture(t *testing.T) (string, string) {
 			t.Fatal(err)
 		}
 	}
-	for name, data := range map[string]string{"server-man.yaml": "config", "data/file\nname": "private payload", "native/incus/export.tar": "private native export"} {
+	configBytes, err := Encode(Config{Version: 1, Storage: map[string]Storage{"files": {Path: "data"}}, Bindings: map[string]Binding{"pool": {Kind: "pool", Name: "pool"}, "project": {Kind: "project", Name: "default"}, "net": {Kind: "network", Name: "default"}}, Services: map[string]Service{"example": {Kind: "vm", Backend: "incus", VM: &VM{Image: "base", CPUs: 1, MemoryMiB: 128, Network: "net", Pool: "pool", Project: "project"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string]string{"server-man.yaml": string(configBytes), "data/file\nname": "private payload", "native/incus/export.tar": "private native export"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -33,6 +37,7 @@ func payloadFixture(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	m := manifestFixture()
+	m.Revision, m.Files[0].SHA256, m.Files[0].SizeBytes = digest(configBytes), digest(configBytes), int64(len(configBytes))
 	f := m.Files[0]
 	f.BundlePath, f.SizeBytes, f.SHA256, f.LinkCount, f.CapturedLinks = "data/file\nname", int64(len("private payload")), digest([]byte("private payload")), 2, 2
 	m.Files = append(m.Files, f)
@@ -41,9 +46,11 @@ func payloadFixture(t *testing.T) (string, string) {
 	f = m.Files[0]
 	f.Type, f.BundlePath, f.SizeBytes, f.SHA256, f.CapturedLinks = "directory", "data/empty", 0, "", 0
 	m.Files = append(m.Files, f)
+	f.BundlePath = "data"
+	m.Files = append(m.Files, f)
 	f.Type, f.BundlePath, f.LinkTarget = "symlink", "data/link", "file\nname"
 	m.Files = append(m.Files, f)
-	m.NativeExports = []BackupManifestNativeExport{{Backend: "incus", Kind: "incus_vm", BundlePath: "native/incus/export.tar", SizeBytes: int64(len("private native export")), SHA256: digest([]byte("private native export")), Native: &NativeBackupObject{Backend: "incus", Name: "sm-example", Project: "default"}, Resources: []string{"service/example"}}}
+	m.NativeExports = []BackupManifestNativeExport{{Backend: "incus", Kind: "incus_instance_export", BundlePath: "native/incus/export.tar", SizeBytes: int64(len("private native export")), SHA256: digest([]byte("private native export")), Native: &NativeBackupObject{Backend: "incus", Name: "sm-example", Project: "default", Pool: "pool", ContentType: "block"}, Resources: []string{"service/example"}}}
 	raw, err := json.Marshal(m)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +161,7 @@ func TestBackupPayloadVerification(t *testing.T) {
 			defer root.Close()
 			m, err := verifyBackupBundle(context.Background(), root, checksum)
 			if name == "valid" {
-				if err != nil || m.Revision != digest([]byte("config")) {
+				if err != nil || m.Stage != "captured" {
 					t.Fatalf("valid bundle: %v", err)
 				}
 			} else if err == nil || m.Version != 0 || strings.Contains(err.Error(), "private payload") || strings.Contains(err.Error(), "private secret") {

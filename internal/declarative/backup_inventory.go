@@ -132,50 +132,32 @@ func (c Coordinator) BackupInventory(ctx context.Context) (BackupInventory, erro
 	}
 	addRequirement("bundle", "private_destination", "The prepared bundle will contain private configuration/data and referenced secrets; require an owner-only destination and never expose contents through routine APIs/logs.")
 	addRequirement("bundle", "filesystem_metadata", "Preserve/review UID/GID mappings, ACLs, extended attributes, SELinux labels, links and sparse-file allocation; metadata-only inspection does not establish complete coverage.")
-	if err = addInput(BackupInput{ID: "configuration", Kind: "configuration", Strategy: "bundle_copy", Path: c.Store.Path, BundlePath: "server-man.yaml", Resources: []string{"configuration"}, Required: true, Sensitive: true}); err != nil {
-		return result, err
-	}
-	root := filepath.Dir(c.Store.Path)
-	for _, id := range slices.Sorted(maps.Keys(cfg.Storage)) {
-		storage := cfg.Storage[id]
-		kind := storage.Kind
-		if kind == "" {
-			kind = "directory"
+	for _, input := range declaredBackupInputs(cfg) {
+		if input.ID == "configuration" {
+			input.Path = c.Store.Path
+		} else {
+			input.Path = c.Store.Resolve(input.Path)
 		}
-		resources := append([]string{"storage/" + id}, storageConsumers(cfg, id)...)
-		strategy, bundlePath, inspection := "bundle_copy", storage.Path, ""
-		if storage.External {
-			strategy, bundlePath, inspection = "external_data", "", "excluded_pending_review"
-			addIssue("unknown", "storage/"+id, "external", "backup_external_data", "External storage is required but excluded until an explicit inclusion/rebinding decision is made.", "Review how this data will be backed up and mapped on the destination host.")
+		if input.Strategy == "external_data" {
+			addIssue("unknown", input.ID, "external", "backup_external_data", "External storage is required but excluded until an explicit inclusion/rebinding decision is made.", "Review how this data will be backed up and mapped on the destination host.")
 		}
-		if err = addInput(BackupInput{ID: "storage/" + id, Kind: kind, Strategy: strategy, Path: c.Store.Resolve(storage.Path), BundlePath: bundlePath, Resources: resources, Required: true, Sensitive: true, Inspection: inspection}); err != nil {
+		if err = addInput(input); err != nil {
 			return result, err
 		}
-		if storage.Mount != "" {
-			addRequirement("storage/"+id, "expected_mount", "Verify the declared mounted filesystem before reading data; an empty mountpoint cannot substitute for it.")
-		}
-		if storage.Kind == "file" && storage.Format != "" {
-			addRequirement("storage/"+id, "disk_dependencies", "Inspect disk format, backing chains, external data and sparse allocation before copying; a single filename does not establish complete guest data.")
-		}
-		if storage.Source != nil {
-			if err = addInput(BackupInput{ID: "asset/" + id, Kind: "image_asset", Strategy: "bundle_copy", Path: c.Store.Resolve(storage.Source.Path), BundlePath: storage.Source.Path, Resources: resources, Required: true, Sensitive: true}); err != nil {
-				return result, err
+		kind, id, _ := strings.Cut(input.ID, "/")
+		if kind == "storage" {
+			storage := cfg.Storage[id]
+			if storage.Mount != "" {
+				addRequirement(input.ID, "expected_mount", "Verify the declared mounted filesystem before reading data; an empty mountpoint cannot substitute for it.")
 			}
-			addRequirement("asset/"+id, "asset_checksum", "Verify the configured initial-image checksum during backup preparation; metadata inspection does not read image contents.")
+			if storage.Kind == "file" && storage.Format != "" {
+				addRequirement(input.ID, "disk_dependencies", "Inspect disk format, backing chains, external data and sparse allocation before copying; a single filename does not establish complete guest data.")
+			}
+		} else if kind == "asset" {
+			addRequirement(input.ID, "asset_checksum", "Verify the configured initial-image checksum during backup preparation; metadata inspection does not read image contents.")
 		}
 	}
-	for _, id := range slices.Sorted(maps.Keys(cfg.Secrets)) {
-		resources := []string{"secret/" + id}
-		for _, serviceID := range slices.Sorted(maps.Keys(cfg.Services)) {
-			if slices.Contains(serviceDataReferences(cfg.Services[serviceID]), "secret/"+id) {
-				resources = append(resources, "service/"+serviceID)
-			}
-		}
-		path := cfg.Secrets[id]
-		if err = addInput(BackupInput{ID: "secret/" + id, Kind: "private_file", Strategy: "bundle_copy", Path: c.Store.Resolve(path), BundlePath: path, Resources: resources, Required: true, Sensitive: true}); err != nil {
-			return result, err
-		}
-	}
+
 	nativeContext, cancelNative := context.WithTimeout(ctx, 8*time.Second)
 	defer cancelNative()
 	for _, key := range orderedResources(cfg) {
@@ -294,7 +276,7 @@ func (c Coordinator) BackupInventory(ctx context.Context) (BackupInventory, erro
 				break
 			}
 		}
-		relative, e := filepath.Rel(root, input.Path)
+		relative, e := filepath.Rel(rootPath, input.Path)
 		if e != nil || relative == ".." || strings.HasPrefix(relative, "../") {
 			addIssue("error", input.ID, "path", "backup_path_escape", "An owned backup input escapes the configuration root.", "Declare external storage explicitly and review its inclusion.")
 		}

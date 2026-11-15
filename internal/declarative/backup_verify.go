@@ -94,6 +94,9 @@ func verifyBackupBundle(ctx context.Context, root *os.Root, checksum string) (Ba
 	if err := ctx.Err(); err != nil {
 		return BackupManifest{}, err
 	}
+	if err := validateBackupCoverage(ctx, root, m); err != nil {
+		return BackupManifest{}, err
+	}
 	return m, nil
 }
 
