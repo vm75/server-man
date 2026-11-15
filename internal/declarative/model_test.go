@@ -305,3 +305,26 @@ func TestHistoryProtectsReusedBaseAndRejectsTamperedEntries(t *testing.T) {
 		t.Fatal("tampered history reused")
 	}
 }
+
+func TestPackagedExampleIsAStoppedPortableDefinition(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("..", "..", "packaging", "examples", "server-man.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, service := range cfg.Services {
+		if service.Enabled {
+			t.Fatalf("example %s must be boot-disabled", id)
+		}
+	}
+	if health := (Store{Path: path}).CheckFiles(cfg); len(health.Issues) != 0 {
+		t.Fatal(health.Issues)
+	}
+}

@@ -45,8 +45,6 @@ func (b *Backend) dependencyPackages(target string) (string, error) {
 		case "zypper":
 			return "qemu-x86 qemu-tools libvirt libvirt-client", nil
 		}
-	case "lxc":
-		return "lxc", nil
 	}
 	return "", core.Invalid("unsupported dependency target or package manager")
 }

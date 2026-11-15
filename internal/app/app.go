@@ -13,8 +13,6 @@ import (
 	"serverman/internal/buildinfo"
 	"serverman/internal/config"
 	"serverman/internal/core"
-	"serverman/internal/modules/compose"
-	"serverman/internal/modules/machines"
 	"serverman/internal/modules/monitor"
 	"serverman/internal/modules/services"
 	"serverman/internal/modules/shares"
@@ -24,6 +22,7 @@ import (
 func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, runner core.Executor) (*core.Registry, error) {
 	registry := core.NewRegistry(cfg.AllowWrites, jobs)
 	startedAt := time.Now().UTC()
+	var managed *declarative.Coordinator
 	err := registry.AddModule(core.Module{ID: "system", Title: "Server", Available: true},
 		core.Tool{Name: "system_capabilities", Title: "Backend capabilities", Description: "Read backend availability, unavailable reasons, and management write policy.", ReadOnly: true,
 			Run: func(context.Context, core.Input, io.Writer) (any, error) {
@@ -59,6 +58,7 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 		err = declarative.RegisterInspection(registry, declarative.Store{Path: path})
 		if err == nil {
 			coordinator := declarative.Coordinator{HealthCache: &declarative.HealthCache{}, Store: declarative.Store{Path: path}, Adapters: map[string]declarative.Adapter{"podman/quadlet": declarative.NewQuadlet(declarative.Store{Path: path}, runner), "podman/compose": declarative.NewCompose(declarative.Store{Path: path}, "podman", runner), "docker/compose": declarative.NewCompose(declarative.Store{Path: path}, "docker", runner), "libvirt": declarative.NewLibvirt(declarative.Store{Path: path}, cfg.LibvirtURI, runner), "incus": declarative.NewIncus(declarative.Store{Path: path}, runner)}}
+			managed = &coordinator
 			nativeShares := shares.New(cfg, runner)
 			for _, protocol := range []string{"samba", "nfs"} {
 				adapter := &declarative.ShareAdapter{Store: declarative.Store{Path: path}, Protocol: protocol, Native: nativeShares}
@@ -86,12 +86,6 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 		err = monitor.Register(registry, monitoring)
 	}
 	if err == nil {
-		err = compose.New(cfg.VMRoot, map[string]string{"podman": cfg.PodmanRoot, "docker": cfg.DockerRoot}, runner, cfg.AllowWrites).Register(registry)
-	}
-	if err == nil {
-		err = machines.New(cfg, runner).Register(registry)
-	}
-	if err == nil {
 		err = services.New(cfg.SystemdScope, runner).Register(registry)
 	}
 	if err == nil {
@@ -102,6 +96,9 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 	}
 	if err == nil {
 		err = shares.RegisterSetup(registry, cfg, runner)
+	}
+	if err == nil && managed != nil {
+		declarative.RouteManagedUnits(registry, *managed, cfg.SystemdScope)
 	}
 	if err == nil && cfg.PrivilegedOperations {
 		admin.Route(registry, admin.Client{Runner: runner}, cfg.SystemdScope)

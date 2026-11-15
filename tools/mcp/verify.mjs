@@ -84,36 +84,7 @@ async function exercise(client, label) {
   assert.equal(configValidation.structuredContent.valid, true)
   const invalidConfig = await client.callTool({ name: 'managed_config_validate', arguments: { content: 'version: 2\n' } })
   assert.equal(invalidConfig.structuredContent.error.code, 'invalid_arguments')
-  const projects = await client.callTool({ name: 'compose_projects', arguments: {} })
-  assert.equal(projects.isError, false)
-  assert.deepEqual(projects.structuredContent.projects, [])
-  assert.equal(projects.structuredContent.engines.length, 2)
-  const invalidProject = await client.callTool({ name: 'compose_status', arguments: { engine: 'podman', project: '../escape' } })
-  assert.equal(invalidProject.structuredContent.error.code, 'invalid_arguments')
-  const deniedCompose = await client.callTool({ name: 'compose_down', arguments: { engine: 'docker', project: 'demo', confirm: true } })
-  assert.equal(deniedCompose.structuredContent.error.code, 'writes_disabled')
-  for (const [name, args] of [
-    ['compose_project_create', { engine: 'podman', project: 'new-demo', content: 'services: {}' }],
-    ['compose_file_read', { engine: 'podman', project: 'demo' }],
-    ['compose_file_save', { engine: 'podman', project: 'demo', revision: 'a'.repeat(64), content: 'services: {}', confirm: true }],
-    ['compose_env_read', { engine: 'podman', project: 'demo', filename: 'app.env' }],
-    ['compose_env_save', { engine: 'podman', project: 'demo', filename: 'app.env', revision: 'missing', content: 'KEY=value', confirm: true }],
-    ['compose_data_mkdir', { engine: 'podman', project: 'demo', path: 'cache' }],
-  ]) {
-    const result = await client.callTool({ name, arguments: args })
-    assert.equal(result.structuredContent.error.code, 'writes_disabled', `${name} must respect allowWrites`)
-  }
-  assert(names.includes('machines_list') && names.includes('lxd_launch') && names.includes('lxc_stop') && names.includes('kvm_define'))
-  assert.equal(tools.find(t => t.name === 'kvm_undefine').annotations.destructiveHint, true)
-  const machines = await client.callTool({ name: 'machines_list', arguments: { backend: 'kvm' } })
-  assert.equal(machines.isError, false)
-  assert.equal(machines.structuredContent.backends.length, 1)
-  assert.equal(machines.structuredContent.backends[0].id, 'kvm')
-  assert(Array.isArray(machines.structuredContent.machines))
-  const invalidMachine = await client.callTool({ name: 'machines_details', arguments: { backend: 'lxd', name: '../escape' } })
-  assert.equal(invalidMachine.structuredContent.error.code, 'invalid_arguments')
-  const deniedMachine = await client.callTool({ name: 'kvm_undefine', arguments: { name: 'demo', confirm: true } })
-  assert.equal(deniedMachine.structuredContent.error.code, 'writes_disabled')
+  for (const retired of ['compose_projects','compose_file_save','compose_env_read','compose_project_create','machines_list','lxd_launch','lxc_stop','kvm_define','kvm_undefine','samba_share_save','nfs_share_remove']) assert(!names.includes(retired), `${retired} must not bypass the central configuration`)
   const services = await client.callTool({ name: 'services_list', arguments: {} })
   assert.equal(services.isError, false)
   assert.equal(services.structuredContent.scope, 'system')
@@ -126,13 +97,8 @@ async function exercise(client, label) {
   assert.equal(shares.isError, false)
   assert.equal(shares.structuredContent.backends[0].protocol, 'nfs')
   assert(Array.isArray(shares.structuredContent.shares))
-  assert.equal(tools.find(t => t.name === 'samba_share_save').annotations.destructiveHint, true)
   const invalidShare = await client.callTool({ name: 'shares_list', arguments: { protocol: 'ftp' } })
   assert.equal(invalidShare.structuredContent.error.code, 'invalid_arguments')
-  for (const protocol of ['samba', 'nfs']) {
-    const deniedShare = await client.callTool({ name: `${protocol}_share_remove`, arguments: { name: 'demo', revision: '0'.repeat(64), confirm: true } })
-    assert.equal(deniedShare.structuredContent.error.code, 'writes_disabled')
-  }
   const updates = await client.callTool({ name: 'updates_status', arguments: {} })
   assert.equal(updates.isError, false)
   assert.equal(typeof updates.structuredContent.manager.available, 'boolean')
@@ -165,7 +131,7 @@ async function exercise(client, label) {
 
 try {
   const config = path.join(root, 'stdio.json')
-  await writeFile(config, JSON.stringify({ vmRoot: path.join(root, 'empty-vms'), stateDir: path.join(root, 'stdio-state'), tokenFile: path.join(root, 'unused-token'), allowWrites: false }), { mode: 0o600 })
+  await writeFile(config, JSON.stringify({ stateDir: path.join(root, 'stdio-state'), tokenFile: path.join(root, 'unused-token'), allowWrites: false }), { mode: 0o600 })
   const stdioClient = new Client({ name: 'server-man-verifier', version: '1.0.0' })
   stdioClient.onerror = error => protocolErrors.push(error)
   clients.push(stdioClient)

@@ -2,7 +2,7 @@
 
 server-man is a native Linux binary. Node is needed only to build or run the verification tools. Build with `make setup build`, then install the built binary and examples with `sudo make install`. Installation copies files beneath `/usr/local` (or `PREFIX`) and honors `DESTDIR`; it does not enable or start a service, create accounts, or replace an active configuration. For packaging checks, use a temporary staging root such as `make install DESTDIR="$PWD/.cache/install-root"`.
 
-Copy `/usr/local/share/server-man/config.example.json` (or `packaging/server-man.example.json` from the source tree) to `/etc/server-man/config.json`, then set ownership to root and mode 0600. Adjust `vmRoot` to the directory containing your VM/Compose conventions. Create the token file as a random private secret, for example:
+Copy `/usr/local/share/server-man/config.example.json` (or `packaging/server-man.example.json` from the source tree) to `/etc/server-man/config.json`, then set ownership to root and mode 0600. Set `manifestPath` to the absolute location of your authoritative workload YAML. Relative workload paths resolve against its directory. Create the token file as a random private secret, for example:
 
 ```sh
 sudo install -d -m 0700 /etc/server-man
@@ -57,12 +57,11 @@ native package-manager detection, `/etc/samba/smb.conf`, the owned Samba fragmen
 Root-owned helper state is separate at `/var/lib/server-man-admin`.
 
 The Updates page also offers module dependency installation for Podman/Compose,
-Docker/Compose, Samba, NFS, x86 QEMU/libvirt and classic LXC. These are native
+Docker/Compose, Samba, NFS, x86 QEMU/libvirt only. These are native
 repository packages; missing repository packages fail explicitly. Restart the
 app after installing a provider to refresh discovery. Dependency installation
 does not change group memberships or container ownership. Use the separate share
-setup action to configure and enable Samba/NFS. LXD still requires the host's
-normal LXD installation procedure.
+setup action to configure and enable Samba/NFS. Incus requires a separately installed and initialized local daemon with the configured project, pool and network; automatic Incus package setup is not yet provided.
 
 The helper requires the default `/usr/local` installation prefix. For custom
 prefixes, update the compiled helper path and sudoers rule together. Do not enable

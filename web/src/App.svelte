@@ -6,8 +6,6 @@
   import Overview from './pages/Overview.svelte'
   import AgentAccess from './pages/AgentAccess.svelte'
   import Applications from './pages/Applications.svelte'
-  import Containers from './pages/Containers.svelte'
-  import Machines from './pages/Machines.svelte'
   import Services from './pages/Services.svelte'
   import Shares from './pages/ConfiguredShares.svelte'
   import Configuration from './pages/Configuration.svelte'
@@ -17,8 +15,6 @@
   const pages = [
     { id: 'overview', name: 'Overview', subtitle: 'Your server, at a glance.' },
     { id: 'applications', name: 'Applications', subtitle: 'Managed workloads and configuration health.' },
-    { id: 'containers', name: 'Containers', subtitle: 'Compose projects across Podman and Docker.' },
-    { id: 'machines', name: 'Virtual machines', subtitle: 'LXC, LXD, and KVM workloads.' },
     { id: 'services', name: 'Services', subtitle: 'System services and their logs.' },
     { id: 'configuration', name: 'Configuration', subtitle: 'Storage, bindings, private references and recovery.' },
     { id: 'shares', name: 'File shares', subtitle: 'Samba and NFS exports.' },
@@ -97,10 +93,6 @@
         <AgentAccess allowWrites={status.allowWrites} />
       {:else if selected === 'applications' && status}
         <Applications allowWrites={status.allowWrites} />
-      {:else if selected === 'containers' && status}
-        <Containers allowWrites={status.allowWrites} />
-      {:else if selected === 'machines' && status}
-        <Machines allowWrites={status.allowWrites} />
       {:else if selected === 'services' && status}
         <Services allowWrites={status.allowWrites} />
       {:else if selected === 'configuration' && status}

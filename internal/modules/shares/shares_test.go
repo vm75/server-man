@@ -608,17 +608,18 @@ func TestRegistryRequiresConfirmationAndPreservesWritePolicy(t *testing.T) {
 	}
 	defer jobs.Close()
 	r := core.NewRegistry(true, jobs)
-	if err := b.Register(r); err != nil {
+	if err := b.RegisterDefinitions(r); err != nil {
 		t.Fatal(err)
 	}
-	args := map[string]any{"name": "demo", "path": path, "readOnly": true, "guest": false, "browseable": true, "users": "alice,@staff", "revision": revision(t, b, "samba")}
+	definitions, _ := json.Marshal([]Definition{definition("samba", path)})
+	args := map[string]any{"protocol": "samba", "definitions": string(definitions), "revision": revision(t, b, "samba")}
 	raw, _ := json.Marshal(args)
-	if _, err := r.Invoke(context.Background(), "samba_share_save", raw, "test"); err == nil {
+	if _, err := r.Invoke(context.Background(), "shares_definitions_apply", raw, "test"); err == nil {
 		t.Fatal("confirmation bypassed")
 	}
 	args["confirm"] = true
 	raw, _ = json.Marshal(args)
-	result, err := r.Invoke(context.Background(), "samba_share_save", raw, "test")
+	result, err := r.Invoke(context.Background(), "shares_definitions_apply", raw, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -641,7 +642,7 @@ func TestRegistryRequiresConfirmationAndPreservesWritePolicy(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	r.AllowWrites = false
-	if _, err := r.Invoke(context.Background(), "samba_share_save", raw, "test"); err == nil {
+	if _, err := r.Invoke(context.Background(), "shares_definitions_apply", raw, "test"); err == nil {
 		t.Fatal("write policy bypassed")
 	}
 }

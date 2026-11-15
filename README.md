@@ -2,21 +2,13 @@
 
 A lightweight Linux server manager inspired by Cockpit, with a responsive web interface and MCP access for AI agents. Built with Go, Svelte 5, TypeScript, and Vite.
 
-Implementation follows the [tracked plan](docs/plans/implementation.md). The application provides Linux resource monitoring, Podman/Docker Compose management, LXD/classic LXC/KVM management, systemd services, Samba/NFS shares, system package updates, authenticated HTTP APIs, MCP over stdio/Streamable HTTP, a responsive Svelte UI, and cancellable management jobs with bounded output and audit records. See [installation and privilege guidance](docs/installation.md), [module extension guide](docs/extensions.md), and the [verification audit](docs/verification.md) for deployment and evidence limits.
+Implementation follows the [declarative management plan](docs/plans/declarative-management.md). A single portable YAML configuration owns managed container applications, VMs, storage references and file shares. Applications supports Podman Quadlet (default), Podman Compose, Docker Compose, existing-disk KVM/libvirt and local Incus VMs. Configuration and File shares provide shared typed editors and reviewed changes. This phase remains in progress; provisioning, backup/restore and full native lifecycle/boot verification are unfinished. See [current behavior and limits](docs/design/declarative.md).
 
-The overview has CPU/network histories, per-core CPU meters, memory/swap, local storage usage and I/O, uptime/load, optional temperatures, and a searchable/sortable process table. Monitoring uses one shared Linux sampler and native SVG charts. See [monitoring details](docs/design/monitoring.md) for units, limits, and missing-data behavior.
+The overview provides bounded Linux resource histories and process inventory. Services manages host system/user systemd units and bounded journal output. Updates manages native packages directly on the host. These host operations remain outside workload configuration. Managed application units shown in Services route lifecycle and startup changes through the application's configuration and coordinator.
 
-**Containers** discovers Compose projects, shows containers and associated Podman pods, reads bounded logs, and runs up/start/stop/restart/pull/down jobs. With management writes enabled, it can create projects, edit Compose and project environment files, and make private folders under each project's data directory. It preserves the project directories, environment-file order and disabled markers used by `~/vms/vms.sh`; Compose validation restricts host binds to that project's data directory. See [Compose setup and behavior](docs/design/compose.md) for paths, provider requirements and safety rules, and [disposable examples](packaging/examples/README.md) for safe starter definitions.
+File shares derives owned Samba/NFS fragments from central definitions, validates candidates and attempts rollback on native publication failure, preserving unmanaged configuration and shared data. Host daemon/package setup remains explicit. Missing dependencies and file/mount prerequisites appear as resource issues; complete post-port validation remains in development.
 
-**Virtual machines** separates LXD, classic LXC and KVM/libvirt inventory and controls. Launch LXD containers/VMs, manage existing classic containers, and manage libvirt lifecycle/autostart or define an existing KVM XML file. See [machine setup and behavior](docs/design/machines.md) for backend contexts, supported actions and retained storage.
-
-**Services** combines installed systemd units with runtime state, selected properties and bounded journal output. Start/stop/restart/reload and startup enablement run as jobs. The Services selector switches between system and current-user managers. `systemdScope` supplies the API/MCP default. See [service management](docs/design/services.md) for permissions and action semantics.
-
-**File shares** inspects existing Samba/NFS shares and creates, edits, removes or reapplies application-owned shares. Saves validate a candidate, publish an atomic fragment and apply native changes, with rollback on failure. Existing host configuration and shared directory data are preserved. See [share setup and behavior](docs/design/shares.md) for the required Samba include, NFS server setup, access fields and runtime-state limits.
-
-**Updates** inspects cached candidates, refreshes metadata and installs normal system updates through APT, DNF/DNF5, Pacman or Zypper. It reports reboot requirements where detectable and never requests reboot or a distribution migration. `packageManager` defaults to `auto`; an explicit supported family can be configured. Arch metadata refresh uses an isolated `checkupdates` database. See [update behavior](docs/design/updates.md) for commands, capabilities, cancellation and repository limits.
-
-The canonical product name is **server-man**. Compatibility identifiers remain `server-man`: the Go module and entry point, executable, systemd unit names, default config/state paths, session cookie, internal browser events, share ownership format and native fragment filenames, and `SERVERMAN_*` environment variables. Existing installations need no path migration. MCP advertises `server-man`; tool names and schemas are unchanged.
+HTTP and MCP share authentication/write policy, validated operations, serialized jobs and bounded output/audit. See [installation](docs/installation.md), [architecture](ARCHITECTURE.md), and [monitoring](docs/design/monitoring.md).
 
 ## Build and run
 
@@ -45,19 +37,19 @@ Use `./bin/server-man -config /absolute/path/config.json` to override defaults:
 ```json
 {
   "listen": "127.0.0.1:8080",
-  "vmRoot": "/srv/vms",
+  "manifestPath": "/srv/server-man/server-man.yaml",
   "allowWrites": false,
   "sampleIntervalSeconds": 2
 }
 ```
 
-`vmRoot` defaults to `~/vms`. Compose projects default to `vmRoot/config/podman/<project>/` and `vmRoot/config/docker/<project>/`. Optional `podmanRoot` and `dockerRoot` override those discovery roots; environment files and disabled markers remain under `vmRoot/data/`. All roots, optional `tokenFile`, and optional `stateDir` must be absolute paths. Unknown fields and relative roots are rejected. Remote listening requires `0.0.0.0` plus an HTTP `publicOrigin` pinned to the server's non-loopback IP and same port. server-man does not edit Compose or environment files. Enabled Compose actions change workloads through the installed provider.
+`manifestPath` defaults to `stateDir/server-man.yaml`. Workload-relative paths resolve against that YAML file. Bootstrap path settings must be absolute; unknown fields are rejected, including retired discovery-root settings. Generated native definitions are derived outputs, never configuration inputs. Remote listening requires `0.0.0.0` plus an HTTP `publicOrigin` pinned to the server's non-loopback IP and same port.
 
 `sampleIntervalSeconds` ranges from 1 to 10. History retains at most 60 samples; the default interval shows two minutes. Process and network data follow the server's visible Linux namespaces/permissions. The first sample has null rates until the next sample establishes a delta.
 
 For direct remote browser/API access, bind to `0.0.0.0:8080` and set `publicOrigin` to the server's non-loopback IP and matching HTTP port, such as `http://192.168.192.78:8080`. The application restricts accepted Host and Origin values to that origin. HTTP session cookies are not Secure; use this only on a trusted network. HTTPS deployments can still use a TLS reverse proxy. See [installation and remote access](docs/installation.md).
 
-The declarative configuration foundation exposes `managed_config_read`, `managed_config_validate`, and `managed_config_health` through the shared API/MCP registry. Set the absolute bootstrap `manifestPath` to select the workload YAML; it defaults to `stateDir/server-man.yaml`. Private editor reads require `allowWrites`. Preview/save/apply-status/retry operations also use the shared registry and serialized jobs. Desired saves are journaled; initial Podman Quadlet, Docker/Podman Compose, existing-disk libvirt and local Incus adapters and `managed_service_start/stop/restart/enable/disable` tools are connected. The Applications page shows status, startup policy, configuration issues and lifecycle controls. `managed_config_check` refreshes prerequisites and mount/file checks. Compose currently uses boot-only user units with no container crash restart policy. Applications and File shares provide typed definition/edit/review forms; Configuration manages storage, bindings, private-file references and YAML recovery. Complete VM provisioning and full runtime verification remain in development. `managed_shares` and `managed_share_publish` inspect and change central share publication through shared native validation/rollback. Legacy native workload APIs still await retirement. See [current behavior and limits](docs/design/declarative.md).
+The declarative configuration foundation exposes `managed_config_read`, `managed_config_validate`, and `managed_config_health` through the shared API/MCP registry. Set the absolute bootstrap `manifestPath` to select the workload YAML; it defaults to `stateDir/server-man.yaml`. Private editor reads require `allowWrites`. Preview/save/apply-status/retry operations also use the shared registry and serialized jobs. Desired saves are journaled; initial Podman Quadlet, Docker/Podman Compose, existing-disk libvirt and local Incus adapters and `managed_service_start/stop/restart/enable/disable` tools are connected. The Applications page shows status, startup policy, configuration issues and lifecycle controls. `managed_config_check` refreshes prerequisites and mount/file checks. Compose currently uses boot-only user units with no container crash restart policy. Applications and File shares provide typed definition/edit/review forms; Configuration manages storage, bindings, private-file references and YAML recovery. Complete VM provisioning and full runtime verification remain in development. `managed_shares` and `managed_share_publish` inspect and change central share publication through shared native validation/rollback. Legacy Compose discovery/editing, LXD/classic LXC tools and direct native share-edit APIs have been removed. See [current behavior and limits](docs/design/declarative.md).
 
 ## HTTP API
 
@@ -71,13 +63,9 @@ All `/api/` routes require authentication except token sign-in. Send `Authorizat
 | `GET /api/tools` | Module availability and tool schemas |
 | `POST /api/tools/<name>` | Invoke a tool with a JSON arguments object |
 
-Core tools: `system_status`, `system_capabilities`, `monitor_snapshot`, `monitor_processes`, `jobs_list`, `jobs_get`, and `jobs_cancel`. Compose adds `compose_projects`, `compose_status`, `compose_logs`, and six [lifecycle tools](docs/design/compose.md#actions). `monitor_processes` accepts `sort`, `filter`, and `limit`. Mutation tools return a `job`; use `jobs_get` with its `id` to read state/output. `jobs_cancel` is an immediate control operation. Foreign browser origins and unexpected Host headers are rejected.
+Core tools include `system_status`, `system_capabilities`, `monitor_snapshot`, `monitor_processes`, `jobs_list`, `jobs_get`, and `jobs_cancel`. `monitor_processes` accepts `sort`, `filter`, and `limit`. Mutation tools return a `job`; use `jobs_get` with its `id` to read state/output. `jobs_cancel` is an immediate control operation.
 
-Machine tools include `machines_list`, `machines_details`, and [backend-specific actions](docs/design/machines.md#actions). Service tools include `services_list`, `services_details`, `services_logs`, and six [management actions](docs/design/services.md#actions). `GET /api/tools` and the Agent access page provide the complete current schemas.
-
-Share tools are `shares_list`, `samba_share_save`, `samba_share_remove`, `nfs_share_save`, and `nfs_share_remove`. Save/remove require the fragment revision returned by inventory and destructive acknowledgement. They apply the change as a job; see [share transactions](docs/design/shares.md#transactions).
-
-Updates expose `updates_status`, `updates_refresh` and destructive `updates_install`. No arbitrary package names, commands or distro-upgrade arguments are accepted.
+Managed workloads use `managed_config_*`, `managed_resource_plan/save`, `managed_apply_status/retry`, `managed_services`, and `managed_service_start/stop/restart/enable/disable`. Shares use `managed_shares` and `managed_share_publish`; `shares_list` remains read-only native inspection. Native host services use `services_list/details/logs` and six management actions. Updates exposes `updates_status/refresh/install`, `packages_install`, and `dependencies_install`; `shares_setup` explicitly prepares native share services. `GET /api/tools` and Agent access provide complete current schemas. Foreign browser origins and unexpected Host headers are rejected.
 
 ## MCP
 
@@ -104,5 +92,5 @@ explicit native server setup (`shares_setup`); both require confirmation and
 `allowWrites`.
 
 Updates also offers **Install dependencies** (`dependencies_install`) for
-Podman/Compose, Docker/Compose, Samba, NFS, x86 QEMU/libvirt and classic LXC using
+Podman/Compose, Docker/Compose, Samba, NFS, x86 QEMU/libvirt using
 native repositories. Restart the app afterward to refresh provider discovery.

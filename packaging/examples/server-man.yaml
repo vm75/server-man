@@ -1,0 +1,22 @@
+version: 1
+services:
+  demo-status:
+    name: Demo status page
+    kind: container
+    engine: podman
+    backend: quadlet
+    enabled: false
+    containers:
+      web:
+        image: docker.io/library/busybox:1.37
+        command: [httpd, -f, -p, "8080", -h, /site]
+        memory_mib: 64
+        cpus: 1
+        mounts:
+          - storage: site
+            target: /site
+            read_only: true
+storage:
+  site:
+    path: data/site
+    kind: directory

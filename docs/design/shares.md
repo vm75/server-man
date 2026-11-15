@@ -1,6 +1,6 @@
 # Samba and NFS shares
 
-File shares and the five `shares_*`/protocol tools inspect existing shares and manage application-owned fragments. server-man does not edit unmanaged host configuration, create accounts, change directory permissions/ownership/ACLs/SELinux labels, or remove shared data. The server account needs native file/daemon permissions; writes also require `allowWrites: true`.
+File shares manages central YAML share definitions using `managed_resource_plan/save` and `managed_share_publish`. `managed_shares` reports authoritative publication status; `shares_list` remains read-only native inspection. server-man does not edit unmanaged host configuration, create accounts, change directory permissions/ownership/ACLs/SELinux labels, or remove shared data. The server account needs native file/daemon permissions; writes also require `allowWrites: true`.
 
 ## One-time host setup
 
@@ -41,7 +41,7 @@ NFS adds 1–16 IP/CIDR client selectors or an explicit `*`, root squashing, and
 
 ## Inventory and runtime state
 
-`shares_list` accepts optional `protocol: "samba" | "nfs"`. It returns backend/tool/setup state, managed filename, current revision, warnings and selected share metadata. Missing tools do not break other modules. The UI shows host-owned entries for inspection with their editing controls disabled.
+`shares_list` accepts optional `protocol: "samba" | "nfs"`. It returns backend/tool/setup state, managed filename, current revision, warnings and selected share metadata. Missing tools do not break other modules. Native inventory is read-only; the File shares editor operates on central definitions.
 
 Samba configuration is read through bounded `testparm --suppress-prompt`; only names, paths and supported access fields are returned. Current use comes from whitelisted `smbstatus --json --shares` connection counts. Counts do not prove complete daemon configuration or share availability. Existing connections can retain old settings after reload, including a removed share; observed runtime-only shares remain visible. Full daemon configuration, sessions, open filenames and credentials are excluded. Samba's [testparm manual](https://www.samba.org/samba/docs/current/man-html/testparm.1.html) and [smbstatus JSON format](https://www.samba.org/samba/docs/current/man-html/smbstatus.1.html) define those native interfaces.
 
@@ -51,7 +51,7 @@ Reads are bounded to 1 MiB per file/captured command, 1 MiB total unmanaged NFS 
 
 ## Transactions
 
-`samba_share_save`, `samba_share_remove`, `nfs_share_save` and `nfs_share_remove` require the current fragment `revision` from inventory and `confirm: true`. They return serialized jobs. Save is also the reapply operation for an unchanged definition. The UI captures a form's revision when opened so an intervening refresh cannot silently approve a stale edit.
+Central edits require the current configuration revision and acknowledged saves return serialized jobs. The adapter validates and publishes the complete enabled protocol set through the shared transaction below, removing stale owned definitions. Fragment revisions protect derived outputs; metadata comments supply integrity/rollback information rather than desired configuration. The former direct protocol save/remove tools are no longer registered. Low-level inspect/validate/apply operations are helper-only and revalidate typed definitions at the root boundary.
 
 1. Read the owned file without following a final symlink or blocking on a FIFO. Verify its marker and generated body against typed metadata comments. Reject foreign files, manual edits, stale revisions and unmanaged identity/path conflicts.
 2. Validate all input, directory existence, supported access fields and size limits. Build a temporary candidate in the fragment directory. Existing mode bits are retained; new fragments use 0644 and temporary validation shadows use 0600. Replacement files belong to the server account.
@@ -60,7 +60,7 @@ Reads are bounded to 1 MiB per file/captured command, 1 MiB total unmanaged NFS 
 5. Samba sends a bounded `smbcontrol ... smbd reload-config` request. It does not disconnect existing sessions. NFS uses `exportfs -i -o <validated options> <client>:<path>` for desired pairs and `exportfs -u <client>:<path>` only for removed, previously owned pairs. IPv6 command targets are bracketed. Global `-ra`, `-ua` and flush operations are never used, preserving unrelated runtime exports. NFS validates typed syntax before publication; native exportability checks happen during apply, followed by a registered-table access check. See the upstream [exportfs interface](https://github.com/linux-nfs/nfs-utils/blob/master/utils/exportfs/exportfs.man).
 6. On failure/cancellation after publication, restore the previous fragment (or its prior absence), then request Samba reload or restore the affected NFS pairs and their complete prior native options. NFS rollback rereads/verifies affected entries; unrelated pairs are retained. Cleanup gets an independent 30-second deadline. Failed or refused rollback is reported in job error/output, including when the job is cancelled. External edits to the new fragment prevent overwriting it during rollback.
 
-This is an atomic file replacement with bounded best-effort runtime recovery. Other administrators and native daemon reloads are not covered by server-man's lock. Coordinate external changes; daemon/client effects are not a multi-process atomic transaction. A crash between publication and apply can leave configured and runtime states different; inventory and Edit/apply expose that distinction. Rollback cannot undo client I/O or guarantee old settings for already connected Samba sessions.
+This is an atomic file replacement with bounded best-effort runtime recovery. Other administrators and native daemon reloads are not covered by server-man's lock. Coordinate external changes; daemon/client effects are not a multi-process atomic transaction. A crash between publication and apply can leave configured and runtime states different; native inventory and managed apply status expose that distinction. Rollback cannot undo client I/O or guarantee old settings for already connected Samba sessions.
 
 ## Verification
 

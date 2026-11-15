@@ -67,7 +67,7 @@ func testHandlerWithMonitor(t *testing.T, allowWrites, includeMonitor bool) (htt
 		monitoring = monitor.New(context.Background(), time.Second)
 		t.Cleanup(monitoring.Close)
 	}
-	registry, err := app.Registry(config.Config{AllowWrites: allowWrites, VMRoot: filepath.Join(root, "vms")}, jobs, monitoring, core.Runner{})
+	registry, err := app.Registry(config.Config{AllowWrites: allowWrites, StateDir: root}, jobs, monitoring, core.Runner{})
 	if err != nil {
 		t.Fatal(err)
 	}

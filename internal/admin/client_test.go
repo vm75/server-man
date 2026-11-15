@@ -35,12 +35,12 @@ func (f *clientFixture) Capture(_ context.Context, c core.Command) (string, erro
 func TestClientPreservesErrorAndOutput(t *testing.T) {
 	f := &clientFixture{t: t, response: `{"error":"stale revision","code":"conflict","status":409,"output":"rollback complete"}`}
 	var out strings.Builder
-	_, err := (Client{Runner: f}).Call(context.Background(), "samba_share_remove", core.Input{"name": "docs", "revision": "stale", "confirm": true}, &out)
+	_, err := (Client{Runner: f}).Call(context.Background(), "shares_definitions_apply", core.Input{"name": "docs", "revision": "stale", "confirm": true}, &out)
 	var typed *core.Error
 	if !errors.As(err, &typed) || typed.Status != 409 || typed.Code != "conflict" {
 		t.Fatal(err)
 	}
-	if out.String() != "rollback complete" || f.request.Operation != "samba_share_remove" {
+	if out.String() != "rollback complete" || f.request.Operation != "shares_definitions_apply" {
 		t.Fatal(out.String(), f.request)
 	}
 }

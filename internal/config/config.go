@@ -19,14 +19,7 @@ import (
 type Config struct {
 	ManifestPath          string `json:"manifestPath"`
 	Listen                string `json:"listen"`
-	VMRoot                string `json:"vmRoot"`
-	PodmanRoot            string `json:"podmanRoot"`
-	DockerRoot            string `json:"dockerRoot"`
-	LXDRemote             string `json:"lxdRemote"`
-	LXDProject            string `json:"lxdProject"`
-	LXCPath               string `json:"lxcPath"`
 	LibvirtURI            string `json:"libvirtURI"`
-	LibvirtXMLRoot        string `json:"libvirtXMLRoot"`
 	SystemdScope          string `json:"systemdScope"`
 	SambaConfig           string `json:"sambaConfig"`
 	SambaManagedFile      string `json:"sambaManagedFile"`
@@ -52,7 +45,7 @@ func Defaults() (Config, error) {
 	if stateRoot == "" {
 		stateRoot = filepath.Join(home, ".local", "state")
 	}
-	return Config{Listen: "127.0.0.1:8080", VMRoot: filepath.Join(home, "vms"), StateDir: filepath.Join(stateRoot, "server-man"), TokenFile: filepath.Join(configDir, "server-man", "token"), LXDRemote: "local", LXDProject: "default", LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/server-man.conf", PackageManager: "auto", SampleIntervalSeconds: 2}, nil
+	return Config{Listen: "127.0.0.1:8080", StateDir: filepath.Join(stateRoot, "server-man"), TokenFile: filepath.Join(configDir, "server-man", "token"), LibvirtURI: "qemu:///system", SystemdScope: "system", SambaConfig: "/etc/samba/smb.conf", SambaManagedFile: "/etc/samba/server-man.conf", PackageManager: "auto", SampleIntervalSeconds: 2}, nil
 }
 
 func Load(path string) (Config, error) {
@@ -122,29 +115,8 @@ func (c Config) Validate() error {
 	if wildcard && c.PublicOrigin == "" {
 		return errors.New("0.0.0.0 requires publicOrigin to restrict accepted Host and Origin")
 	}
-	if !filepath.IsAbs(c.VMRoot) {
-		return errors.New("vmRoot must be an absolute path")
-	}
-	if (c.PodmanRoot != "" && !filepath.IsAbs(c.PodmanRoot)) || (c.DockerRoot != "" && !filepath.IsAbs(c.DockerRoot)) {
-		return errors.New("podmanRoot and dockerRoot must be absolute when configured")
-	}
 	if !filepath.IsAbs(c.StateDir) || !filepath.IsAbs(c.TokenFile) {
 		return errors.New("stateDir and tokenFile must be absolute paths")
-	}
-	for _, path := range []string{c.LXCPath, c.LibvirtXMLRoot} {
-		if path != "" && !filepath.IsAbs(path) {
-			return errors.New("lxcPath and libvirtXMLRoot must be absolute when configured")
-		}
-	}
-	for _, value := range []string{c.LXDRemote, c.LXDProject} {
-		if value == "" || len(value) > 128 || strings.ContainsAny(value, ":/\\ \t\r\n") || strings.HasPrefix(value, "-") {
-			return errors.New("lxdRemote and lxdProject must be simple nonempty names")
-		}
-		for _, char := range value {
-			if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || strings.ContainsRune("._-", char)) {
-				return errors.New("lxdRemote and lxdProject contain unsupported characters")
-			}
-		}
 	}
 	if c.LibvirtURI != "qemu:///system" && c.LibvirtURI != "qemu:///session" {
 		return errors.New("libvirtURI must be qemu:///system or qemu:///session")

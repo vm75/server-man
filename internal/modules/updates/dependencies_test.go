@@ -9,7 +9,7 @@ import (
 
 func TestDependencyTargetsUseValidatedNativePackages(t *testing.T) {
 	for _, id := range []string{"apt", "dnf", "pacman", "zypper"} {
-		for _, target := range []string{"podman", "docker", "samba", "nfs", "virtualization", "lxc"} {
+		for _, target := range []string{"podman", "docker", "samba", "nfs", "virtualization"} {
 			b, r := fixture(t, id)
 			if _, err := b.InstallDependencies(context.Background(), target, io.Discard); err != nil {
 				t.Fatal(id, target, err)
