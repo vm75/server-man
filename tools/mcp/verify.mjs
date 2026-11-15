@@ -86,7 +86,7 @@ async function exercise(client, label) {
   assert.equal(deniedStorageCreate.structuredContent.error.code,'writes_disabled')
   const deniedBackupInventory = await client.callTool({name:'managed_backup_inventory',arguments:{}})
   assert.equal(deniedBackupInventory.structuredContent.error.code,'writes_disabled')
-  const deniedBackupPrepare = await client.callTool({name:'managed_backup_prepare',arguments:{destination:'/var/backups/test',confirm:true}})
+  const deniedBackupPrepare = await client.callTool({name:'managed_backup_prepare',arguments:{revision:'a'.repeat(64),destination:'/var/backups/test',confirm:true}})
   assert.equal(deniedBackupPrepare.structuredContent.error.code,'writes_disabled')
   const deniedConfig = await client.callTool({ name: 'managed_config_read', arguments: {} })
   assert.equal(deniedConfig.structuredContent.error.code, 'writes_disabled')

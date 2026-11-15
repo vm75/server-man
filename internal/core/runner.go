@@ -47,7 +47,17 @@ type Executor interface {
 	Capture(context.Context, Command) (string, error)
 }
 
+// StreamingExecutor separates binary output from diagnostics and does not apply
+// Capture's text retention limit. Callers must bound/private-store streamed data.
+type StreamingExecutor interface {
+	Stream(context.Context, Command, io.Writer, io.Writer) error
+}
+
 type Runner struct{}
+
+func (Runner) Stream(ctx context.Context, command Command, stdout, stderr io.Writer) error {
+	return run(ctx, command, stdout, stderr)
+}
 
 func (Runner) Run(ctx context.Context, command Command, output io.Writer) error {
 	return run(ctx, command, output, output)

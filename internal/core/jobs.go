@@ -70,6 +70,19 @@ func NewJobs(ctx context.Context, stateDir string) (*Jobs, error) {
 
 // Start permits one mutation at a time across all modules. Reads remain independent.
 func (j *Jobs) Start(tool, source string, run func(context.Context, io.Writer) (any, error)) (Job, error) {
+	return j.StartWithTimeout(tool, source, 0, run)
+}
+
+// StartWithTimeout accepts only trusted tool configuration, never a request field.
+// Zero retains the normal management deadline; every job remains bounded.
+func (j *Jobs) StartWithTimeout(tool, source string, timeout time.Duration, run func(context.Context, io.Writer) (any, error)) (Job, error) {
+	if timeout < 0 || timeout > 24*time.Hour {
+		return Job{}, Invalid("job timeout must be positive and at most 24 hours")
+	}
+	if timeout == 0 {
+		timeout = 30 * time.Minute
+	}
+
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.closed || j.ctx.Err() != nil {
@@ -100,7 +113,7 @@ func (j *Jobs) Start(tool, source string, run func(context.Context, io.Writer) (
 		return Job{}, err
 	}
 	id := hex.EncodeToString(idBytes[:])
-	ctx, cancel := context.WithTimeout(j.ctx, 30*time.Minute)
+	ctx, cancel := context.WithTimeout(j.ctx, timeout)
 	entry := &runningJob{job: Job{ID: id, Tool: tool, State: "running", CreatedAt: time.Now().UTC()}, output: NewTail(128 << 10), cancel: cancel, done: make(chan struct{}), source: source}
 	entry.lock = lock
 	if err := j.audit(entry, "running"); err != nil {

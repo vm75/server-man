@@ -3,6 +3,8 @@ package declarative
 import (
 	"context"
 	"io"
+	"time"
+
 	"server-man/internal/core"
 )
 
@@ -18,10 +20,11 @@ func RegisterBackup(r *core.Registry, c Coordinator) error {
 			}
 			return inventory, nil
 		}},
-		core.Tool{Name: "managed_backup_prepare", Title: "Prepare portable backup", Description: "Prepare a portable backup bundle containing authoritative configuration, declared storage data, referenced secret/asset files and native VM exports as a tracked job. Workloads can be gracefully quiesced during backup and resumed afterward.", Destructive: true, Fields: map[string]core.Field{
+		core.Tool{Name: "managed_backup_prepare", Title: "Capture backup inputs", Description: "Capture supported stopped-workload inputs into a private checksummed bundle for a reviewed revision. This initial capture is not a prepared/restorable backup: complete filesystem metadata, native exports and restore validation remain unfinished. Unresolved prerequisites block capture. Recovery of previously running workloads is attempted and failures are reported.", Destructive: true, JobTimeout: 24 * time.Hour, Fields: map[string]core.Field{
+			"revision":        core.StringField("Reviewed configuration revision", true, 64),
 			"destination":     core.StringField("Absolute path to backup destination directory", true, 4096),
 			"quiesce":         {Type: "boolean", Description: "Gracefully stop running workloads during backup and resume afterward"},
-			"deadlineSeconds": {Type: "integer", Description: "Backup timeout in seconds (30-86400, default 900)"},
+			"deadlineSeconds": {Type: "integer", Minimum: backupDeadlineMinimum(), Maximum: backupDeadlineMaximum(), Description: "Backup timeout in seconds (30-86400, default 900)"},
 		}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
 			if !r.AllowWrites {
 				return nil, &core.Error{Code: "writes_disabled", Status: 403, Message: "Backup preparation is disabled with management writes."}
@@ -33,6 +36,7 @@ func RegisterBackup(r *core.Registry, c Coordinator) error {
 			}
 			deadline := int(in.Number("deadlineSeconds"))
 			summary, err := c.PrepareBackup(ctx, BackupPrepareOptions{
+				Revision:        in.String("revision"),
 				Destination:     dest,
 				Quiesce:         quiesce,
 				DeadlineSeconds: deadline,
@@ -44,3 +48,6 @@ func RegisterBackup(r *core.Registry, c Coordinator) error {
 		}},
 	)
 }
+
+func backupDeadlineMinimum() *float64 { value := 30.0; return &value }
+func backupDeadlineMaximum() *float64 { value := 86400.0; return &value }

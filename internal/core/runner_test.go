@@ -1,13 +1,16 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +28,13 @@ func helperCommand(t *testing.T, mode string) Command {
 
 func TestRunnerHelperProcess(t *testing.T) {
 	switch os.Getenv("SERVER_MAN_TEST_HELPER") {
+	case "binary-stream":
+		block := bytes.Repeat([]byte{0, 1, 2, 255}, 32<<10)
+		for range 32 {
+			_, _ = os.Stdout.Write(block)
+		}
+		_, _ = io.WriteString(os.Stderr, "diagnostic-only")
+		os.Exit(0)
 	case "output":
 		fmt.Fprint(os.Stdout, `{"result":"ok"}`)
 		fmt.Fprint(os.Stderr, "diagnostic warning")
@@ -136,5 +146,31 @@ func TestRunnerTimeoutAndCaptureLimit(t *testing.T) {
 	}
 	if _, err := (Runner{}).Capture(context.Background(), helperCommand(t, "overflow")); err == nil {
 		t.Fatal("oversized capture accepted")
+	}
+}
+
+func TestStreamKeepsLargeBinaryDataSeparateFromDiagnostics(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stream.bin")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	hash := sha256.New()
+	diagnostic := NewTail(1024)
+	if err = (Runner{}).Stream(context.Background(), helperCommand(t, "binary-stream"), io.MultiWriter(f, hash), diagnostic); err != nil {
+		t.Fatal(err)
+	}
+	info, err := f.Stat()
+	if err != nil || info.Size() != 4<<20 {
+		t.Fatal(info, err)
+	}
+	expected := sha256.Sum256(bytes.Repeat([]byte{0, 1, 2, 255}, 1<<20))
+	if !bytes.Equal(hash.Sum(nil), expected[:]) {
+		t.Fatal("binary stream was truncated or contaminated")
+	}
+	text, truncated := diagnostic.Snapshot()
+	if truncated || text != "diagnostic-only" {
+		t.Fatal(text, truncated)
 	}
 }

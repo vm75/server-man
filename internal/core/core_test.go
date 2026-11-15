@@ -290,3 +290,51 @@ func awaitJob(t *testing.T, jobs *Jobs, id string) Job {
 		}
 	}
 }
+
+func TestTrustedJobTimeoutsRemainBoundedAndCannotBeSetByRequests(t *testing.T) {
+	jobs, err := NewJobs(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+	registry := NewRegistry(true, jobs)
+	observed := make(chan time.Duration, 1)
+	if err = registry.AddModule(Module{ID: "backup", Available: true}, Tool{Name: "backup_test", JobTimeout: 2 * time.Hour, Run: func(ctx context.Context, _ Input, _ io.Writer) (any, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return nil, errors.New("missing deadline")
+		}
+		observed <- time.Until(deadline)
+		return nil, nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = registry.Invoke(context.Background(), "backup_test", json.RawMessage(`{"timeout":86400}`), "test"); err == nil {
+		t.Fatal("request could set execution deadline")
+	}
+	result, err := registry.Invoke(context.Background(), "backup_test", json.RawMessage(`{}`), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := result.(map[string]any)["job"].(Job)
+	if completed := awaitJob(t, jobs, job.ID); completed.State != "succeeded" {
+		t.Fatal(completed)
+	}
+	remaining := <-observed
+	if remaining < 119*time.Minute || remaining > 2*time.Hour {
+		t.Fatal("trusted timeout did not reach job context", remaining)
+	}
+	for _, tool := range []Tool{{Name: "negative", JobTimeout: -time.Second}, {Name: "unbounded", JobTimeout: 25 * time.Hour}, {Name: "read", ReadOnly: true, JobTimeout: time.Hour}, {Name: "immediate", Immediate: true, JobTimeout: time.Hour}} {
+		tool.Run = func(context.Context, Input, io.Writer) (any, error) { return nil, nil }
+		if err = NewRegistry(true, jobs).AddModule(Module{ID: "invalid", Available: true}, tool); err == nil {
+			t.Fatal("invalid timeout policy accepted", tool.Name)
+		}
+	}
+	short, err := jobs.StartWithTimeout("short", "test", 10*time.Millisecond, func(ctx context.Context, _ io.Writer) (any, error) { <-ctx.Done(); return nil, ctx.Err() })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed := awaitJob(t, jobs, short.ID); completed.State != "cancelled" || !strings.Contains(completed.Error, "deadline") {
+		t.Fatal(completed)
+	}
+}

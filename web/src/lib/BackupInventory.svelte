@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { invokeTool } from './api'
+  import { invokeTool, startJob, type Job } from './api'
   import type { ConfigurationIssue } from './managed'
   interface Input {native?:{backend:string;name:string;project?:string;pool?:string;contentType?:string};runtimeState?:string;id:string;kind:string;strategy:string;path?:string;bundlePath?:string;resources:string[];required:boolean;sensitive:boolean;includedBy?:string;inspection:string;logicalBytes?:number;allocatedBytes?:number}
   interface Inventory {stage:string;revision:string;checkedAt:string;inputs:Input[];requirements:{resource:string;kind:string;description:string}[];exclusions:{kind:string;reason:string}[];issues:ConfigurationIssue[]}
@@ -13,6 +13,7 @@
   let quiesce=$state(true)
   let confirm=$state(false)
   let preparing=$state(false)
+  let activeJob=$state<string|null>(null)
   let prepareError=$state('')
   let summary=$state<BackupSummary|null>(null)
   let controller:AbortController|undefined
@@ -24,18 +25,33 @@
     finally{if(!stopped)busy=false}
   }
   async function prepareBundle(){
-    if(!destination.trim()||!confirm)return
+    if(!destination.trim()||!confirm||!inventory)return
     preparing=true;prepareError=''
     try{
-      const result=await invokeTool<BackupSummary>('managed_backup_prepare',{destination:destination.trim(),quiesce,confirm:true})
-      if(!stopped)summary=result
+      const job=await startJob('managed_backup_prepare',{revision:inventory.revision,destination:destination.trim(),quiesce,confirm:true})
+      if(!stopped)activeJob=job.id
     }catch(e){
-      if(!stopped)prepareError=e instanceof Error?e.message:'Backup preparation failed'
-    }finally{
-      if(!stopped)preparing=false
+      if(!stopped){prepareError=e instanceof Error?e.message:'Backup capture failed';preparing=false}
     }
   }
-  onMount(()=>()=>{stopped=true;controller?.abort()})
+  onMount(()=>{
+    const finished=async(event:Event)=>{
+      const job=(event as CustomEvent<Job>).detail
+      if(job.id!==activeJob)return
+      activeJob=null
+      try{
+        if(job.state==='succeeded'){
+          // Job-list events contain metadata only; retrieve the private result.
+          const completed=job.result ? job : await invokeTool<Job>('jobs_get',{id:job.id})
+          if(!completed.result)throw new Error('Capture finished but its result could not be read. Inspect job details.')
+          if(!stopped)summary=completed.result as BackupSummary
+        }else if(!stopped)prepareError=job.error||`Backup capture ${job.state}. Inspect job details and workload recovery status.`
+      }catch(e){if(!stopped)prepareError=e instanceof Error?e.message:'Could not read capture result'}
+      finally{if(!stopped)preparing=false}
+    }
+    window.addEventListener('server-man:job-finished',finished)
+    return ()=>{stopped=true;controller?.abort();window.removeEventListener('server-man:job-finished',finished)}
+  })
 </script>
 <section class="panel backup-inventory" aria-label="Backup inventory">
   <header><h2>Portable backup inventory</h2><button disabled={disabled||busy} onclick={review}>{busy?'Inspecting…':'Review backup inventory'}</button></header>
@@ -48,12 +64,12 @@
     <details><summary>Collection and restore requirements ({inventory.requirements.length})</summary><ul>{#each inventory.requirements as requirement}<li><strong>{requirement.resource} · {requirement.kind.replaceAll('_',' ')}</strong><p>{requirement.description}</p></li>{/each}</ul></details>
     <details><summary>Explicit exclusions ({inventory.exclusions.length})</summary><ul>{#each inventory.exclusions as exclusion}<li><strong>{exclusion.kind.replaceAll('_',' ')}</strong><p>{exclusion.reason}</p></li>{/each}</ul></details>
     <div class="prepare-section">
-      <h3>Prepare backup bundle</h3>
-      <p>Collect authoritative configuration, declared storage data, referenced secret/asset files and native VM exports into a verified, checksummed bundle.</p>
+      <h3>Capture backup inputs</h3>
+      <p>Capture supported inputs into a private checksummed bundle. This initial capture is not a prepared or restorable backup: complete filesystem metadata, native exports and restore validation remain unfinished. Published shares and unresolved prerequisites block capture.</p>
       {#if prepareError}<p class="form-error" role="alert">{prepareError}</p>{/if}
       {#if summary}
         <div class="summary-box" role="status">
-          <p><strong>Backup bundle prepared successfully.</strong></p>
+          <p><strong>Backup inputs captured. Restore readiness remains unverified.</strong></p>
           <p>Destination: {summary.destination}</p>
           <p>{summary.totalFiles} files · {summary.totalBytes} bytes · manifest checksum {summary.manifestChecksum.slice(0, 16)}…</p>
           {#if summary.resumedServices && summary.resumedServices.length > 0}
@@ -75,10 +91,10 @@
           </label>
           <label class="checkbox-label">
             <input type="checkbox" bind:checked={confirm} disabled={disabled || preparing} />
-            I acknowledge this creates a private backup bundle on disk
+            I acknowledge this writes private backup inputs and may stop running workloads
           </label>
           <button disabled={disabled || preparing || !destination.trim() || !confirm} onclick={prepareBundle}>
-            {preparing ? 'Preparing bundle…' : 'Prepare backup bundle'}
+            {preparing ? 'Capturing inputs…' : 'Capture backup inputs'}
           </button>
         </div>
       {/if}

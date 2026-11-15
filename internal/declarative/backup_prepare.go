@@ -20,6 +20,7 @@ import (
 )
 
 type BackupPrepareOptions struct {
+	Revision        string `json:"revision"`
 	Destination     string `json:"destination"`
 	Quiesce         bool   `json:"quiesce"`
 	DeadlineSeconds int    `json:"deadlineSeconds,omitempty"`
@@ -44,6 +45,7 @@ type BackupManifestNativeExport struct {
 }
 
 type BackupManifest struct {
+	VerificationRequired     []string                     `json:"verificationRequired"`
 	Version                  int                          `json:"version"`
 	Stage                    string                       `json:"stage"`
 	Revision                 string                       `json:"revision"`
@@ -82,7 +84,10 @@ type BackupExporter interface {
 }
 
 func copyFileSparseAndHash(src, dst string, mode os.FileMode) (BackupManifestFile, error) {
-	srcF, err := os.Open(src)
+	return copyBackupFile(context.Background(), src, dst, mode)
+}
+func copyBackupFile(ctx context.Context, src, dst string, mode os.FileMode) (BackupManifestFile, error) {
+	srcF, err := os.OpenFile(src, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return BackupManifestFile{}, err
 	}
@@ -97,7 +102,7 @@ func copyFileSparseAndHash(src, dst string, mode os.FileMode) (BackupManifestFil
 	if mode == 0 {
 		mode = info.Mode().Perm() & 0777
 	}
-	dstF, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	dstF, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_EXCL|syscall.O_NOFOLLOW, mode)
 	if err != nil {
 		return BackupManifestFile{}, err
 	}
@@ -107,8 +112,13 @@ func copyFileSparseAndHash(src, dst string, mode os.FileMode) (BackupManifestFil
 	buf := make([]byte, 128*1024)
 	var sparseOffset int64
 
+	var copied int64
 	for {
+		if err := ctx.Err(); err != nil {
+			return BackupManifestFile{}, err
+		}
 		n, rErr := srcF.Read(buf)
+		copied += int64(n)
 		if n > 0 {
 			chunk := buf[:n]
 			hasher.Write(chunk)
@@ -141,6 +151,10 @@ func copyFileSparseAndHash(src, dst string, mode os.FileMode) (BackupManifestFil
 			return BackupManifestFile{}, rErr
 		}
 	}
+	latest, e := srcF.Stat()
+	if e != nil || copied != info.Size() || latest.Size() != info.Size() || !latest.ModTime().Equal(info.ModTime()) {
+		return BackupManifestFile{}, errors.New("source changed while copying backup data")
+	}
 	if err := dstF.Truncate(info.Size()); err != nil {
 		return BackupManifestFile{}, err
 	}
@@ -156,6 +170,9 @@ func copyFileSparseAndHash(src, dst string, mode os.FileMode) (BackupManifestFil
 }
 
 func copyDirectory(ctx context.Context, srcDir, dstDir, bundlePrefix string, maxFiles int) ([]BackupManifestFile, error) {
+	if err := os.MkdirAll(dstDir, 0700); err != nil {
+		return nil, err
+	}
 	var files []BackupManifestFile
 	count := 0
 	err := filepath.WalkDir(srcDir, func(path string, d os.DirEntry, err error) error {
@@ -172,6 +189,10 @@ func copyDirectory(ctx context.Context, srcDir, dstDir, bundlePrefix string, max
 		if rel == "." {
 			return nil
 		}
+		count++
+		if count > maxFiles {
+			return errors.New("directory entry limit exceeded during backup copy")
+		}
 		dstPath := filepath.Join(dstDir, rel)
 		if d.IsDir() {
 			return os.MkdirAll(dstPath, 0700)
@@ -180,6 +201,9 @@ func copyDirectory(ctx context.Context, srcDir, dstDir, bundlePrefix string, max
 			target, err := os.Readlink(path)
 			if err != nil {
 				return err
+			}
+			if filepath.IsAbs(target) {
+				return errors.New("absolute symlinks cannot be relocated in a portable capture")
 			}
 			resolved := target
 			if !filepath.IsAbs(target) {
@@ -195,12 +219,8 @@ func copyDirectory(ctx context.Context, srcDir, dstDir, bundlePrefix string, max
 		if !d.Type().IsRegular() {
 			return fmt.Errorf("unsupported file type for %s", path)
 		}
-		count++
-		if count > maxFiles {
-			return errors.New("directory file limit exceeded during backup copy")
-		}
 		_ = os.MkdirAll(filepath.Dir(dstPath), 0700)
-		fileEntry, err := copyFileSparseAndHash(path, dstPath, 0)
+		fileEntry, err := copyBackupFile(ctx, path, dstPath, 0)
 		if err != nil {
 			return err
 		}
@@ -212,19 +232,28 @@ func copyDirectory(ctx context.Context, srcDir, dstDir, bundlePrefix string, max
 }
 
 func fileHash(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	return hashBackupFile(context.Background(), f)
+}
+func hashBackupFile(ctx context.Context, f *os.File) (string, error) {
+	if _, err := f.Seek(0, 0); err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	hash := sha256.New()
+	if _, err := io.Copy(hash, contextReader{ctx, f}); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOptions, out io.Writer) (BackupSummary, error) {
+func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOptions, out io.Writer) (summary BackupSummary, resultErr error) {
+	if !revisionPattern.MatchString(opts.Revision) {
+		return BackupSummary{}, core.Invalid("a reviewed configuration revision is required")
+	}
 	if opts.Destination == "" {
 		return BackupSummary{}, core.Invalid("missing destination path")
 	}
@@ -241,10 +270,25 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		return BackupSummary{}, core.Invalid("destination cannot be inside the configuration root directory")
 	}
 
+	parentReal, e := filepath.EvalSymlinks(filepath.Dir(cleanDest))
+	if e != nil {
+		return BackupSummary{}, core.Invalid("destination parent cannot be resolved")
+	}
+	sourceReal, e := filepath.EvalSymlinks(rootPath)
+	if e != nil {
+		return BackupSummary{}, core.Invalid("configuration root cannot be resolved")
+	}
+	relative, e := filepath.Rel(sourceReal, parentReal)
+	if e == nil && (relative == "." || relative != ".." && !strings.HasPrefix(relative, "../")) {
+		return BackupSummary{}, core.Invalid("destination resolves inside the configuration root")
+	}
 	destExisted := false
-	destInfo, err := os.Stat(cleanDest)
+	destInfo, err := os.Lstat(cleanDest)
 	if err == nil {
 		destExisted = true
+		if !destInfo.IsDir() || destInfo.Mode().Perm()&0077 != 0 {
+			return BackupSummary{}, core.Invalid("existing destination must be a private real directory")
+		}
 		if !destInfo.IsDir() {
 			return BackupSummary{}, core.Invalid("destination exists and is not a directory")
 		}
@@ -266,7 +310,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	}
 
 	deadline := opts.DeadlineSeconds
-	if deadline <= 0 {
+	if deadline == 0 {
 		deadline = 900
 	}
 	if deadline < 30 || deadline > 86400 {
@@ -276,6 +320,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	defer cancel()
 
 	j, err := c.ReadJournal()
+	if err != nil && !os.IsNotExist(err) {
+		return BackupSummary{}, errors.New("apply journal must be valid before backup preparation")
+	}
 	if err == nil && j.Stage != "complete" && j.Stage != "aborted" {
 		return BackupSummary{}, errors.New("cannot prepare backup while an incomplete apply is pending")
 	}
@@ -283,6 +330,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	snapshot, err := c.Store.Read()
 	if err != nil {
 		return BackupSummary{}, errors.New("a valid private configuration is required to prepare a backup")
+	}
+	if snapshot.Revision != opts.Revision {
+		return BackupSummary{}, ErrConflict
 	}
 	rawBytes, rev, err := c.Store.ReadRaw()
 	if err != nil || rev != snapshot.Revision {
@@ -294,11 +344,37 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		return BackupSummary{}, fmt.Errorf("backup inventory failed: %w", err)
 	}
 	for _, issue := range inventory.Issues {
-		if issue.Severity == "error" {
+		if issue.Severity != "warning" {
 			return BackupSummary{}, fmt.Errorf("backup blocked by unresolved issue on %s: %s", issue.Resource, issue.Message)
 		}
 	}
 
+	if inventory.Revision != snapshot.Revision {
+		return BackupSummary{}, ErrConflict
+	}
+	for _, share := range snapshot.Config.Shares {
+		if share.Enabled {
+			return BackupSummary{}, errors.New("published shares require a verified client-quiescence strategy before backup; no data was captured")
+		}
+	}
+	for _, input := range inventory.Inputs {
+		if input.Strategy == "external_data" {
+			return BackupSummary{}, errors.New("external data inclusion remains unresolved")
+		}
+		if input.Strategy == "native_export" && input.Required && input.IncludedBy == "" {
+			for _, resource := range input.Resources {
+				if _, ok := c.Adapters[backend(snapshot.Config, resource)].(BackupExporter); !ok {
+					return BackupSummary{}, errors.New("required native export support is unavailable; backup cannot be marked prepared")
+				}
+			}
+		}
+		if input.Strategy == "native_file" {
+			return BackupSummary{}, errors.New("native state paths require a verified capture strategy before backup")
+		}
+		if input.Strategy == "bundle_copy" && (input.BundlePath == "manifest.json" || input.BundlePath == "native" || strings.HasPrefix(input.BundlePath, "native/")) {
+			return BackupSummary{}, errors.New("backup data paths collide with reserved bundle metadata/export paths")
+		}
+	}
 	var requiredBytes uint64
 	for _, input := range inventory.Inputs {
 		if input.LogicalBytes != nil {
@@ -310,7 +386,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		targetFsDir = filepath.Dir(cleanDest)
 	}
 	var fs syscall.Statfs_t
-	if err := syscall.Statfs(targetFsDir, &fs); err == nil {
+	if err := syscall.Statfs(targetFsDir, &fs); err != nil {
+		return BackupSummary{}, errors.New("destination filesystem capacity could not be checked")
+	} else {
 		if fs.Flags&1 != 0 {
 			return BackupSummary{}, errors.New("destination filesystem is read-only")
 		}
@@ -321,11 +399,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	}
 
 	var stagingDir string
-	if destExisted {
-		stagingDir, err = os.MkdirTemp(cleanDest, ".staging-backup-*")
-	} else {
-		stagingDir, err = os.MkdirTemp(filepath.Dir(cleanDest), ".staging-backup-*")
-	}
+	stagingDir, err = os.MkdirTemp(filepath.Dir(cleanDest), ".staging-backup-*")
 	if err != nil {
 		return BackupSummary{}, fmt.Errorf("create staging directory: %w", err)
 	}
@@ -342,14 +416,21 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	for id := range snapshot.Config.Services {
 		key := "service/" + id
 		adapter := c.Adapters[backend(snapshot.Config, key)]
-		if adapter != nil {
-			obs, err := adapter.Inspect(bCtx, snapshot.Config, key)
-			if err == nil && obs.Active {
-				runningWorkloads = append(runningWorkloads, id)
-			}
+		if adapter == nil {
+			return BackupSummary{}, errors.New("every service needs an available backend to establish a consistent backup boundary")
+		}
+		obs, inspectErr := adapter.Inspect(bCtx, snapshot.Config, key)
+		if inspectErr != nil {
+			return BackupSummary{}, errors.New("service runtime state could not be established before backup")
+		}
+		if obs.Active {
+			runningWorkloads = append(runningWorkloads, id)
 		}
 	}
 	slices.Sort(runningWorkloads)
+	if !opts.Quiesce && len(runningWorkloads) > 0 {
+		return BackupSummary{}, errors.New("running workloads must be quiesced; live copies are not consistent backups")
+	}
 
 	ordered := orderedResources(snapshot.Config)
 	runningSet := map[string]bool{}
@@ -370,6 +451,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	quiesced := map[string]bool{}
 	var resumed []string
 	var failedResume []string
+	resumeFailed := map[string]bool{}
 
 	resumeWorkloads := func() {
 		if len(quiesced) == 0 {
@@ -383,19 +465,38 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 				if quiesced[id] {
 					key := "service/" + id
 					adapter := c.Adapters[backend(snapshot.Config, key)]
-					if life, ok := adapter.(LifecycleAdapter); ok {
-						if err := life.Action(resumeCtx, snapshot.Config, key, "start"); err != nil {
-							failedResume = append(failedResume, id)
-						} else {
-							resumed = append(resumed, id)
+					blocked := false
+					for _, dependency := range snapshot.Config.Services[id].DependsOn {
+						blocked = blocked || resumeFailed[dependency]
+					}
+					life, ok := adapter.(LifecycleAdapter)
+					var resumeErr error
+					if !blocked && ok {
+						resumeErr = life.Action(resumeCtx, snapshot.Config, key, "start")
+						if resumeErr == nil {
+							observed, err := adapter.Inspect(resumeCtx, snapshot.Config, key)
+							if err != nil || !observed.Active {
+								resumeErr = errors.New("resumed workload active state did not verify")
+							}
 						}
+					}
+					if blocked || !ok || resumeErr != nil {
+						failedResume = append(failedResume, id)
+						resumeFailed[id] = true
+					} else {
+						resumed = append(resumed, id)
 					}
 					delete(quiesced, id)
 				}
 			}
 		}
 	}
-	defer resumeWorkloads()
+	defer func() {
+		resumeWorkloads()
+		if len(failedResume) > 0 {
+			resultErr = errors.Join(resultErr, fmt.Errorf("previously running workloads need recovery: %s", strings.Join(failedResume, ", ")))
+		}
+	}()
 
 	if opts.Quiesce {
 		for _, id := range toStop {
@@ -408,10 +509,16 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 			if !ok {
 				return BackupSummary{}, fmt.Errorf("service %s does not support lifecycle operations", id)
 			}
+			// A failed/cancelled stop may already have changed runtime state.
+			// Include the attempted workload in recovery before issuing it.
+			quiesced[id] = true
 			if err := life.Action(bCtx, snapshot.Config, key, "stop"); err != nil {
 				return BackupSummary{}, fmt.Errorf("failed to quiesce service %s: %w", id, err)
 			}
-			quiesced[id] = true
+			observed, e := adapter.Inspect(bCtx, snapshot.Config, key)
+			if e != nil || observed.Active {
+				return BackupSummary{}, errors.New("workload did not reach a verified stopped state for backup")
+			}
 		}
 	}
 
@@ -432,7 +539,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	var manifestNativeExports []BackupManifestNativeExport
 
 	configDst := filepath.Join(stagingDir, "server-man.yaml")
-	if err := os.WriteFile(configDst, rawBytes, 0600); err != nil {
+	if err := writeBackupMetadata(configDst, rawBytes); err != nil {
 		return BackupSummary{}, fmt.Errorf("write bundle configuration: %w", err)
 	}
 	configInfo, err := os.Stat(configDst)
@@ -462,28 +569,26 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 					return BackupSummary{}, fmt.Errorf("copy directory %s: %w", input.ID, err)
 				}
 				manifestFiles = append(manifestFiles, dirFiles...)
-			} else if input.Kind == "file" || input.Kind == "private_file" {
+			} else if input.Kind == "file" || input.Kind == "private_file" || input.Kind == "image_asset" {
 				mode := os.FileMode(0)
 				if input.Kind == "private_file" {
 					mode = 0600
 				}
 				_ = os.MkdirAll(filepath.Dir(targetDst), 0700)
-				fileEntry, err := copyFileSparseAndHash(input.Path, targetDst, mode)
+				fileEntry, err := copyBackupFile(bCtx, input.Path, targetDst, mode)
 				if err != nil {
 					return BackupSummary{}, fmt.Errorf("copy file %s: %w", input.ID, err)
+				}
+				if input.Kind == "image_asset" {
+					_, storageID, _ := strings.Cut(input.ID, "/")
+					source := snapshot.Config.Storage[storageID].Source
+					if source == nil || fileEntry.SHA256 != source.SHA256 {
+						return BackupSummary{}, errors.New("initial image checksum does not match configuration")
+					}
 				}
 				fileEntry.BundlePath = filepath.ToSlash(input.BundlePath)
 				manifestFiles = append(manifestFiles, fileEntry)
 			}
-		} else if input.Strategy == "native_file" && input.Path != "" {
-			targetDst := filepath.Join(stagingDir, input.BundlePath)
-			_ = os.MkdirAll(filepath.Dir(targetDst), 0700)
-			fileEntry, err := copyFileSparseAndHash(input.Path, targetDst, 0600)
-			if err != nil {
-				return BackupSummary{}, fmt.Errorf("copy native state file %s: %w", input.ID, err)
-			}
-			fileEntry.BundlePath = filepath.ToSlash(input.BundlePath)
-			manifestFiles = append(manifestFiles, fileEntry)
 		}
 	}
 
@@ -496,6 +601,9 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 				return BackupSummary{}, fmt.Errorf("native export for %s: %w", id, err)
 			}
 			for _, exp := range exports {
+				if err := verifyBackupExport(bCtx, stagingDir, exp); err != nil {
+					return BackupSummary{}, err
+				}
 				manifestNativeExports = append(manifestNativeExports, BackupManifestNativeExport{
 					Resource:   key,
 					Backend:    snapshot.Config.Services[id].Backend,
@@ -509,11 +617,31 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 	}
 
+	for _, input := range inventory.Inputs {
+		if input.Strategy != "native_export" || !input.Required || input.IncludedBy != "" {
+			continue
+		}
+		covered := false
+		for _, exported := range manifestNativeExports {
+			if input.Native != nil && exported.Native != nil && *input.Native == *exported.Native && input.Kind == exported.Kind && slices.Contains(input.Resources, exported.Resource) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return BackupSummary{}, fmt.Errorf("required native input %s has no verified matching export", input.ID)
+		}
+	}
+
+	if _, current, e := c.Store.ReadRaw(); e != nil || current != snapshot.Revision {
+		return BackupSummary{}, ErrConflict
+	}
 	resumeWorkloads()
 
 	manifest := BackupManifest{
+		VerificationRequired:     []string{"Owner/group, ACL, xattr/SELinux, directory and link metadata require complete capture/validation before this bundle can be marked prepared."},
 		Version:                  1,
-		Stage:                    "prepared",
+		Stage:                    "captured",
 		Revision:                 snapshot.Revision,
 		CreatedAt:                time.Now().UTC(),
 		ServerManVersion:         buildinfo.Version,
@@ -529,7 +657,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		return BackupSummary{}, fmt.Errorf("serialize manifest: %w", err)
 	}
 	manifestPath := filepath.Join(stagingDir, "manifest.json")
-	if err := os.WriteFile(manifestPath, manifestBytes, 0600); err != nil {
+	if err := writeBackupMetadata(manifestPath, manifestBytes); err != nil {
 		return BackupSummary{}, fmt.Errorf("write manifest: %w", err)
 	}
 	manifestChecksum := digest(manifestBytes)
@@ -538,24 +666,21 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		return BackupSummary{}, err
 	}
 
-	if destExisted {
-		entries, err := os.ReadDir(stagingDir)
-		if err != nil {
-			return BackupSummary{}, err
-		}
-		for _, entry := range entries {
-			src := filepath.Join(stagingDir, entry.Name())
-			dst := filepath.Join(cleanDest, entry.Name())
-			if err := os.Rename(src, dst); err != nil {
-				return BackupSummary{}, fmt.Errorf("publish bundle entry %s: %w", entry.Name(), err)
-			}
-		}
-		_ = os.Remove(stagingDir)
-	} else {
-		if err := os.Rename(stagingDir, cleanDest); err != nil {
-			return BackupSummary{}, fmt.Errorf("publish bundle to destination: %w", err)
-		}
+	// Linux rename atomically replaces an empty destination directory; os.Rename
+	// rejects an existing directory before reaching that kernel operation.
+	if err = syscall.Rename(stagingDir, cleanDest); err != nil {
+		return BackupSummary{}, errors.New("bundle publication failed; destination must remain absent or empty")
 	}
+	directory, e := os.Open(filepath.Dir(cleanDest))
+	if e != nil {
+		return BackupSummary{}, errors.New("bundle published but parent sync failed; inspect destination before retry")
+	}
+	e = directory.Sync()
+	directory.Close()
+	if e != nil {
+		return BackupSummary{}, errors.New("bundle published but parent sync failed; inspect destination before retry")
+	}
+
 	success = true
 
 	totalFiles := len(manifest.Files) + len(manifest.NativeExports) + 1
@@ -568,7 +693,7 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	}
 
 	return BackupSummary{
-		Stage:            "prepared",
+		Stage:            "captured",
 		Destination:      cleanDest,
 		Revision:         snapshot.Revision,
 		PreparedAt:       manifest.CreatedAt,
@@ -579,4 +704,16 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		ResumedServices:  resumed,
 		FailedResume:     failedResume,
 	}, nil
+}
+
+func writeBackupMetadata(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0600)
+	if err != nil {
+		return err
+	}
+	_, writeErr := f.Write(data)
+	if writeErr == nil {
+		writeErr = f.Sync()
+	}
+	return errors.Join(writeErr, f.Close())
 }

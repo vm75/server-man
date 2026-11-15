@@ -19,6 +19,7 @@ type Module struct {
 }
 
 type Tool struct {
+	JobTimeout  time.Duration                                        `json:"-"`
 	Name        string                                               `json:"name"`
 	Module      string                                               `json:"module"`
 	Title       string                                               `json:"title"`
@@ -60,6 +61,9 @@ func (r *Registry) AddModule(module Module, tools ...Tool) error {
 		}
 		if _, exists := r.tools[tool.Name]; exists || seen[tool.Name] {
 			return fmt.Errorf("duplicate tool %q", tool.Name)
+		}
+		if tool.JobTimeout < 0 || tool.JobTimeout > 24*time.Hour || tool.JobTimeout != 0 && (tool.ReadOnly || tool.Immediate) {
+			return fmt.Errorf("invalid job timeout for tool %q", tool.Name)
 		}
 		if tool.ReadOnly && tool.Destructive {
 			return fmt.Errorf("read-only tool %q cannot be destructive", tool.Name)
@@ -160,7 +164,7 @@ func (r *Registry) Invoke(ctx context.Context, name string, raw json.RawMessage,
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			job, err := r.jobs.Start(tool.Name, source, func(ctx context.Context, out io.Writer) (any, error) { return tool.Run(ctx, input, out) })
+			job, err := r.jobs.StartWithTimeout(tool.Name, source, tool.JobTimeout, func(ctx context.Context, out io.Writer) (any, error) { return tool.Run(ctx, input, out) })
 			if err != nil {
 				return nil, err
 			}

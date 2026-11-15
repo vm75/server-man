@@ -18,6 +18,7 @@ const failures = []
 const sampleTimes = new Set()
 const managementCalls = []
 const deniedByServer = []
+const backupJobResults = new Map()
 let fixtureMode = false
 let readinessScenario = 'blocked'
 
@@ -195,7 +196,7 @@ async function exerciseManagement(page) {
   assert.equal(submitted.shares_setup?.confirm, true)
   assert.equal(submitted.dependencies_install?.target, 'podman')
   assert.equal(submitted.dependencies_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['managed_resource_save', 'managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
+  assert.deepEqual(deniedByServer.sort(), ['managed_backup_prepare', 'managed_backup_prepare', 'managed_resource_save', 'managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
   // The alert stays mounted on every page; rechecks clear only resolved issues.
   const beforeRepairCalls = managementCalls.length
   readinessScenario = 'unknown'
@@ -221,11 +222,27 @@ async function exerciseBackupInventory(page) {
   await inventory.getByRole('button',{name:'Review backup inventory',exact:true}).click()
   await inventory.getByText(/Stage: inventory/).waitFor()
   await inventory.getByText('Inventory instance and attached volume exports before backup.',{exact:true}).waitFor()
-  await inventory.getByRole('heading',{name:'Prepare backup bundle',exact:true}).waitFor()
+  await inventory.getByRole('heading',{name:'Capture backup inputs',exact:true}).waitFor()
   await inventory.getByText('storage/documents',{exact:true}).waitFor()
   await inventory.getByText('Native object: incus · sm-guest · project managed · pool default',{exact:true}).waitFor()
   await inventory.getByText('Observed state: stopped',{exact:true}).waitFor()
   assert.equal(managementCalls.length,calls,'backup inventory must not mutate workloads or create a bundle')
+  await inventory.getByLabel('Destination directory (absolute path)',{exact:true}).fill('/tmp/server-man-ui-capture')
+  await inventory.getByLabel('I acknowledge this writes private backup inputs and may stop running workloads',{exact:true}).check()
+  await inventory.getByRole('button',{name:'Capture backup inputs',exact:true}).click()
+  await inventory.getByRole('button',{name:'Capturing inputs…',exact:true}).waitFor()
+  assert.deepEqual(managementCalls.at(-1),{tool:'managed_backup_prepare',args:{revision:'a'.repeat(64),destination:'/tmp/server-man-ui-capture',quiesce:true,confirm:true}})
+  assert.equal(await inventory.getByText('Backup inputs captured. Restore readiness remains unverified.',{exact:true}).count(),0,'submission must not be shown as completion')
+  await page.evaluate(id=>window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool:'managed_backup_prepare',state:'failed',error:'Fixture: guest needs recovery'}})),`fixture-${managementCalls.length}`)
+  await inventory.getByText('Fixture: guest needs recovery',{exact:true}).waitFor()
+  await inventory.getByRole('button',{name:'Capture backup inputs',exact:true}).click()
+  await inventory.getByRole('button',{name:'Capturing inputs…',exact:true}).waitFor()
+  const completedID=`fixture-${managementCalls.length}`
+  backupJobResults.set(completedID,{id:completedID,tool:'managed_backup_prepare',state:'succeeded',result:{stage:'captured',destination:'/tmp/server-man-ui-capture',revision:'a'.repeat(64),preparedAt:new Date().toISOString(),totalFiles:3,totalBytes:123,manifestChecksum:'b'.repeat(64),quiesced:true,resumedServices:['app']}})
+  // Production list events omit results; the component must fetch jobs_get.
+  await page.evaluate(id=>window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool:'managed_backup_prepare',state:'succeeded'}})),completedID)
+  await inventory.getByText('Backup inputs captured. Restore readiness remains unverified.',{exact:true}).waitFor()
+
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'backup inventory overflows')
 }
 
@@ -292,12 +309,16 @@ try {
       if (fixtureMode && url.pathname.startsWith('/api/tools/') && request.method() === 'POST') {
         const tool = decodeURIComponent(url.pathname.split('/').at(-1))
         const args = JSON.parse(request.postData() ?? '{}')
+        if (tool === 'jobs_get' && backupJobResults.has(args.id)) {
+          await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(backupJobResults.get(args.id))})
+          return
+        }
         if (tool.startsWith('jobs_')) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
           return
         }
-        if (['services_stop', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
+        if (['services_stop', 'managed_backup_prepare', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
           assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)
