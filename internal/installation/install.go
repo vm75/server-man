@@ -88,6 +88,23 @@ func distributionID(data string) string {
 	return ""
 }
 
+// hostUnits is shared by the reviewed plan and execution. Docker's socket is
+// enabled for the early sockets target before boot-only user launchers run.
+func hostUnits(backends []string) []string {
+	var units []string
+	for _, backend := range backends {
+		switch backend {
+		case "docker":
+			units = append(units, "docker.socket", "docker.service")
+		case "virtualization":
+			units = append(units, "libvirtd.socket")
+		case "incus":
+			units = append(units, "incus.socket")
+		}
+	}
+	return units
+}
+
 func Run(ctx context.Context, args []string, in io.Reader, out io.Writer) error {
 	if len(args) == 2 && args[0] == "--initialize-config" {
 		return initializeConfig(args[1])
@@ -159,6 +176,7 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		}
 	}
 	fmt.Fprintf(out, "Account: %s (%s)\nBackends: %s\nPackage manager: %s\nPackages: %s\nSkip package installation: %t\nGroups: %s\n", p.Account, p.UID, strings.Join(targets, ", "), manager, strings.Join(packages, " "), *skip, strings.Join(p.Groups, ", "))
+	fmt.Fprintln(out, "Host units to enable/start:", strings.Join(hostUnits(targets), ", "))
 	fmt.Fprintln(out, "Install: /usr/local/bin/server-man, /usr/local/libexec/server-man-admin, /usr/local/sbin/server-man-install")
 	fmt.Fprintf(out, "Privilege rule: %s ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/server-man-admin \"\"\n", p.Account)
 	fmt.Fprintln(out, "Enable lingering and server-man.service as the workload account, with loopback access and management writes. Docker/Incus groups and helper operations grant broad host control. Package installation can start daemons; Arch uses a full system upgrade. Existing configuration is preserved. Incus pools/networks and shares are not initialized.")
@@ -367,20 +385,9 @@ func (p plan) apply(ctx context.Context, out io.Writer) error {
 			}
 		}
 	}
-	for _, target := range p.Backends {
-		service := ""
-		switch target {
-		case "docker":
-			service = "docker.service"
-		case "virtualization":
-			service = "libvirtd.socket"
-		case "incus":
-			service = "incus.socket"
-		}
-		if service != "" {
-			if err = run(ctx, out, "systemctl", "enable", "--now", service); err != nil {
-				return err
-			}
+	for _, unit := range hostUnits(p.Backends) {
+		if err = run(ctx, out, "systemctl", "enable", "--now", unit); err != nil {
+			return err
 		}
 	}
 

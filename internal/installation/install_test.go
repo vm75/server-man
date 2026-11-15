@@ -139,3 +139,13 @@ func TestInitialConfigurationPrivateAndPreserved(t *testing.T) {
 		t.Fatal("invalid existing config silently accepted")
 	}
 }
+
+func TestSelectedHostUnitsIncludeDockerSocketWithoutShareExposure(t *testing.T) {
+	units := hostUnits([]string{"podman", "docker", "virtualization", "incus", "samba", "nfs"})
+	if !slices.Equal(units, []string{"docker.socket", "docker.service", "libvirtd.socket", "incus.socket"}) {
+		t.Fatal(units)
+	}
+	if got := hostUnits([]string{"podman", "samba", "nfs"}); len(got) != 0 {
+		t.Fatal("rootless Podman/share selection should not activate system daemons", got)
+	}
+}

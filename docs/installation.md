@@ -26,7 +26,7 @@ The release includes static `server-man`, `server-man-admin` and `server-man-ins
 
 Choose `--backends podman,docker,virtualization,incus,samba,nfs` or a subset. `--skip-packages` skips repository refresh/install; required backend groups must already exist. `--yes` explicitly accepts the displayed plan without prompting. Without it, the tool asks before mutations. The plan includes packages, group grants, helper sudo policy, service and lingering. Installation may start native daemons. Arch package installation performs a full system upgrade to avoid partial upgrades. No repositories are added and package signature checks remain enabled. Missing repository packages fail explicitly.
 
-The installer installs root-owned executables, validates the exact helper rule, adds selected Docker/Incus/libvirt groups, creates initial private unified YAML configuration and enables lingering. Existing configuration is preserved and validated, including listen address/write policy. A new configuration enables writes and privileged operations on loopback. Selected Docker, libvirt and Incus daemon/socket units are enabled; Samba/NFS exposure remains explicit. The helper and Docker/Incus groups provide broad host administration privileges.
+The installer installs root-owned executables, validates the exact helper rule, adds selected Docker/Incus/libvirt groups, creates initial private unified YAML configuration and enables lingering. Existing configuration is preserved and validated, including listen address/write policy. A new configuration enables writes and privileged operations on loopback. Selected Docker, libvirt and Incus daemon/socket units are enabled. Docker setup explicitly enables both `docker.socket` and `docker.service`; Samba/NFS exposure remains explicit. The helper and Docker/Incus groups provide broad host administration privileges.
 
 The installed **system service runs as the selected workload account**, with its home and user bus, so rootless Podman still belongs to that account. Systemd obtains current supplementary groups at service start without restarting the account's desktop session. The installer stops/disables an existing server-man user service to avoid duplicate listeners. It never restarts the user manager or logs you out.
 
@@ -151,3 +151,7 @@ For historical host configuration and verification, see the
 ## First Ubuntu deployment
 
 See the [current deployment record](operations/ubuntu-first-deployment.md) for application access, installed dependencies and remaining provider setup. Debian and Arch Linux remain support targets without native acceptance evidence.
+
+## Docker boot readiness
+
+Managed Docker Compose boot launchers run in the workload account's user manager. The installer explicitly enables `docker.socket` at the system sockets target as well as `docker.service`, so the local API socket participates in early host startup. It does not restart an already active Docker daemon. Readiness checks treat a missing, disabled, runtime-only or unreadable socket unit as a boot prerequisite to resolve. This blocks Enable boot startup while keeping current-run Start available when the engine is reachable. Rerun the installer with Docker selected or enable the native socket through host service setup, then recheck. Native reboot/daemon-restart acceptance remains a separate validation gate.

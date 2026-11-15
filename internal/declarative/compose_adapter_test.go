@@ -3,11 +3,14 @@ package declarative
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 	"server-man/internal/core"
@@ -248,5 +251,70 @@ func TestComposeRemovesOnlyStoppedOwnedMembersWithoutVolumes(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("stale stopped member not removed")
+	}
+}
+
+type dockerSocketRecorder struct {
+	composeRecorder
+	output  string
+	failure error
+}
+
+func (r *dockerSocketRecorder) Capture(ctx context.Context, cmd core.Command) (string, error) {
+	if slices.Contains(cmd.Args, "docker.socket") {
+		r.commands = append(r.commands, cmd)
+		return r.output, r.failure
+	}
+	return r.composeRecorder.Capture(ctx, cmd)
+}
+
+func TestDockerBootSocketReadinessIsBoundedAndNotARuntimeBlocker(t *testing.T) {
+	for _, tc := range []struct {
+		name, output, code, severity string
+		failure                      error
+	}{
+		{name: "enabled", output: "LoadState=loaded\nUnitFileState=enabled\n"},
+		{name: "disabled", output: "LoadState=loaded\nUnitFileState=disabled\n", code: "docker_socket_disabled", severity: "error"},
+		{name: "runtime only", output: "LoadState=loaded\nUnitFileState=enabled-runtime\n", code: "docker_socket_disabled", severity: "error"},
+		{name: "missing", output: "LoadState=not-found\nUnitFileState=\n", code: "docker_socket_disabled", severity: "error"},
+		{name: "malformed", output: "private-probe-output", code: "docker_socket_unknown", severity: "unknown"},
+		{name: "failed", failure: errors.New("private-probe-output"), code: "docker_socket_unknown", severity: "unknown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := &dockerSocketRecorder{output: tc.output, failure: tc.failure}
+			p := &Compose{Engine: "docker", Systemctl: "/usr/bin/systemctl", Runner: recorder}
+			issues := p.dockerBootIssues(context.Background())
+			if tc.code == "" {
+				if len(issues) != 0 {
+					t.Fatal(issues)
+				}
+			} else {
+				if len(issues) != 1 || issues[0].Code != tc.code || issues[0].Severity != tc.severity || issues[0].Field != "autostart" || issues[0].Resource != "backend/docker/compose" {
+					t.Fatal(issues)
+				}
+				if strings.Contains(issues[0].Message+issues[0].Remedy, "private-probe-output") {
+					t.Fatal("probe output exposed")
+				}
+				c, cfg, _ := coordinatorFixture(t)
+				service := cfg.Services["website"]
+				service.Engine = "docker"
+				service.Backend = "compose"
+				cfg.Services["website"] = service
+				c.Adapters = map[string]Adapter{"docker/compose": &probeAdapter{issues: issues}}
+				if err := c.readinessError(context.Background(), cfg, "website", false); err != nil {
+					t.Fatal("boot prerequisite blocked current-run start", err)
+				}
+				if err := c.readinessError(context.Background(), cfg, "website", true); err == nil {
+					t.Fatal("boot prerequisite allowed enablement")
+				}
+			}
+			if len(recorder.commands) != 1 {
+				t.Fatal(recorder.commands)
+			}
+			cmd := recorder.commands[0]
+			if cmd.Timeout > 3*time.Second || cmd.Timeout <= 0 || slices.Contains(cmd.Args, "--user") || !slices.Contains(cmd.Args, "docker.socket") {
+				t.Fatal(cmd)
+			}
+		})
 	}
 }

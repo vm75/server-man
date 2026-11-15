@@ -401,7 +401,40 @@ func (p *Compose) Prerequisites(ctx context.Context) []Issue {
 		}
 	}
 	issues = append(issues, userManagerIssues(ctx, p.Systemctl, p.Runner, p.Engine+"/compose")...)
+	if p.Engine == "docker" && p.Systemctl != "" {
+		issues = append(issues, p.dockerBootIssues(ctx)...)
+	}
 	return issues
+}
+
+// The system socket participates in early host boot; user units cannot order
+// themselves against system-manager daemon units. Current-run access is checked
+// separately, so this prerequisite only blocks automatic startup policy.
+func (p *Compose) dockerBootIssues(ctx context.Context) []Issue {
+	issue := Issue{"unknown", "backend/docker/compose", "autostart", "docker_socket_unknown", "Docker's boot socket could not be checked.", "Check the system docker.socket unit or rerun the installer with Docker selected, then recheck."}
+	result, err := p.Runner.Capture(ctx, core.Command{Program: p.Systemctl, Args: []string{"--no-pager", "--no-ask-password", "show", "docker.socket", "--property=LoadState,UnitFileState"}, Timeout: 3 * time.Second})
+	if err != nil {
+		return []Issue{issue}
+	}
+	properties := map[string]string{}
+	for _, line := range strings.Split(result, "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if ok {
+			properties[key] = value
+		}
+	}
+	if properties["LoadState"] == "loaded" && properties["UnitFileState"] == "enabled" {
+		return nil
+	}
+	_, loadKnown := properties["LoadState"]
+	_, stateKnown := properties["UnitFileState"]
+	if !loadKnown || !stateKnown {
+		return []Issue{issue}
+	}
+	issue.Severity = "error"
+	issue.Code = "docker_socket_disabled"
+	issue.Message = "Docker's system socket is missing or not persistently enabled for boot."
+	return []Issue{issue}
 }
 
 func (p *Compose) Action(ctx context.Context, c Config, key, action string) error {
