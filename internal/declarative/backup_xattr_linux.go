@@ -3,60 +3,26 @@ package declarative
 import (
 	"bytes"
 	"errors"
+	"golang.org/x/sys/unix"
 	"os"
-	"runtime"
 	"syscall"
 	"unicode/utf8"
-	"unsafe"
 )
 
 const maxBackupXattrBytes = 64 << 10
 
-// The frozen syscall package does not wrap the FD/no-follow xattr variants.
-// Keep these Linux read-only bindings here; no attributes are applied to host
-// files. FD variants pin regular files/directories, L variants pin the final
-// symlink through its held parent descriptor.
+// Use maintained Linux FD/no-follow bindings; attributes are read only.
 func backupXattrCall(fd *os.File, path, name string, buffer []byte, list bool) (int, error) {
-	var data unsafe.Pointer
-	if len(buffer) > 0 {
-		data = unsafe.Pointer(&buffer[0])
-	}
-	var result uintptr
-	var errno syscall.Errno
 	if fd != nil {
 		if list {
-			result, _, errno = syscall.Syscall(syscall.SYS_FLISTXATTR, fd.Fd(), uintptr(data), uintptr(len(buffer)))
-		} else {
-			attribute, err := syscall.BytePtrFromString(name)
-			if err != nil {
-				return 0, err
-			}
-			result, _, errno = syscall.Syscall6(syscall.SYS_FGETXATTR, fd.Fd(), uintptr(unsafe.Pointer(attribute)), uintptr(data), uintptr(len(buffer)), 0, 0)
-			runtime.KeepAlive(attribute)
+			return unix.Flistxattr(int(fd.Fd()), buffer)
 		}
-	} else {
-		location, err := syscall.BytePtrFromString(path)
-		if err != nil {
-			return 0, err
-		}
-		if list {
-			result, _, errno = syscall.Syscall(syscall.SYS_LLISTXATTR, uintptr(unsafe.Pointer(location)), uintptr(data), uintptr(len(buffer)))
-		} else {
-			attribute, err := syscall.BytePtrFromString(name)
-			if err != nil {
-				return 0, err
-			}
-			result, _, errno = syscall.Syscall6(syscall.SYS_LGETXATTR, uintptr(unsafe.Pointer(location)), uintptr(unsafe.Pointer(attribute)), uintptr(data), uintptr(len(buffer)), 0, 0)
-			runtime.KeepAlive(attribute)
-		}
-		runtime.KeepAlive(location)
+		return unix.Fgetxattr(int(fd.Fd()), name, buffer)
 	}
-	runtime.KeepAlive(buffer)
-	runtime.KeepAlive(fd)
-	if errno != 0 {
-		return 0, errno
+	if list {
+		return unix.Llistxattr(path, buffer)
 	}
-	return int(result), nil
+	return unix.Lgetxattr(path, name, buffer)
 }
 
 func readBackupXattrs(fd *os.File, linkPath string) (map[string][]byte, string, error) {

@@ -16,14 +16,17 @@
   let activeJob=$state<string|null>(null)
   let prepareError=$state('')
   let summary=$state<BackupSummary|null>(null)
-  interface Recovery {currentRevision?:string;journal?:{revision:string;destination:string;stage:string;updatedAt:string;services:Record<string,string>};reviewToken?:string}
+  interface Recovery {currentRevision?:string;journal?:{revision:string;destination:string;stage:string;updatedAt:string;services:Record<string,string>;artifact?:{stage:string;stagingPath:string;manifestChecksum?:string}};reviewToken?:string}
   let recovery=$state<Recovery|null>(null)
   let recoveryError=$state('')
   let recoveryActionError=$state('')
   let recoveryChecking=$state(false)
   let recoveryConfirm=$state(false)
   let recoveryJob=$state<string|null>(null)
-  const recoveryPending=$derived(!!recovery?.journal && recovery.journal.stage!=='complete' && recovery.journal.stage!=='released')
+  let recoveryKind=$state<'resume'|'release'>('resume')
+  const publicationPending=$derived(!!recovery?.journal?.artifact && !['published','discarded','released'].includes(recovery.journal.artifact.stage))
+  const workloadsPending=$derived(!!recovery?.journal && !['complete','released'].includes(recovery.journal.stage))
+  const recoveryPending=$derived(workloadsPending||publicationPending)
   async function loadRecovery(){
     if(disabled)return
     recoveryChecking=true;recoveryConfirm=false
@@ -33,7 +36,7 @@
   }
   async function recover(resume=true){
     if(!recovery?.journal||!recovery.reviewToken||!recoveryConfirm)return
-    recoveryActionError=''
+    recoveryActionError='';recoveryKind=resume?'resume':'release'
     try{const job=await startJob(resume?'managed_backup_recover':'managed_backup_release',{revision:resume?recovery.journal.revision:recovery.currentRevision,reviewToken:recovery.reviewToken,confirm:true});if(!stopped)recoveryJob=job.id}
     catch(e){if(!stopped)recoveryActionError=e instanceof Error?e.message:'Could not resume backup workloads'}
   }
@@ -89,11 +92,17 @@
     {#if recoveryPending && recovery?.journal}
       <p role="alert">A backup capture was interrupted or workloads still need recovery. Managed changes are blocked until recovery completes.</p>
       <p>Configuration {recovery.journal.revision.slice(0,12)} · destination {recovery.journal.destination} · updated {new Date(recovery.journal.updatedAt).toLocaleString()}</p>
+      {#if recovery.journal.artifact}
+        <p>Recorded publication phase: {recovery.journal.artifact.stage}</p>
+        <p>Recorded staging location: {recovery.journal.artifact.stagingPath}</p>
+        {#if recovery.journal.artifact.manifestChecksum}<p>Recorded manifest checksum: {recovery.journal.artifact.manifestChecksum}</p>{/if}
+        {#if publicationPending}<p>Inspect the destination and recorded staging location before releasing recovery. Release does not publish or delete capture data.</p>{/if}
+      {/if}
       <ul>{#each Object.entries(recovery.journal.services) as [id,state]}<li>{id}: {state.replaceAll('_',' ')}</li>{/each}</ul>
       <p>Resume only workloads whose stop was attempted. An uncertain stop may still complete later; inspect native state before releasing recovery. This does not replay capture or restore data. “Leave workloads as they are” acknowledges the interruption and releases managed controls without changing runtime state. If the configuration changed outside server-man, restore the recorded revision before recovery.</p>
       <label><input type="checkbox" bind:checked={recoveryConfirm} disabled={disabled||!!recoveryJob} /> I reviewed the interrupted capture and selected a recovery action</label>
-      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(true)}>{recoveryJob?'Recovering workloads…':'Resume backup workloads'}</button>
-      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(false)}>Leave workloads as they are</button>
+      {#if workloadsPending}      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(true)}>{recoveryJob&&recoveryKind==='resume'?'Recovering workloads…':'Resume backup workloads'}</button>{/if}
+      <button disabled={disabled||recoveryChecking||preparing||!!recoveryJob||!recoveryConfirm} onclick={()=>recover(false)}>{recoveryJob&&recoveryKind==='release'?'Releasing recovery…':'Leave workloads as they are'}</button>
     {:else if recovery}<p>No pending backup recovery.</p>{/if}
   </section>
 

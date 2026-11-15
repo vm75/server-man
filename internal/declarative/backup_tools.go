@@ -10,14 +10,14 @@ import (
 
 func RegisterBackup(r *core.Registry, c Coordinator) error {
 	return r.AddModule(core.Module{ID: "managed_backup", Title: "Portable backup planning", Available: true},
-		core.Tool{Name: "managed_backup_release", Title: "Leave backup workloads as they are", Description: "Acknowledge the reviewed interrupted capture and release its management blocker without starting/stopping workloads or replaying capture. Requires the current configuration revision and recovery token; retained journal states do not claim successful resumption.", Destructive: true, Fields: map[string]core.Field{
+		core.Tool{Name: "managed_backup_release", Title: "Leave backup workloads as they are", Description: "Acknowledge the reviewed interrupted capture and release its management blocker without starting/stopping workloads, publishing/deleting capture data or replaying capture. Requires the current configuration revision and recovery token; retained journal states do not claim successful resumption.", Destructive: true, Fields: map[string]core.Field{
 			"revision":    core.StringField("Current configuration revision from recovery status", true, 64),
 			"reviewToken": core.StringField("Current recovery review token", true, 64),
 		}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
 			status, err := c.ReleaseBackup(in.String("revision"), in.String("reviewToken"))
 			return status, managedError(err)
 		}},
-		core.Tool{Name: "managed_backup_recovery_status", Title: "Review backup recovery", Description: "Read the private durable record of previously running workloads and capture stop/resume progress. Does not activate workloads.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
+		core.Tool{Name: "managed_backup_recovery_status", Title: "Review backup recovery", Description: "Read the private durable record of workload stop/resume progress and staged/synced/uncertain capture publication. Does not activate workloads.", ReadOnly: true, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
 			if !r.AllowWrites {
 				return nil, &core.Error{Code: "writes_disabled", Status: 403, Message: "Private backup recovery is disabled with management writes."}
 			}

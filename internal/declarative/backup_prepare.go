@@ -229,13 +229,19 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		if !destInfo.IsDir() {
 			return BackupSummary{}, core.Invalid("destination exists and is not a directory")
 		}
-		entries, readErr := os.ReadDir(cleanDest)
-		if readErr != nil {
+		dir, e := os.Open(cleanDest)
+		if e != nil {
+			return BackupSummary{}, core.Invalid("destination directory cannot be read")
+		}
+		entries, readErr := dir.ReadDir(1)
+		dir.Close()
+		if readErr != nil && readErr != io.EOF {
 			return BackupSummary{}, core.Invalid("destination directory cannot be read")
 		}
 		if len(entries) > 0 {
 			return BackupSummary{}, core.Invalid("destination directory already exists and is not empty")
 		}
+
 	} else if !os.IsNotExist(err) {
 		return BackupSummary{}, core.Invalid("destination path cannot be checked: %s", err.Error())
 	} else {
@@ -340,18 +346,27 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 	}
 
-	var stagingDir string
-	stagingDir, err = os.MkdirTemp(filepath.Dir(cleanDest), ".staging-backup-*")
+	publication, err := newBackupPublication(cleanDest, destInfo)
 	if err != nil {
-		return BackupSummary{}, fmt.Errorf("create staging directory: %w", err)
+		return BackupSummary{}, err
 	}
-	_ = os.Chmod(stagingDir, 0700)
-
-	success := false
+	defer publication.close()
+	stagingDir := publication.path()
+	var recovery *BackupRecovery
 	defer func() {
-		if !success {
-			_ = os.RemoveAll(stagingDir)
+		var cleanupErr error
+		if !publication.published {
+			cleanupErr = publication.discard()
 		}
+		if recovery != nil {
+			if !publication.published && cleanupErr == nil {
+				recovery.Artifact.Stage = "discarded"
+			} else if recovery.Artifact.Stage != "published" {
+				recovery.Artifact.Stage = "uncertain"
+			}
+			cleanupErr = errors.Join(cleanupErr, c.writeBackupRecovery(recovery))
+		}
+		resultErr = errors.Join(resultErr, cleanupErr)
 	}()
 
 	var runningWorkloads []string
@@ -393,16 +408,14 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 		}
 	}
 
-	var recovery *BackupRecovery
-	if len(toStop) > 0 {
-		recovery = &BackupRecovery{Version: 1, Revision: snapshot.Revision, Destination: cleanDest, Stage: "capturing", Services: map[string]string{}}
-		for _, id := range runningWorkloads {
-			recovery.Services[id] = "untouched"
-		}
-		if err := c.writeBackupRecovery(recovery); err != nil {
-			return BackupSummary{}, err
-		}
+	recovery = &BackupRecovery{Version: 1, Revision: snapshot.Revision, Destination: cleanDest, Stage: "capturing", Services: map[string]string{}, Artifact: publication.artifact()}
+	for _, id := range runningWorkloads {
+		recovery.Services[id] = "untouched"
 	}
+	if err := c.writeBackupRecovery(recovery); err != nil {
+		return BackupSummary{}, err
+	}
+
 	var resumed, failedResume []string
 	var recoveryErr error
 	recoveryDone := false
@@ -571,35 +584,43 @@ func (c Coordinator) PrepareBackup(ctx context.Context, opts BackupPrepareOption
 	if err != nil {
 		return BackupSummary{}, fmt.Errorf("serialize manifest: %w", err)
 	}
+
+	if len(manifestBytes) > backupMetadataReserve {
+		return BackupSummary{}, errors.New("private manifest exceeds capture size limit")
+	}
 	manifestPath := filepath.Join(stagingDir, "manifest.json")
 	if err := writeBackupMetadata(manifestPath, manifestBytes); err != nil {
 		return BackupSummary{}, fmt.Errorf("write manifest: %w", err)
 	}
-	if len(manifestBytes) > backupMetadataReserve {
-		return BackupSummary{}, errors.New("private manifest exceeds capture size limit")
-	}
+
 	manifestChecksum := digest(manifestBytes)
 
 	if err := bCtx.Err(); err != nil {
 		return BackupSummary{}, err
 	}
 
-	// Linux rename atomically replaces an empty destination directory; os.Rename
-	// rejects an existing directory before reaching that kernel operation.
-	if err = syscall.Rename(stagingDir, cleanDest); err != nil {
-		return BackupSummary{}, errors.New("bundle publication failed; destination must remain absent or empty")
+	if err := publication.sync(bCtx); err != nil {
+		return BackupSummary{}, err
 	}
-	directory, e := os.Open(filepath.Dir(cleanDest))
-	if e != nil {
-		return BackupSummary{}, errors.New("bundle published but parent sync failed; inspect destination before retry")
+	recovery.Artifact.Stage = "synced"
+	recovery.Artifact.ManifestChecksum = manifestChecksum
+	if err := c.writeBackupRecovery(recovery); err != nil {
+		return BackupSummary{}, err
 	}
-	e = directory.Sync()
-	directory.Close()
-	if e != nil {
-		return BackupSummary{}, errors.New("bundle published but parent sync failed; inspect destination before retry")
+	recovery.Artifact.Stage = "publishing"
+	if err := c.writeBackupRecovery(recovery); err != nil {
+		return BackupSummary{}, err
 	}
-
-	success = true
+	if err := publication.rename(); err != nil {
+		return BackupSummary{}, err
+	}
+	if err := publication.parentFile.Sync(); err != nil {
+		return BackupSummary{}, errors.New("capture was renamed but parent sync failed; publication requires inspection")
+	}
+	recovery.Artifact.Stage = "published"
+	if err := c.writeBackupRecovery(recovery); err != nil {
+		return BackupSummary{}, errors.New("capture published but recovery record sync failed; inspect publication before retry")
+	}
 
 	totalEntries := len(manifest.Files) + len(manifest.NativeExports) + 1
 	var totalBytes int64 = int64(len(manifestBytes))

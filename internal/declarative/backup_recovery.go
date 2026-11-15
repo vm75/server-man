@@ -2,6 +2,7 @@ package declarative
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,11 +13,12 @@ import (
 )
 
 type BackupRecovery struct {
-	Version     int       `json:"version"`
-	Revision    string    `json:"revision"`
-	Destination string    `json:"destination"`
-	Stage       string    `json:"stage"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Artifact    *BackupArtifact `json:"artifact,omitempty"`
+	Version     int             `json:"version"`
+	Revision    string          `json:"revision"`
+	Destination string          `json:"destination"`
+	Stage       string          `json:"stage"`
+	UpdatedAt   time.Time       `json:"updatedAt"`
 	// Only services observed running before capture appear here.
 	Services map[string]string `json:"services"`
 }
@@ -54,6 +56,27 @@ func validateBackupRecovery(j BackupRecovery) error {
 	if j.Stage != "capturing" && j.Stage != "recovering" && j.Stage != "complete" && j.Stage != "released" {
 		return errors.New("invalid backup recovery stage")
 	}
+
+	if a := j.Artifact; a != nil {
+		switch a.Stage {
+		case "building", "synced", "publishing", "published", "discarded", "uncertain", "released":
+		default:
+			return errors.New("invalid backup artifact stage")
+		}
+		name := filepath.Base(a.StagingPath)
+		if !filepath.IsAbs(a.StagingPath) || filepath.Clean(a.StagingPath) != a.StagingPath || filepath.Dir(a.StagingPath) != filepath.Dir(j.Destination) || !strings.HasPrefix(name, ".staging-backup-") || len(strings.TrimPrefix(name, ".staging-backup-")) != 32 || a.Inode == 0 || a.ParentInode == 0 {
+			return errors.New("invalid backup artifact identity")
+		}
+		if _, err := hex.DecodeString(strings.TrimPrefix(name, ".staging-backup-")); err != nil {
+			return errors.New("invalid backup artifact location")
+		}
+		if a.ManifestChecksum != "" && !revisionPattern.MatchString(a.ManifestChecksum) {
+			return errors.New("invalid backup manifest checksum")
+		}
+		if (a.Stage == "synced" || a.Stage == "publishing" || a.Stage == "published") && a.ManifestChecksum == "" {
+			return errors.New("backup publication has no manifest checksum")
+		}
+	}
 	for id, state := range j.Services {
 		if !validID(id) {
 			return errors.New("invalid backup recovery service")
@@ -88,7 +111,7 @@ func (c Coordinator) checkBackupIdle() error {
 }
 
 func backupRecoveryPending(j *BackupRecovery) bool {
-	return j != nil && j.Stage != "complete" && j.Stage != "released"
+	return j != nil && (j.Stage != "complete" && j.Stage != "released" || backupArtifactPending(j.Artifact))
 }
 
 // ReleaseBackup acknowledges current runtime state without starting or stopping
@@ -106,6 +129,9 @@ func (c Coordinator) ReleaseBackup(revision, token string) (BackupRecoveryStatus
 		return status, nil
 	}
 	status.Journal.Stage = "released"
+	if backupArtifactPending(status.Journal.Artifact) {
+		status.Journal.Artifact.Stage = "released"
+	}
 	if err := c.writeBackupRecovery(status.Journal); err != nil {
 		return status, err
 	}
