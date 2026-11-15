@@ -66,24 +66,6 @@ integration. Samba passwords, firewall policy and provider permissions remain
 explicit host administration tasks. The application/helper were not deployed
 over the existing host application service.
 
-## Repeating the guest checks
+## Repeating current guest checks
 
-Provision a disposable Ubuntu guest named `server-man-test`, with an SSH key for
-`manager`, user lingering and its normal runtime bus. Install the current server
-and helper root-owned at their documented paths and the restricted sudo rule.
-Set `allowWrites` and `privilegedOperations` true in
-`/home/manager/.config/server-man/config.json`. Create `/srv/server-man-test` and
-matching `server-man-test.service` system/user units supporting start and reload
-(for example, oneshot `/usr/bin/true` with `RemainAfterExit=yes` and
-`ExecReload=/usr/bin/true`). Use appropriate system/user install targets.
-
-Place `key` and `known_hosts` in a private temporary directory. Forward only the
-guest's SSH port to loopback port 22472, then run:
-
-```sh
-SERVER_MAN_VM_DIR=/path/to/private/temporary/directory node tools/mcp/verify-vm.mjs
-```
-
-`SERVER_MAN_VM_PORT` overrides that port. The verifier refuses a different
-hostname before mutations. It changes packages, services and managed shares in
-the explicitly provisioned guest; shut down and discard that guest afterward.
+The native result above is historical and predates central declarative shares and the unified YAML. The verifier has since been replaced with current central resource/lifecycle operations. Follow [declarative disposable-guest acceptance](disposable-acceptance.md) for the current fixtures, explicit acknowledgement, selected backends and limitations. Do not treat the older package/system-service/share result as evidence that the current declarative native matrix has passed.

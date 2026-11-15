@@ -1,4 +1,4 @@
-.PHONY: setup dev api check test mcp-test ui-test build install release clean
+.PHONY: setup dev api check test mcp-test mcp-vm-test ui-test build install release clean
 
 export GOCACHE ?= $(CURDIR)/.cache/go-build
 export GOMODCACHE ?= $(CURDIR)/.cache/go-mod
@@ -26,6 +26,10 @@ test:
 mcp-test: build
 	go build -o bin/mcp-http-bridge ./tools/mcp/bridge
 	npm --prefix tools/mcp run verify
+
+# Requires an explicitly acknowledged, separately provisioned disposable guest.
+mcp-vm-test:
+	npm --prefix tools/mcp run verify:guest
 
 ui-test: build
 	go build -o bin/mcp-http-bridge ./tools/mcp/bridge

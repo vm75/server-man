@@ -19,6 +19,7 @@ server-man is a Linux administration application built with Go, Svelte 5, TypeSc
 - `make api` and `make dev`: backend and frontend development servers, in separate terminals.
 - `make check`: Go vet and frontend type checking. `make test`: Go race tests.
 - `make mcp-test`: build and verify stdio/HTTP MCP using the official SDK; requires `make setup` dependencies. The helper disables writes and does not listen on TCP.
+- `make mcp-vm-test`: explicit native acceptance against a separately provisioned/acknowledged disposable guest; see [guest acceptance](docs/operations/disposable-acceptance.md). Never run it against this workstation.
 - `make build`: production UI and static application/helper/installer binaries in `bin/`.
 - `make release`: native-architecture binary archive and SHA256 sidecar in `dist/`; no publication. `make install DESTDIR=...` remains copy-only staging.
 - Generated frontend assets and dependencies are ignored; do not edit them.

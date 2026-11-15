@@ -26,7 +26,7 @@ Host bootstrap is separate from workload configuration. `install.sh` builds from
 | `internal/mcp/` | MCP tools protocol, stdio and stateless Streamable HTTP adapters |
 | `internal/webui/` | Embed and serve production assets |
 | `web/src/` | Responsive Svelte UI; API client, login, job activity, monitoring, managed applications/configuration/shares and agent access |
-| `tools/mcp/` | Test-only official SDK client and HTTP handler bridge |
+| `tools/mcp/` | Test-only official SDK clients, HTTP handler bridge and explicitly gated disposable-guest acceptance |
 
 Dependency direction is entry point → assembly/transports → core. Domain modules depend on core interfaces, and do not import HTTP or UI packages. Assembly receives configuration, jobs, the shared sampler and a command executor. Tests inject a command recorder. A module supplies a capability descriptor and named tools; the registry provides discovery to transports.
 
