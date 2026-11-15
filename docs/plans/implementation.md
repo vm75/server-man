@@ -6,6 +6,15 @@ Status: active. Updated: 2026-10-16. Check off a step only after its acceptance 
 
 The [declarative management implementation plan](declarative-management.md) is the scope and progress authority for the next phase. It supersedes this document's legacy workload discovery, Compose authoring, LXD/classic LXC, and fragment-owned share configuration requirements for that work. No compatibility or migration layer is required. Existing evidence below describes the earlier implementation, not completion of the new plan. The new phase follows DRY, KISS, and YAGNI and ends with architecture updates and consolidation of obsolete planning material. No implementation of that phase is recorded as complete.
 
+## Versioning and CI policy (2026-11-14)
+
+- [x] Add a committed prerelease `VERSION` authority and retain embedded `-version`, API and UI version reporting. Clean exact matching tags identify manual prereleases; untagged builds include a commit identity.
+- [x] Limit GitHub CI triggers to PRs targeting `main` (including new commits), pushes to `main`, and manual dispatch. Neither feature-branch nor tag pushes start CI.
+- [x] Document manual prerelease tagging, the absence of automatic publication, and the requirement not to equate releases with completion of the active declarative plan.
+- [ ] Verify the new PR CI and an eventual post-merge CI run on GitHub; no tag, release or deployment is part of this change.
+
+Verification scope: `sh -n` passed for the revised build script; an isolated Git repository with a stub `go` command verified untagged commit metadata, exact annotated-tag naming, dirty-tree identification, override handling and invalid-`VERSION` rejection. No full repository build, hosted workflow or native integration test has been run for this change. See [versioning and CI policy](../versioning.md).
+
 ## Goal
 
 A lightweight Linux server manager inspired by Cockpit, using Go, Svelte 5, TypeScript, and Vite. The responsive web UI and MCP expose the same operations for Podman Compose, Docker Compose, LXC/LXD, KVM, systemd services, Samba/NFS shares, package updates, and live resource monitoring inspired by btop. Additional features fit a small Go module interface.
