@@ -26,21 +26,29 @@ type incusArchiveIndex struct {
 	OptimizedHeader *bool    `yaml:"optimized_header"`
 	Snapshots       []string `yaml:"snapshots"`
 	Config          *struct {
-		Container *struct {
-			Name   string            `yaml:"name"`
-			Type   string            `yaml:"type"`
-			Config map[string]string `yaml:"config"`
-		} `yaml:"container"`
-		Volume *struct {
-			Name        string `yaml:"name"`
-			Type        string `yaml:"type"`
-			ContentType string `yaml:"content_type"`
-		} `yaml:"volume"`
-		Pool *struct {
+		Container        *incusArchiveGuest    `yaml:"container"`
+		Volume           *incusArchiveVolume   `yaml:"volume"`
+		Snapshots        []*incusArchiveGuest  `yaml:"snapshots"`
+		VolumeSnapshots  []*incusArchiveVolume `yaml:"volume_snapshots"`
+		DependentVolumes []yaml.Node           `yaml:"dependent_volumes"`
+		Pool             *struct {
 			Name   string `yaml:"name"`
 			Driver string `yaml:"driver"`
 		} `yaml:"pool"`
 	} `yaml:"config"`
+}
+
+type incusArchiveGuest struct {
+	Name     string            `yaml:"name"`
+	Type     string            `yaml:"type"`
+	Config   map[string]string `yaml:"config"`
+	Stateful bool              `yaml:"stateful"`
+}
+type incusArchiveVolume struct {
+	Name        string `yaml:"name"`
+	Type        string `yaml:"type"`
+	ContentType string `yaml:"content_type"`
+	Project     string `yaml:"project"`
 }
 
 type incusArchiveMember struct {
@@ -270,6 +278,14 @@ func checkIncusArchiveIndex(index incusArchiveIndex, members map[string]incusArc
 	if pool := index.Config.Pool; pool != nil && (pool.Name != object.Pool || pool.Driver != index.Backend) {
 		return invalid
 	}
+	volumeType := "custom"
+	if export.Kind == "incus_instance_export" {
+		volumeType = "virtual-machine"
+	}
+	volume := index.Config.Volume
+	if volume == nil || volume.Name != object.Name || volume.Type != volumeType || volume.ContentType != object.ContentType || volume.Project != "" && volume.Project != object.Project || len(index.Config.DependentVolumes) != 0 {
+		return invalid
+	}
 	prefix, snapshotPrefix := "volume", "volume-snapshots"
 	if export.Kind == "incus_instance_export" {
 		prefix, snapshotPrefix = "virtual-machine", "virtual-machine-snapshots"
@@ -279,12 +295,11 @@ func checkIncusArchiveIndex(index incusArchiveIndex, members map[string]incusArc
 		}
 		id := strings.TrimPrefix(export.Resources[0], "service/")
 		service, found := cfg.Services[id]
-		if !found || service.VM == nil || service.VM.UUID == "" || instance.Config["user.server-man.id"] != id || instance.Config["user.server-man.identity"] != service.VM.UUID {
+		if !found || service.VM == nil || !incusArchiveGuestOwned(instance, id, service.VM.UUID) {
 			return invalid
 		}
 	} else {
-		volume := index.Config.Volume
-		if export.Kind != "incus_custom_volume" || index.Type != "custom" || volume == nil || volume.Name != object.Name || volume.Type != "custom" || volume.ContentType != object.ContentType {
+		if export.Kind != "incus_custom_volume" || index.Type != "custom" {
 			return invalid
 		}
 	}
@@ -319,6 +334,9 @@ func checkIncusArchiveIndex(index incusArchiveIndex, members map[string]incusArc
 		if !required(relative) {
 			return invalid
 		}
+	}
+	if !incusSnapshotRecordsMatch(index, snapshots, export, cfg) {
+		return invalid
 	}
 	directoryRoots := map[string]bool{}
 	blockFiles := map[string]bool{}

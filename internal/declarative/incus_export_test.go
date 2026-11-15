@@ -20,13 +20,15 @@ import (
 type incusExportRecorder struct {
 	extraInstances map[string]incusInstanceInfo
 	*incusBackupRecorder
-	payload     []byte
-	lastPayload []byte
-	streams     []core.Command
-	help        []core.Command
-	fail        bool
-	legacy      bool
-	after       func()
+	payload       []byte
+	lastPayload   []byte
+	snapshotNames []string
+	archiveMutate func([]byte) []byte
+	streams       []core.Command
+	help          []core.Command
+	fail          bool
+	legacy        bool
+	after         func()
 }
 
 func (r *incusExportRecorder) Capture(ctx context.Context, c core.Command) (string, error) {
@@ -89,9 +91,12 @@ func (r *incusExportRecorder) Stream(ctx context.Context, c core.Command, stdout
 			id, uuid = actual.Config["user.server-man.id"], actual.Config["user.server-man.identity"]
 		}
 		var err error
-		r.lastPayload, err = fixtureIncusArchive(object, kind, id, uuid, r.payload)
+		r.lastPayload, err = fixtureIncusArchive(object, kind, id, uuid, r.payload, r.snapshotNames...)
 		if err != nil {
 			return err
+		}
+		if r.archiveMutate != nil {
+			r.lastPayload = r.archiveMutate(r.lastPayload)
 		}
 	}
 	for offset := 0; offset < len(r.lastPayload); offset += 65536 {

@@ -13,7 +13,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-func fixtureIncusArchive(object NativeBackupObject, kind, id, uuid string, data []byte) ([]byte, error) {
+func fixtureIncusArchive(object NativeBackupObject, kind, id, uuid string, data []byte, snapshots ...string) ([]byte, error) {
 	if object.ContentType == "iso" {
 		return data, nil
 	}
@@ -22,11 +22,25 @@ func fixtureIncusArchive(object NativeBackupObject, kind, id, uuid string, data 
 	if kind == "incus_instance_export" {
 		prefix = "virtual-machine"
 		index["type"] = "virtual-machine"
+		index["config"].(map[string]any)["volume"].(map[string]any)["type"] = "virtual-machine"
 		index["config"].(map[string]any)["container"] = map[string]any{"name": object.Name, "type": "virtual-machine", "config": map[string]string{"user.server-man.id": id, "user.server-man.identity": uuid}}
 	} else {
 		// The standalone custom-volume producer omits config.pool; pool identity
 		// remains in the top-level index, unlike instance/dependent-volume config.
 		delete(index["config"].(map[string]any), "pool")
+	}
+	index["snapshots"] = append([]string{}, snapshots...)
+	volumeSnapshots := []map[string]any{}
+	guestSnapshots := []map[string]any{}
+	for _, snapshot := range snapshots {
+		volumeSnapshots = append(volumeSnapshots, map[string]any{"name": snapshot, "content_type": object.ContentType})
+		if kind == "incus_instance_export" {
+			guestSnapshots = append(guestSnapshots, map[string]any{"name": snapshot, "config": map[string]string{"user.server-man.id": id, "user.server-man.identity": uuid, "user.server-man.fingerprint": "historical"}})
+		}
+	}
+	index["config"].(map[string]any)["volume_snapshots"] = volumeSnapshots
+	if kind == "incus_instance_export" {
+		index["config"].(map[string]any)["snapshots"] = guestSnapshots
 	}
 	raw, err := yaml.Marshal(index)
 	if err != nil {
@@ -40,19 +54,32 @@ func fixtureIncusArchive(object NativeBackupObject, kind, id, uuid string, data 
 	if _, err := writer.Write(raw); err != nil {
 		return nil, err
 	}
-	if object.ContentType == "filesystem" || kind == "incus_instance_export" {
-		if err := writer.WriteHeader(&tar.Header{Name: "backup/" + prefix, Typeflag: tar.TypeDir, Mode: 0700}); err != nil {
+	writePayload := func(base string) error {
+		if object.ContentType == "filesystem" || kind == "incus_instance_export" {
+			if err := writer.WriteHeader(&tar.Header{Name: "backup/" + base, Typeflag: tar.TypeDir, Mode: 0700}); err != nil {
+				return err
+			}
+		}
+		file := "backup/" + base + "/payload"
+		if object.ContentType == "block" {
+			file = "backup/" + base + ".img"
+		}
+		if err := writer.WriteHeader(&tar.Header{Name: file, Mode: 0600, Size: int64(len(data))}); err != nil {
+			return err
+		}
+		_, err := writer.Write(data)
+		return err
+	}
+	snapshotPrefix := "volume-snapshots"
+	if kind == "incus_instance_export" {
+		snapshotPrefix = "virtual-machine-snapshots"
+	}
+	for _, snapshot := range snapshots {
+		if err := writePayload(snapshotPrefix + "/" + snapshot); err != nil {
 			return nil, err
 		}
 	}
-	file := "backup/" + prefix + "/payload"
-	if object.ContentType == "block" {
-		file = "backup/" + prefix + ".img"
-	}
-	if err := writer.WriteHeader(&tar.Header{Name: file, Mode: 0600, Size: int64(len(data))}); err != nil {
-		return nil, err
-	}
-	if _, err := writer.Write(data); err != nil {
+	if err := writePayload(prefix); err != nil {
 		return nil, err
 	}
 	if err := writer.Close(); err != nil {
@@ -165,6 +192,8 @@ func TestIncusArchiveIdentityAndSnapshotCoverage(t *testing.T) {
 			switch scenario {
 			case "snapshot present":
 				index.Snapshots = []string{"snap0"}
+				index.Config.Snapshots = []*incusArchiveGuest{{Name: "snap0", Config: map[string]string{"user.server-man.id": "guest", "user.server-man.identity": "identity"}}}
+				index.Config.VolumeSnapshots = []*incusArchiveVolume{{Name: "snap0", ContentType: "block"}}
 				members["backup/virtual-machine-snapshots/snap0.img"] = incusArchiveMember{kind: tar.TypeReg, size: 5}
 				members["backup/virtual-machine-snapshots/snap0"] = incusArchiveMember{kind: tar.TypeDir}
 			case "name":
