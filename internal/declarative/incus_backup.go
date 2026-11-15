@@ -53,14 +53,13 @@ func (i *Incus) BackupDependencies(ctx context.Context, c Config, key string) (N
 		result.State = "unknown"
 		result.issue(key, "backup_native_state", "The native guest is in a transitional or unrecognized state.", "Inspect and stabilize its state before choosing a backup boundary.")
 	}
-	devices := actual.Devices
-	if actual.ExpandedDevices != nil {
-		devices = actual.ExpandedDevices
-	} else if len(actual.Profiles) > 0 {
-		return result, errors.New("expanded profile devices are unavailable")
+	deviceInventory, err := i.backupDeviceInventory(ctx, c, id, project, actual)
+	if err != nil {
+		return result, err
 	}
-	if len(devices) > 64 {
-		return result, errors.New("Incus backup device limit exceeded")
+	devices := deviceInventory.devices
+	if deviceInventory.snapshots > 0 {
+		result.require(key, "historical_device_data", "Snapshot device references are included in native volume discovery; review historical host bindings and memory-state compatibility before restore.")
 	}
 	if len(actual.Profiles) > 0 {
 		result.issue(key, "backup_native_profiles", "Native profiles add settings outside the central definition.", "Review and preserve native dependencies before reconciling profile-free managed definitions.")
@@ -91,27 +90,24 @@ func (i *Incus) BackupDependencies(ctx context.Context, c Config, key string) (N
 			}
 			continue
 		}
-		if device["path"] == "/" {
+		reference, parseErr := parseIncusBackupDisk(device)
+		if parseErr != nil {
+			return result, parseErr
+		}
+		if reference.kind == "root" {
 			roots++
-			if !bindingNamePattern.MatchString(device["pool"]) || device["source"] != "" {
-				return result, errors.New("unsupported Incus root storage")
-			}
-			result.Object.Pool = device["pool"]
+			result.Object.Pool = reference.pool
 			result.Object.ContentType = "block"
 			continue
 		}
-		pool, source := device["pool"], device["source"]
-		if pool == "" {
-			if nativeBackupPath(source) {
-				result.Inputs = append(result.Inputs, BackupInput{ID: "native/" + id + "/host/" + digest([]byte(source))[:16], Kind: "incus_host_disk", Strategy: "external_data", Path: source, Resources: []string{key}, Required: true, Sensitive: true, Inspection: "excluded_pending_review"})
+		if reference.kind == "external" {
+			if nativeBackupPath(reference.source) {
+				result.Inputs = append(result.Inputs, BackupInput{ID: "native/" + id + "/host/" + digest([]byte(reference.source))[:16], Kind: "incus_host_disk", Strategy: "external_data", Path: reference.source, Resources: []string{key}, Required: true, Sensitive: true, Inspection: "excluded_pending_review"})
 			}
 			result.issue(key, "backup_incus_host_disk", "A native disk uses host/external data outside the managed storage bindings.", "Declare and review portable inclusion of this data; an instance export does not include host mounts.")
 			continue
 		}
-		volume, subpath, hasSubpath := strings.Cut(source, "/")
-		if !bindingNamePattern.MatchString(pool) || !bindingNamePattern.MatchString(volume) || (hasSubpath && !portablePath(subpath)) {
-			return result, errors.New("unsupported Incus custom-volume source")
-		}
+		pool, volume := reference.pool, reference.name
 		if !projectChecked {
 			var info struct {
 				Name   string            `json:"name"`
@@ -152,7 +148,7 @@ func (i *Incus) BackupDependencies(ctx context.Context, c Config, key string) (N
 			return result, errors.New("unsupported Incus volume metadata")
 		}
 		resources := []string{key}
-		usageConfirmed := false
+		usageConfirmed := deviceInventory.historical[deviceID]
 		for _, usage := range info.UsedBy {
 			uri, e := url.Parse(usage)
 			if e != nil || uri.Scheme != "" || uri.Host != "" || !strings.HasPrefix(uri.Path, "/1.0/instances/") {
@@ -166,7 +162,14 @@ func (i *Incus) BackupDependencies(ctx context.Context, c Config, key string) (N
 			if err = ctx.Err(); err != nil {
 				return result, err
 			}
-			otherID, found := knownInstances[usedProject+uri.Path]
+			consumerPath := uri.Path
+			if base, snapshot, hasSnapshot := strings.Cut(uri.Path, "/snapshots/"); hasSnapshot {
+				if !bindingNamePattern.MatchString(snapshot) {
+					return result, errors.New("unsupported Incus snapshot consumer")
+				}
+				consumerPath = base
+			}
+			otherID, found := knownInstances[usedProject+consumerPath]
 			if found {
 				resources = append(resources, "service/"+otherID)
 				if otherID == id {

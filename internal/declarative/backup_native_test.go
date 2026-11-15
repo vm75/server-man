@@ -90,6 +90,13 @@ type incusBackupRecorder struct {
 	failVolume        bool
 	clustered         bool
 	omitServerProof   bool
+	snapshotRecords   map[string][]*incusArchiveGuest
+	volumeRecords     map[string]incusTestVolume
+}
+
+type incusTestVolume struct {
+	Name, ContentType string
+	UsedBy            []string
 }
 
 func (r *incusBackupRecorder) Capture(ctx context.Context, cmd core.Command) (string, error) {
@@ -99,6 +106,22 @@ func (r *incusBackupRecorder) Capture(ctx context.Context, cmd core.Command) (st
 		return "", errors.New("mutation in read-only fixture")
 	}
 	var metadata any
+	if record, found := r.volumeRecords[u.Path+"?project="+u.Query().Get("project")]; found {
+		metadata = map[string]any{"name": record.Name, "type": "custom", "content_type": record.ContentType, "used_by": record.UsedBy}
+		r.commands = append(r.commands, cmd)
+		raw, _ := json.Marshal(map[string]any{"type": "sync", "error_code": 0, "metadata": metadata})
+		return string(raw), nil
+	}
+	if strings.HasSuffix(u.Path, "/snapshots") {
+		snapshots := r.snapshotRecords[u.Path]
+		if snapshots == nil {
+			snapshots = []*incusArchiveGuest{}
+		}
+		metadata = snapshots
+		r.commands = append(r.commands, cmd)
+		raw, _ := json.Marshal(map[string]any{"type": "sync", "error_code": 0, "metadata": metadata})
+		return string(raw), nil
+	}
 	switch u.Path {
 	case "/1.0":
 		environment := map[string]any{"server_name": "fixture-host"}

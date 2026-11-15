@@ -14,6 +14,10 @@ import (
 )
 
 func fixtureIncusArchive(object NativeBackupObject, kind, id, uuid string, data []byte, snapshots ...string) ([]byte, error) {
+	return fixtureIncusArchiveDevices(object, kind, id, uuid, nil, data, snapshots...)
+}
+
+func fixtureIncusArchiveDevices(object NativeBackupObject, kind, id, uuid string, devices map[string]map[string]string, data []byte, snapshots ...string) ([]byte, error) {
 	if object.ContentType == "iso" {
 		return data, nil
 	}
@@ -21,9 +25,12 @@ func fixtureIncusArchive(object NativeBackupObject, kind, id, uuid string, data 
 	prefix := "volume"
 	if kind == "incus_instance_export" {
 		prefix = "virtual-machine"
+		if devices == nil {
+			devices = map[string]map[string]string{"root": {"type": "disk", "path": "/", "pool": object.Pool}}
+		}
 		index["type"] = "virtual-machine"
 		index["config"].(map[string]any)["volume"].(map[string]any)["type"] = "virtual-machine"
-		index["config"].(map[string]any)["container"] = map[string]any{"name": object.Name, "type": "virtual-machine", "config": map[string]string{"user.server-man.id": id, "user.server-man.identity": uuid}}
+		index["config"].(map[string]any)["container"] = map[string]any{"name": object.Name, "type": "virtual-machine", "devices": devices, "config": map[string]string{"user.server-man.id": id, "user.server-man.identity": uuid}}
 	} else {
 		// The standalone custom-volume producer omits config.pool; pool identity
 		// remains in the top-level index, unlike instance/dependent-volume config.
@@ -35,7 +42,7 @@ func fixtureIncusArchive(object NativeBackupObject, kind, id, uuid string, data 
 	for _, snapshot := range snapshots {
 		volumeSnapshots = append(volumeSnapshots, map[string]any{"name": snapshot, "content_type": object.ContentType})
 		if kind == "incus_instance_export" {
-			guestSnapshots = append(guestSnapshots, map[string]any{"name": snapshot, "config": map[string]string{"user.server-man.id": id, "user.server-man.identity": uuid, "user.server-man.fingerprint": "historical"}})
+			guestSnapshots = append(guestSnapshots, map[string]any{"name": snapshot, "devices": devices, "config": map[string]string{"user.server-man.id": id, "user.server-man.identity": uuid, "user.server-man.fingerprint": "historical"}})
 		}
 	}
 	index["config"].(map[string]any)["volume_snapshots"] = volumeSnapshots
@@ -192,7 +199,7 @@ func TestIncusArchiveIdentityAndSnapshotCoverage(t *testing.T) {
 			switch scenario {
 			case "snapshot present":
 				index.Snapshots = []string{"snap0"}
-				index.Config.Snapshots = []*incusArchiveGuest{{Name: "snap0", Config: map[string]string{"user.server-man.id": "guest", "user.server-man.identity": "identity"}}}
+				index.Config.Snapshots = []*incusArchiveGuest{{Name: "snap0", Devices: index.Config.Container.Devices, Config: map[string]string{"user.server-man.id": "guest", "user.server-man.identity": "identity"}}}
 				index.Config.VolumeSnapshots = []*incusArchiveVolume{{Name: "snap0", ContentType: "block"}}
 				members["backup/virtual-machine-snapshots/snap0.img"] = incusArchiveMember{kind: tar.TypeReg, size: 5}
 				members["backup/virtual-machine-snapshots/snap0"] = incusArchiveMember{kind: tar.TypeDir}

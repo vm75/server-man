@@ -73,6 +73,7 @@ func (r *incusExportRecorder) Stream(ctx context.Context, c core.Command, stdout
 		at := slices.Index(c.Args, "export")
 		object := NativeBackupObject{Backend: "incus", Project: c.Args[2]}
 		kind, id, uuid := "incus_custom_volume", "", ""
+		var devices map[string]map[string]string
 		if slices.Contains(c.Args, "volume") {
 			object.Pool, object.Name, object.ContentType = strings.TrimPrefix(c.Args[at+1], "local:"), c.Args[at+2], r.volumeContentType
 			if object.ContentType == "" {
@@ -88,10 +89,14 @@ func (r *incusExportRecorder) Stream(ctx context.Context, c core.Command, stdout
 				}
 			}
 			object.Pool, object.ContentType = actual.Devices["root"]["pool"], "block"
+			devices = actual.Devices
+			if actual.ExpandedDevices != nil {
+				devices = actual.ExpandedDevices
+			}
 			id, uuid = actual.Config["user.server-man.id"], actual.Config["user.server-man.identity"]
 		}
 		var err error
-		r.lastPayload, err = fixtureIncusArchive(object, kind, id, uuid, r.payload, r.snapshotNames...)
+		r.lastPayload, err = fixtureIncusArchiveDevices(object, kind, id, uuid, devices, r.payload, r.snapshotNames...)
 		if err != nil {
 			return err
 		}

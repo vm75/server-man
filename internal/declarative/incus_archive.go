@@ -39,10 +39,13 @@ type incusArchiveIndex struct {
 }
 
 type incusArchiveGuest struct {
-	Name     string            `yaml:"name"`
-	Type     string            `yaml:"type"`
-	Config   map[string]string `yaml:"config"`
-	Stateful bool              `yaml:"stateful"`
+	Name            string                       `yaml:"name" json:"name"`
+	Type            string                       `yaml:"type" json:"type"`
+	Config          map[string]string            `yaml:"config" json:"config"`
+	Stateful        bool                         `yaml:"stateful" json:"stateful"`
+	Devices         map[string]map[string]string `yaml:"devices" json:"devices"`
+	ExpandedDevices map[string]map[string]string `yaml:"expanded_devices,omitempty" json:"expanded_devices,omitempty"`
+	Profiles        []string                     `yaml:"profiles" json:"profiles"`
 }
 type incusArchiveVolume struct {
 	Name        string `yaml:"name"`
@@ -79,32 +82,37 @@ func zeroBackupBytes(buffer []byte) bool {
 // This scanner never extracts data or asks Incus to import it. It checks the
 // complete uncompressed archive and its index; native restore policy is separate.
 func verifyIncusArchive(ctx context.Context, root *os.Root, export BackupManifestNativeExport, cfg Config) error {
+	_, err := inspectIncusArchive(ctx, root, export, cfg)
+	return err
+}
+
+func inspectIncusArchive(ctx context.Context, root *os.Root, export BackupManifestNativeExport, cfg Config) (incusArchiveIndex, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return incusArchiveIndex{}, err
 	}
 	invalid := errors.New("Incus archive structure, index identity or payload coverage did not verify")
 	if export.Native == nil || export.Backend != "incus" {
-		return invalid
+		return incusArchiveIndex{}, invalid
 	}
 	// ISO exports are raw media, with no Incus index. Their bytes remain checked
 	// by the shared verifier; native identity/import review remains required.
 	parent, name, err := backupRealParent(root, export.BundlePath, false)
 	if err != nil {
-		return invalid
+		return incusArchiveIndex{}, invalid
 	}
 	defer parent.Close()
 	before, err := parent.Lstat(name)
 	if err != nil || !before.Mode().IsRegular() || before.Mode().Perm()&0077 != 0 || before.Size() != export.SizeBytes || before.Size() <= 0 {
-		return invalid
+		return incusArchiveIndex{}, invalid
 	}
 	f, err := parent.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return invalid
+		return incusArchiveIndex{}, invalid
 	}
 	defer f.Close()
 	opened, err := f.Stat()
 	if err != nil || !stableBackupNode(before, opened) {
-		return invalid
+		return incusArchiveIndex{}, invalid
 	}
 	hash := sha256.New()
 	reader := io.TeeReader(io.LimitReader(contextReader{ctx, f}, before.Size()), hash)
@@ -117,21 +125,24 @@ func verifyIncusArchive(ctx context.Context, root *os.Root, export BackupManifes
 	}
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return incusArchiveIndex{}, ctx.Err()
 		}
-		return invalid
+		return incusArchiveIndex{}, invalid
 	}
 	after, statErr := f.Stat()
 	current, pathErr := root.Lstat(export.BundlePath)
 	if statErr != nil || pathErr != nil || !stableBackupNode(before, after) || !stableBackupNode(before, current) || !backupParentStillReal(root, export.BundlePath, parent) || hex.EncodeToString(hash.Sum(nil)) != export.SHA256 {
-		return invalid
+		return incusArchiveIndex{}, invalid
 	}
 	if export.Native.ContentType != "iso" {
 		if err := checkIncusArchiveIndex(index, members, export, cfg); err != nil {
-			return invalid
+			return incusArchiveIndex{}, invalid
 		}
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return incusArchiveIndex{}, err
+	}
+	return index, nil
 }
 
 func scanIncusArchive(ctx context.Context, reader io.Reader) (incusArchiveIndex, map[string]incusArchiveMember, error) {
@@ -337,6 +348,11 @@ func checkIncusArchiveIndex(index incusArchiveIndex, members map[string]incusArc
 	}
 	if !incusSnapshotRecordsMatch(index, snapshots, export, cfg) {
 		return invalid
+	}
+	if export.Kind == "incus_instance_export" {
+		if _, err := incusArchiveDiskReferences(index, export); err != nil {
+			return invalid
+		}
 	}
 	directoryRoots := map[string]bool{}
 	blockFiles := map[string]bool{}

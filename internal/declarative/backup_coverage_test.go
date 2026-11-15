@@ -73,6 +73,18 @@ func coverageAddVolume(t *testing.T, dir string, m *BackupManifest) {
 	}
 	mustBackupWrite(t, filepath.Join(dir, path), string(raw))
 	m.NativeExports = append(m.NativeExports, BackupManifestNativeExport{Backend: "incus", Kind: "incus_custom_volume", BundlePath: path, SizeBytes: int64(len(raw)), SHA256: digest(raw), Resources: []string{"service/example"}, Native: &object})
+	guest := &m.NativeExports[0]
+	archive, err := os.ReadFile(filepath.Join(dir, guest.BundlePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive = rewriteIncusIndex(t, archive, func(index *incusArchiveIndex) {
+		index.Config.Container.Devices["data"] = map[string]string{"type": "disk", "path": "/data", "pool": "pool", "source": "volume"}
+	})
+	if err := os.WriteFile(filepath.Join(dir, guest.BundlePath), archive, 0600); err != nil {
+		t.Fatal(err)
+	}
+	guest.SizeBytes, guest.SHA256 = int64(len(archive)), digest(archive)
 }
 
 func TestBackupCoverageRejectsSelfConsistentIncompleteBundles(t *testing.T) {
