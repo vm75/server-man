@@ -40,15 +40,25 @@ async function call(name,args = {}) {
   return reply.structuredContent
 }
 
-// The prepared BIOS fixture must finish booting before it can receive an ACPI
-// shutdown. A running QEMU process alone does not establish that precondition.
+// Prepared VM fixtures must finish booting before graceful shutdown requests.
+// A running hypervisor alone does not establish that precondition.
 // Probe only the dedicated fixture's serial login; never emit console contents.
-async function waitLibvirtFixtureBoot(service) {
-  if (service !== 'server-man-test-libvirt') return
+async function waitVMFixtureBoot(service) {
+  let command, detach
+  if (service === 'server-man-test-libvirt') {
+    command=['virsh','--connect','qemu:///system','console','sm-server-man-test-libvirt','--safe']
+    detach='\x1d'
+  } else if (service === 'server-man-test-incus') {
+    const snapshot=await call('managed_config_model')
+    const project=snapshot.config.bindings?.[snapshot.config.services[service]?.vm?.project]?.name
+    assert(typeof project === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(project),'Prepare a safe local Incus project fixture name')
+    command=['incus','--force-local','--project',project,'console','local:sm-server-man-test-incus','--type=console']
+    detach='\x01q'
+  } else return
   const deadline = Date.now()+3*60*1000
   while (Date.now() < deadline) {
     const ready = await new Promise(resolve => {
-      const child = spawn('ssh',['-tt',...connectionArgs,'timeout','--kill-after=2s','8s','virsh','--connect','qemu:///system','console','sm-server-man-test-libvirt','--safe'],{stdio:['pipe','pipe','pipe']})
+      const child = spawn('ssh',['-tt',...connectionArgs,'timeout','--kill-after=2s','8s',...command],{stdio:['pipe','pipe','pipe']})
       let output = '', found = false
       child.stdin.on('error',()=>{})
       child.stderr.resume()
@@ -56,7 +66,7 @@ async function waitLibvirtFixtureBoot(service) {
         output=(output+data.toString()).slice(-4096)
         if (!found && /(?:^|[\r\n])[^\r\n]{0,128} login: /.test(output)) {
           found=true
-          child.stdin.write('\x1d')
+          child.stdin.write(detach)
         }
       })
       const newline=setTimeout(()=>child.stdin.write('\r'),2000)
@@ -68,7 +78,7 @@ async function waitLibvirtFixtureBoot(service) {
     if (ready) return
     await delay(1000)
   }
-  throw new Error('Prepared libvirt fixture did not reach serial login; inspect guest boot before further lifecycle operations')
+  throw new Error(`${service}: prepared VM fixture did not reach serial login; inspect guest boot before further lifecycle operations`)
 }
 async function job(name,args) {
   const {job} = await call(name,args)
@@ -78,7 +88,7 @@ async function job(name,args) {
     const state = await call('jobs_get',{id:job.id})
     if (state.state !== 'running') {
       assert.equal(state.state,'succeeded',`${name}: job ${job.id} did not succeed; inspect the guest`)
-      if (name === 'managed_service_start' || name === 'managed_service_restart') await waitLibvirtFixtureBoot(args.service)
+      if (name === 'managed_service_start' || name === 'managed_service_restart') await waitVMFixtureBoot(args.service)
       return state.result
     }
     await delay(1000)
