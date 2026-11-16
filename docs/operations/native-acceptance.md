@@ -52,7 +52,7 @@ All seven targets now have the selected operation evidence above across the reco
 
 ## Outstanding evidence
 
-An uninterrupted final-build matrix, actual host reboot and daemon restart, broader guest OS/application health, SMB/NFS clients, Debian/Arch fresh installations and broader supported profiles remain separate gates. Do not infer them from a successful process start, autostart setting or daemon reload. Archival/restore acceptance is deferred by user instruction.
+An uninterrupted final-build matrix, normal-environment enabled-boot reliability after the unexplained Netavark failure, daemon restart, broader guest OS/application health, SMB/NFS clients, Debian/Arch fresh installations and broader supported profiles remain separate gates. Actual guest power cycles are recorded below; these do not prove reliability across all profiles. Archival/restore acceptance is deferred by user instruction.
 
 
 ## Initial cold-boot observation
@@ -65,4 +65,12 @@ On `31109c5`, both Podman adapters passed an actual two-container service-name D
 
 A second graceful cold power cycle used five enabled/stopped fixtures on this build. Raw observation again proved autonomous libvirt/Incus startup before provider queries. Four workloads ran, but Podman Compose failed with exit 255 and left its container created without starting. Journal process metadata identifies Netavark as the process reporting a Rust stdout `Broken pipe` panic. No kernel OOM/segfault indicators were found, and the launcher has no memory limit. The cause is unresolved; concurrency is only a hypothesis. One explicit manual start of the exact failed generated unit succeeded and left it active/exited with its container running. This does not count as autonomous startup success.
 
-The five boot fixtures currently remain enabled/running after that manual retry. The boot checkpoint has not been advanced to verified. Disabled-running boot and final cleanup remain outstanding; the original Incus definition/disks and shared sentinel are retained. Do not treat the earlier lifecycle table's stopped/disabled end state as this later boot suite's current state.
+At this point the five boot fixtures remained enabled/running after that manual retry, without advancing the verification checkpoint. The following diagnostic attempt and cleanup supersede that intermediate state.
+
+## Diagnostic enabled boot and disabled-running cycle
+
+The five exact fixtures were stopped through shared management operations, preserving enabled policy and the central revision. A temporary owner-only environment.d file enabled Rust backtraces in the disposable account. A third graceful cold power cycle on 31109c5 changed the boot ID; raw observations before provider queries again showed both VMs running autonomously. All five application rows were running, matching and enabled without any manual start. Podman Compose's launcher was active/exited with Result=success and status 0. The earlier failure did not reproduce, so no useful backtrace was produced; this diagnostic pass does not resolve its cause or establish normal-environment reliability.
+
+Disable then left all five workloads running with matching definitions. The temporary backtrace file and manager environment setting were removed. A further graceful cold power cycle changed boot ID; raw observations before provider queries showed neither VM running. All five application rows were stopped, matching and disabled. Thus the actual disabled-after-running policy check passed across all five backends on this guest/build.
+
+Cleanup stopped the known Quadlet network helper, removed four temporary definitions through central plans, verified no network consumers and removed only that known unused network. The original Incus definition is again stopped/disabled, with its disks and external references retained. The shared sentinel SHA256 is unchanged. No workstation reboot or existing-workload mutation occurred.
