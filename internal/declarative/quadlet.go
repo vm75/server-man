@@ -315,11 +315,11 @@ func (q *Quadlet) Prerequisites(ctx context.Context) []Issue {
 		}
 	}
 	if q.Podman != "" {
-		output, err := q.Runner.Capture(ctx, core.Command{Program: q.Podman, Args: []string{"info", "--format", "{{.Host.CgroupsVersion}}"}, Timeout: 4 * time.Second})
+		output, err := q.Runner.Capture(ctx, core.Command{Program: q.Podman, Args: []string{"info", "--format", "json"}, Timeout: 4 * time.Second})
 		if err != nil {
 			add("error", "podman", "engine_unavailable", "Podman cannot access its runtime context.", "Check the service account, user namespaces, runtime directory and Podman setup.")
-		} else if strings.TrimSpace(output) != "v2" {
-			add("error", "cgroups", "unsupported_cgroups", "Quadlet requires cgroup v2.", "Configure a host with cgroup v2 before activating Quadlet services.")
+		} else {
+			issues = append(issues, podmanInfoIssues(output, "quadlet", true)...)
 		}
 	}
 	issues = append(issues, userManagerIssues(ctx, q.Systemctl, q.Runner, "podman/quadlet")...)

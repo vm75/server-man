@@ -395,8 +395,10 @@ func (p *Compose) Prerequisites(ctx context.Context) []Issue {
 		args          []string
 		code, message string
 	}{{[]string{"compose", "version"}, "compose_unavailable", "A compatible Compose provider is unavailable."}, {[]string{"info", "--format", "json"}, "engine_unavailable", "The engine runtime is inaccessible."}} {
-		if _, err := p.Runner.Capture(ctx, core.Command{Program: p.Program, Args: probe.args, Timeout: 4 * time.Second}); err != nil {
+		if output, err := p.Runner.Capture(ctx, core.Command{Program: p.Program, Args: probe.args, Timeout: 4 * time.Second}); err != nil {
 			add("runtime", probe.code, probe.message, "Check engine/provider installation, socket access and the service account.")
+		} else if p.Engine == "podman" && probe.args[0] == "info" {
+			issues = append(issues, podmanInfoIssues(output, "compose", false)...)
 		}
 	}
 	issues = append(issues, userManagerIssues(ctx, p.Systemctl, p.Runner, p.Engine+"/compose")...)

@@ -3,6 +3,7 @@ package updates
 import (
 	"context"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -40,5 +41,14 @@ func TestDependencyTargetsUseValidatedNativePackages(t *testing.T) {
 	names, err := b.dependencyPackages("docker")
 	if err != nil || !strings.Contains(names, "docker-compose-v2") {
 		t.Fatal(names, err)
+	}
+}
+
+func TestPodmanInstallIncludesRootlessNetworkHelper(t *testing.T) {
+	for _, host := range []struct{ manager, distribution string }{{"apt", "ubuntu"}, {"apt", "debian"}, {"pacman", "arch"}} {
+		packages, err := DependencyPackages(host.manager, host.distribution, "podman")
+		if err != nil || !slices.Contains(packages, "passt") {
+			t.Fatal(host, packages, err)
+		}
 	}
 }

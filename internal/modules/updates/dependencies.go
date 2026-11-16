@@ -25,9 +25,9 @@ func dependencyPackageNames(manager, distribution, target string) (string, error
 	switch target {
 	case "podman":
 		if manager == "apt" {
-			return "podman podman-compose uidmap slirp4netns", nil
+			return "podman podman-compose uidmap slirp4netns passt", nil
 		}
-		return "podman podman-compose", nil
+		return "podman podman-compose passt", nil
 	case "docker":
 		switch manager {
 		case "apt":
