@@ -143,3 +143,10 @@ The failed fixture removal was inspected and completed explicitly with the insta
 
 
 Deployment of native fixes: `2088bc4` is installed on the workstation using the shared release installer with `--skip-packages`. Archive checksum/extraction, exact unified YAML/token preservation, unchanged Docker daemon PID, installed version and HTTP 200 were verified. No new workstation packages, workloads, shares or Incus pool/network were changed. `make mcp-test` passed all seven acceptance contracts plus official SDK stdio/HTTP 55-tool parity/authentication checks. The operations record now leads with current system-unit/single-YAML settings rather than historical bootstrap instructions. In the ongoing dedicated-guest run, both Podman Quadlet and Podman Compose have passed their complete lifecycle/boot-policy/deferred-update sequences; remaining native targets and actual reboot/client checks are not yet proven.
+
+
+## Libvirt live network normalization (2026-11-16)
+
+Build 2088bc4 passed all three container targets in the native guest: stopped definition/update, independent boot policy, start/stop/restart, deferred runtime update and removal. The first libvirt VM started successfully but inventory incorrectly reported restart_required. Native XML comparison isolated a daemon-added `bridge` on the live network-backed interface; inactive XML retained only the requested network. Matching now ignores this resolved bridge only for matching network-backed interfaces, while preserving checks for the requested network, explicit bridge bindings and other modeled fields.
+
+`make check test` passed with zero frontend diagnostics/full Go race suite. Regression fixtures prove live observation with a resolved bridge matches, while changed network/explicit bridge settings do not. A read-only binary built from the correction observed the actual retained running guest with registered=true, active=true, persistentMatches=true and activeMatches=true. Full libvirt/Incus/shares and actual boot/client acceptance remain open. Graceful fixture stop/removal is handled separately through the reviewed central plan before retry; its disk/data remain intact.

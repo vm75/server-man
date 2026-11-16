@@ -128,6 +128,11 @@ func domainMatches(want, actual domainXML) bool {
 	if libvirtMachineMatches(want.OS.Type.Machine, actual.OS.Type.Machine) {
 		actual.OS.Type.Machine = want.OS.Type.Machine
 	}
+	// A live network interface includes the bridge libvirt resolved from the
+	// named network. It is daemon-derived state, not a requested bridge binding.
+	if want.Devices.Interface.Type == "network" && actual.Devices.Interface.Type == "network" && want.Devices.Interface.Source.Network == actual.Devices.Interface.Source.Network && want.Devices.Interface.Source.Bridge == "" {
+		actual.Devices.Interface.Source.Bridge = ""
+	}
 	// Compare managed hardware fields, allowing libvirt to retain its generated
 	// addresses, controllers, aliases and other native defaults outside this model.
 	return want.UUID == actual.UUID && want.Name == actual.Name && want.Type == actual.Type && want.VCPU == actual.VCPU && reflect.DeepEqual(want.Memory, actual.Memory) && reflect.DeepEqual(want.OS, actual.OS) && reflect.DeepEqual(want.Devices.Disks, actual.Devices.Disks) && reflect.DeepEqual(want.Devices.Interface, actual.Devices.Interface)

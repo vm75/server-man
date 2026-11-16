@@ -48,6 +48,44 @@ type libvirtRecorder struct {
 	failShutdown    bool
 }
 
+func TestLibvirtLiveNetworkBridgeIsResolvedState(t *testing.T) {
+	l, cfg, r := libvirtFixture(t)
+	if err := l.Apply(context.Background(), Config{Version: 1}, cfg, "service/guest", "now"); err != nil {
+		t.Fatal(err)
+	}
+	var live domainXML
+	if err := xml.Unmarshal([]byte(r.xml), &live); err != nil {
+		t.Fatal(err)
+	}
+	live.Devices.Interface.Source.Bridge = "virbr0"
+	setLive := func() {
+		data, err := xml.Marshal(live)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.activeXML, r.state = string(data), "running"
+	}
+	setLive()
+	obs, err := l.Inspect(context.Background(), cfg, "service/guest")
+	if err != nil || !obs.Active || !obs.Matches || !obs.ActiveMatches {
+		t.Fatal("native resolved bridge must not require restart", obs, err)
+	}
+	live.Devices.Interface.Source.Network = "different-network"
+	setLive()
+	obs, err = l.Inspect(context.Background(), cfg, "service/guest")
+	if err != nil || obs.ActiveMatches {
+		t.Fatal("different network hidden", obs, err)
+	}
+	var want domainXML
+	want.Devices.Interface.Type = "bridge"
+	want.Devices.Interface.Source.Bridge = "br0"
+	actual := want
+	actual.Devices.Interface.Source.Bridge = "br1"
+	if domainMatches(want, actual) {
+		t.Fatal("explicit bridge drift hidden")
+	}
+}
+
 func (r *libvirtRecorder) Run(_ context.Context, c core.Command, _ io.Writer) error {
 	r.commands = append(r.commands, c)
 	args := c.Args
