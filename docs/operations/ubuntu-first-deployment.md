@@ -1,20 +1,16 @@
-# Ubuntu first deployment
+# Ubuntu deployment
 
-Recorded 2026-11-15 on Ubuntu 26.10 (amd64). This is the first application deployment, not complete native lifecycle/boot acceptance or Debian/Arch verification.
+Current deployment: Ubuntu 26.10 amd64, workload account `shasak`. Server-man is installed under `/usr/local` and runs through the system unit `/etc/systemd/system/server-man.service` as UID/GID 1000. The prior user unit is disabled. Lingering and the account's user bus are configured; the desktop manager was not restarted.
 
-server-man is installed under `/usr/local`, running as account `shasak` through `systemctl --user`. The service is enabled and the account already has lingering enabled. UI `/` and `/healthz` return HTTP 200 at <http://127.0.0.1:8080>.
+The single active configuration is `/home/shasak/.config/server-man/server-man.yaml` (0600), including `server` settings and managed resources. No JSON bootstrap or manifest selector exists. The private token remains `~/.config/server-man/token`. The listener is loopback at <http://127.0.0.1:8080>; UI and `/healthz` return HTTP 200. See [installation and remote access](../installation.md) for binding settings and source/release installation.
 
-Bootstrap configuration: `~/.config/server-man/config.json` (0600). Authoritative workload configuration: `~/.local/state/server-man/server-man.yaml`. At initial startup this YAML is absent; Configuration returns a valid `version: 1` starter and revision `missing` for first-save review. No workloads or shares were imported or created. Sign in using the private `~/.config/server-man/token`; do not copy it into logs or this document.
+Use `sudo systemctl status server-man`, `sudo journalctl -u server-man`, and `sudo systemctl restart server-man`. Server-setting saves require a restart; resource edits use reviewed central apply. No workstation workloads or shares were imported or created, and `~/vms` is untouched. Archival/restore development remains deferred and preserved.
 
-The installed user service uses `allowWrites: true` and `privilegedOperations: true`. The user explicitly approved the exact no-argument helper rule in `/etc/sudoers.d/server-man`; that file passes `visudo -cf`. The root-owned helper and parent directories are mode 0755. Full `visudo -c` reported a pre-existing `/etc/sudoers` mode of 0644 rather than 0440; that unrelated file was not changed.
+Writes and privileged operations are enabled by explicit user approval. The exact no-argument helper rule in `/etc/sudoers.d/server-man` passes isolated `visudo` validation. The root-owned helper and parents are 0755. Full sudoers validation found an unrelated preexisting `/etc/sudoers` mode of 0644 instead of 0440, left unchanged. User-approved Docker, Incus-admin and libvirt account grants are active in the application process; native read-only Docker/libvirt/Incus inventory succeeds. No permanent direct KVM group grant was made. Host Incus pool/network initialization remains pending the user's concrete settings choice.
 
-The user explicitly exempted this deployment from AGENTS.md's development-host package-installation prohibition. Installed `docker.io docker-compose-v2 incus samba nfs-kernel-server` using existing package indexes: 48 new packages, no upgrades/removals; Compose v2 was already installed. Native packages may enable/start their daemons. No shares were exposed by server-man, and Incus storage/network initialization was not performed.
+The user explicitly exempted the earlier `docker.io docker-compose-v2 incus samba nfs-kernel-server` installation from the development-host package prohibition: 48 new packages, no upgrades/removals. Subsequent installer reruns use `--skip-packages`. They do not initialize Incus or expose shares. Native acceptance uses a separate disposable guest, never the workstation's existing workloads; [the release tracker](../plans/single-server-release.md) records its progress and remaining gates. Debian/Arch fresh-install and full boot/client acceptance remain unproven.
 
-Read-only provider checks: Podman 5.8.6 responds; libvirt `qemu:///system` inventory succeeds. Docker client 29.7.2 and Compose 2.40.3 are present, but Docker socket access is denied to the workload account. Incus is installed but account socket access is denied and initialization remains required. Account access changes and concrete Incus pool/network settings remain pending.
-
-Verification: `make check test mcp-test ui-test` passed, including zero frontend diagnostics, full Go race tests, 55-tool official SDK stdio/HTTP checks and Firefox desktop/mobile checks. `make install DESTDIR=/tmp/server-man-release-stage` passed. Installed user unit passes `systemd-analyze --user verify`. Authenticated readiness and configuration-read requests succeed and accurately report the missing initial manifest. No native container/VM lifecycle, host reboot, share-client access or restore acceptance was performed; `~/vms` was untouched.
-
-Use `systemctl --user status server-man.service` and `journalctl --user -u server-man.service` for service diagnosis. Stop with `systemctl --user stop server-man.service`. Workload and share setup proceeds through the UI's reviewed central configuration; the [release checklist](../plans/single-server-release.md) retains outstanding acceptance. Backup/restore development remains deferred and preserved.
+The dated evidence below records earlier deployment stages; the current settings and commands above supersede historical bootstrap/user-service references.
 
 ## Guided installer follow-up (2026-11-15)
 
@@ -49,3 +45,9 @@ Deployed `79859c0`, preserving the exact unified configuration and existing grou
 Direct execution of the revised server-man prerequisite function under UID 1000 returned zero issues for qemu:///system and the expected KVM blocker for qemu:///session. Fixed-query, locale, timeout, native XML shape/profile and sanitized failure handling are covered by fixtures and the full Go race suite. Native inspection created no VM and granted no direct KVM permission.
 
 The installer update completed and the service remained active. An immediate ad hoc HTTP probe raced process startup; rechecking the same service confirmed running state and HTTP 200 without reinstalling/restarting it. The refreshed release archive checksum passed. Native guest lifecycle/reboot acceptance remains open; no disposable guest was provisioned by this increment.
+
+## Native prerequisite and Compose fixes (2026-11-16)
+
+Build `2088bc4` is installed and packaged in the native amd64 release. It includes corrected Quadlet raw scalar encoding, missing configured rootless networking-helper checks, Compose launcher sources outside systemd's unit hierarchy, and consistent podman-compose selection across readiness/validation/runtime/boot. The shared dependency preset explicitly includes passt; no additional workstation package was installed.
+
+Release checksum/extraction and the shared installer with `--skip-packages` passed. Exact unified YAML/token bytes and the Docker daemon PID were preserved; installed version and HTTP 200 were verified. `make check test` passed with zero frontend diagnostics/full Go race suite; `make mcp-test` passed all seven acceptance contracts and official SDK stdio/HTTP 55-tool parity/authentication checks. Native guest evidence is tracked separately and does not establish reboot or share-client acceptance.
