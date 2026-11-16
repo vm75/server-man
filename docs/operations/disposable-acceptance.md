@@ -1,6 +1,6 @@
 # Declarative disposable-guest acceptance
 
-The native verifier uses the same central configuration tools as the UI. It is separate from the ordinary read-only/fixture checks. No currently provisioned guest or current native pass is claimed by the repository. Historical helper acceptance in [the earlier verification record](privileged-helper-verification.md) used retired share operations and does not prove this workflow.
+The native verifier uses the same central configuration tools as the UI. It is separate from the ordinary read-only/fixture checks. The [native acceptance record](native-acceptance.md) lists the actual disposable environment, versions, selected passes and outstanding gates; a partial result is never an all-target pass. Historical helper acceptance in [the earlier verification record](privileged-helper-verification.md) used retired share operations and does not prove this workflow.
 
 ## Boundary and prerequisites
 
@@ -40,7 +40,7 @@ bindings:
     name: smtest0
 ```
 
-The directory must already exist, with DAC permissions for the workload account and share daemons. The libvirt fixture must be a standalone bootable raw/qcow2 x86 BIOS guest compatible with the current adapter, with working graceful ACPI shutdown and access for both the manager and QEMU accounts. Do not use an important disk or a host path. Native virtualization must be available inside the disposable guest (nested KVM or supported software emulation).
+The directory must already exist, with DAC permissions for the workload account and share daemons. The libvirt fixture must be a standalone bootable raw/qcow2 x86 BIOS guest compatible with the current adapter, with working graceful ACPI shutdown, a serial login prompt after boot, and access for both the manager and QEMU accounts. The native runner waits up to three minutes for this dedicated libvirt fixture to reach serial login after start/restart before requesting further lifecycle operations; a running QEMU process alone cannot receive guest shutdown before the OS initializes. The bounded read-only console probe requires coreutils timeout, emits no console contents and disconnects before continuing. This is a fixture precondition, not application guest-health monitoring. Do not use an important disk or a host path. Native virtualization must be available inside the disposable guest (nested KVM or supported software emulation).
 
 For Incus, initialize the named local project/pool/network and preload a VM image alias named `server-man-test`, compatible with secure boot and an 8 GiB root disk. No image download or pool/network setup is supplied by the verifier. For container cases, preload the same trusted image reference into each selected engine under the manager account (rootless Podman and local Docker), and provide that reference as `SERVER_MAN_VM_IMAGE`. It must contain `sleep`; the test uses `sleep 3600` and a read-only fixture mount. Images and VM guest OS behavior remain the fixture author's responsibility.
 
