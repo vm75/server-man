@@ -64,16 +64,14 @@ func (c Coordinator) ServiceStatuses(ctx context.Context) (any, error) {
 		id := key[8:]
 		s := snapshot.Config.Services[id]
 		item := ServiceStatus{ID: id, Name: s.Name, Kind: s.Kind, Backend: backend(snapshot.Config, key), Enabled: s.Enabled, State: "unknown", Configuration: "unknown", Issues: []Issue{}}
-		blocked := false
 		for _, issue := range health.Issues {
 			if issue.Resource == key {
 				item.Issues = append(item.Issues, issue)
-				if issue.Severity != "warning" && issue.Field != "autostart" {
-					blocked = true
-				}
 			}
 		}
-		if a := c.Adapters[item.Backend]; a != nil && !blocked && ctx.Err() == nil {
+		// Readiness blocks activation, not observation: a running workload may
+		// remain observable even when its data or startup prerequisites are broken.
+		if a := c.Adapters[item.Backend]; a != nil && ctx.Err() == nil {
 			obs, e := a.Inspect(ctx, snapshot.Config, key)
 			if e == nil {
 				item.Issues = append(item.Issues, obs.Issues...)
