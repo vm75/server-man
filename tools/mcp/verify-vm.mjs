@@ -1,6 +1,7 @@
 // Explicit native integration check for an already provisioned disposable guest.
 // Nothing runs against this workstation's management endpoint.
 import assert from 'node:assert/strict'
+import {setTimeout as delay} from 'node:timers/promises'
 import {lstat} from 'node:fs/promises'
 import path from 'node:path'
 import {Client} from '@modelcontextprotocol/sdk/client/index.js'
