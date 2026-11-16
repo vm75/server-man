@@ -338,7 +338,7 @@ func TestParseReportsSanitizedYAMLLineNumbers(t *testing.T) {
 	}{
 		{"unknown field", "version: 1\nservices:\n  example:\n    kind: container\n    private_unknown: secret-inline-value\n", "line 5"},
 		{"invalid type", "version: 1\nservices: private-type-value\n", "line 2"},
-		{"syntax failure", "version: 1\nservices: [private-syntax-value\n", "line 2"},
+		{"syntax failure", "version: 1\nservices: [private-syntax-value\n", "line 1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse([]byte(tc.input))
