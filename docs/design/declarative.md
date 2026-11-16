@@ -90,7 +90,7 @@ When privilege routing is enabled, helper-only `shares_definitions_inspect`, `sh
 
 `managed_shares` returns authoritative publication/configuration status; `managed_share_publish` changes the central toggle and applies the protocol set without altering directory data or host daemon enablement. Publication checks do not prove client usability or revoke existing Samba sessions. Unused missing storage remains in configuration health but no longer blocks unrelated apply or unpublication.
 
-File shares uses central definition forms; old direct native share-edit tools and their unused UI have been removed. Native metadata comments remain integrity markers in derived fragments. Complete drift repair, daemon/account/credential/ACL diagnostics, real Samba client/NFS mount checks and portable restore remain open. Tests use temporary files and native-command fixtures; no development-host exports or shares were changed.
+File shares uses central definition forms; old direct native share-edit tools and their unused UI have been removed. Native metadata comments remain integrity markers in derived fragments. Disposable-guest SMB3 and NFSv4.2 clients have verified reads/writes, read-only denial, authentication/user/client restrictions, root squashing, policy changes and fresh-session denial after unpublication; see the [native evidence and limits](../operations/native-acceptance.md#sambanfs-client-acceptance). Complete drift repair, daemon/account/credential/ACL diagnostics and portable restore remain open. Ordinary tests use temporary files/native-command fixtures; live client acceptance used isolated namespaces only inside the dedicated guest. No workstation exports or shares were changed.
 
 ## Typed definition editing and recovery UI
 

@@ -21,6 +21,8 @@ Native versions:
 | Samba | 4.24.7 |
 | NFS server package | 1:2.9.1-1ubuntu1 |
 | passt | 0.0~git20260728.f8df3f1-1 |
+| smbclient (client follow-up) | 4.24.7-Ubuntu-4.24.7+dfsg-1ubuntu1 |
+| mount.nfs (client follow-up) | nfs-utils 2.9.1 |
 
 Containers use a preloaded BusyBox image pinned to `sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662`. VM fixtures use a prepared standalone BIOS disk and an explicit local Incus VM image/pool/network. All test resources live under the dedicated fixture namespace and data root. Guest package/backend preparation is isolated from workstation workloads; separately approved workstation prerequisite installations are recorded in the deployment document.
 
@@ -35,8 +37,8 @@ The official SDK runner uses the same typed revision-pinned configuration edits 
 | Docker Compose | Full lifecycle sequence passed on 2088bc4 |
 | libvirt | Full lifecycle sequence passed on 449e3bd, with serial boot readiness verified before shutdown |
 | Incus | Stopped creation/update/enable passed on 7744ccf; reviewed lifecycle continuation passed on a5916d5; retained stopped/boot-disabled |
-| Samba | Central definition/update/publication/unpublication/removal passed on a5916d5 |
-| NFS | Central definition/update/publication/unpublication/removal passed on a5916d5 |
+| Samba | Central publication lifecycle passed on a5916d5; isolated client access/denial/changed policy/unpublication passed on 18020d4 |
+| NFS | Central publication lifecycle passed on a5916d5; isolated client mounts/access/root squash/changed policy/unpublication passed on 18020d4 |
 
 The full lifecycle sequence comprises stopped definition/update, enable without start, disable without stop, current start/stop/restart, stop while enabled, a deferred runtime update followed by shutdown/start, stable VM identity where applicable, and removal retaining external data. Incus is deliberately retained stopped and boot-disabled after its sequence because destructive removal/export is deferred. Container removal and the unchanged data sentinel were verified before subsequent cases.
 
@@ -52,7 +54,7 @@ All seven targets now have the selected operation evidence above across the reco
 
 ## Outstanding evidence
 
-An uninterrupted final-build matrix, normal-environment enabled-boot reliability after the unexplained Netavark failure, daemon restart, broader guest OS/application health, SMB/NFS clients, Debian/Arch fresh installations and broader supported profiles remain separate gates. Actual guest power cycles are recorded below; these do not prove reliability across all profiles. Archival/restore acceptance is deferred by user instruction.
+An uninterrupted final-build matrix, normal-environment enabled-boot reliability after the unexplained Netavark failure, daemon restart, broader guest OS/application health, Debian/Arch fresh installations and broader supported profiles remain separate gates. Actual guest power cycles and isolated share clients are recorded below; these do not prove reliability across all profiles or separate physical client hosts. Archival/restore acceptance is deferred by user instruction.
 
 
 ## Initial cold-boot observation
@@ -74,3 +76,18 @@ The five exact fixtures were stopped through shared management operations, prese
 Disable then left all five workloads running with matching definitions. The temporary backtrace file and manager environment setting were removed. A further graceful cold power cycle changed boot ID; raw observations before provider queries showed neither VM running. All five application rows were stopped, matching and disabled. Thus the actual disabled-after-running policy check passed across all five backends on this guest/build.
 
 Cleanup stopped the known Quadlet network helper, removed four temporary definitions through central plans, verified no network consumers and removed only that known unused network. The original Incus definition is again stopped/disabled, with its disks and external references retained. The shared sentinel SHA256 is unchanged. No workstation reboot or existing-workload mutation occurred.
+
+## Samba/NFS client acceptance
+
+The guest was upgraded through the shared installer to 18020d4 with packages skipped. Only inside that guest, smbclient was installed and a temporary Samba credential for the manager account was generated through stdin and private runtime files; the account had no Samba entry beforehand. A new network namespace used an isolated veth pair, server 198.18.31.1 and client 198.18.31.2, without a default route or workstation interface. Each client probe used a private mount namespace. Thus requests crossed a real network interface and protocol boundary, while sharing the disposable guest's kernel and client binaries; this is not a second physical host or a different client OS.
+
+All definitions, access-policy edits and publication/removal operations used revision-pinned shared tools/jobs. Each protocol used the existing fixture storage, initially mode 0755 owned by UID/GID 1000, without changing its permissions. The client suite verified:
+
+| Protocol | Observed client behavior |
+| --- | --- |
+| Samba/SMB3 | Authenticated sentinel read matched SHA256. Read-only upload was denied. Writable update allowed upload/download/delete owned by UID 1000. Wrong-password and anonymous access were denied. Restricting valid users excluded manager; fresh access failed. Restoring manager restored writable access. Unpublication denied a fresh tree connection. |
+| NFSv4.2/sec=sys | Real mounts read the sentinel with matching SHA256. Read-only export denied UID 1000 writes. Writable update permitted UID 1000 create/delete, retaining that ownership, while root-squashed UID 0 writes were denied. Changing the allowed client address denied fresh mounts from 198.18.31.2. Restoring the address restored writable access. Unpublication denied a fresh mount. |
+
+Both protocols passed readonly, writable, restricted, writable-again and unpublished cases (ten checks). Denials required specific protocol/permission errors; a generic failed command did not count. Configuration status matched publication throughout. Removal preserved observed unmanaged native share definitions and all server/service/storage/binding/private-file references. The original Incus VM remained stopped/disabled. All client-created files were removed, and the sentinel SHA256 remained unchanged.
+
+Cleanup verified no client namespace processes or client mounts, removed the exact veth/namespace, deleted only the newly added Samba credential entry and erased private generated credential/runtime files. No workstation package, share, mount, account or network was changed. Existing Samba-session revocation, other UID mappings, Kerberos and other client kernels were not tested. See the [client test procedure](disposable-acceptance.md#isolated-share-client-follow-up) for the boundary and cases.

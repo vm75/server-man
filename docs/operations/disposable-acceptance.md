@@ -70,3 +70,20 @@ Each mutation runs as a tracked job with a 25-minute deadline. At deadline the r
 A native run proves only its selected observable checks on its recorded guest/provider versions. It does not prove actual host reboot/daemon-restart policy, guest OS/application health, SMB/NFS client access, portable restore, every distribution or unrelated host settings. Those remain separate acceptance gates.
 
 `make mcp-test` includes seven in-memory guard/workflow contract tests plus the usual official SDK checks. Contracts verify refusal conditions, safe target selection, central mutation vocabulary and detection of broken enable/disable or configuration-preservation semantics. They neither start a guest nor substitute for a native run. The native entry point is never executed by ordinary checks or CI automatically.
+
+## Isolated share-client follow-up
+
+This is a separately prepared, operator-controlled native check, not part of `make mcp-vm-test`. The [recorded run](native-acceptance.md#sambanfs-client-acceptance) uses a stopped/disabled retained Incus fixture and refuses existing central shares. Snapshot all unrelated central references and observed unmanaged native share definitions before testing; compare them after each protocol. Use only the dedicated shared fixture directory and a data sentinel whose hash is known beforehand.
+
+Inside the disposable guest, prepare smbclient and mount.nfs, a temporary Samba credential for an existing fixture account, and an isolated veth-backed network namespace. Refuse a conflicting interface/namespace/address range. The recorded subnet is 198.18.31.0/30 with no default route. Generate the credential at runtime, submit it through stdin, and give smbclient a root-private authentication file through `-A`; never put the password in argv, output, configuration or Git. Preserve any preexisting Samba account instead of overwriting its credential. Keep all network/account preparation outside the application configuration.
+
+Run clients in the separate network namespace and a private mount namespace (`unshare --mount --propagation private`). NFS mounts must be unmounted before the probe exits; do not mount them in the guest's global namespace or on the workstation. Use bounded subprocess deadlines/output and fixed arguments. Assert the client actually occupies different network/mount namespaces. Use a distinct reserved test filename; never overwrite an existing file or alter the fixture directory's DAC permissions to make a check pass.
+
+For each protocol, use reviewed central typed edits and publication jobs in this sequence:
+
+1. Define stopped/unpublished with read-only access, then publish. Read the sentinel through the native client and compare its hash; confirm client writes fail with an explicit permission/protocol denial.
+2. Save writable access, then create/read/delete a temporary file as the intended UID. For Samba, also deny wrong-password and anonymous access. For NFS with root squashing, verify UID 0 cannot create a file while the intended UID can.
+3. Exclude the authenticated user (Samba) or client address (NFS). Confirm fresh access/mount is denied for that reason. Restore the intended policy and repeat the writable check.
+4. Unpublish and confirm fresh access/mount is denied, then remove the central share definition. Compare unrelated central references/native share definitions and the sentinel hash.
+
+Stop immediately on failure and retain the checkpoint; do not silently loosen access rules or treat timeouts as permission denials. After a successful run, verify no client processes/mounts remain, remove only the temporary namespace/veth and newly added test credential, and erase private credential/runtime files. Record exact application/client/server versions and the shared-kernel limitation. These tests prove fresh-session behavior; they do not promise revocation of existing Samba sessions or certify other clients/authentication modes.
