@@ -4,7 +4,7 @@ Status: active, 2026-11-15. This checklist supersedes the broader plan's release
 
 ## Scope
 
-First deployment: this Ubuntu 26.10 machine, as its workload account. Debian and Arch Linux remain support targets. [Debian 13 installer/prerequisite evidence](../operations/debian-acceptance.md) now exists; full Debian workload/boot acceptance remains open. Native Arch testing is deferred by user instruction on 2026-11-16 and is excluded from the current release gates. Retain its implementation/package mappings and label native support unverified.
+Reference first deployment: an Ubuntu 26.10 host under a selected non-root workload account; no particular hostname, user, checkout path, or LAN layout is assumed. Debian and Arch Linux remain support targets. [Debian 13 installer/prerequisite evidence](../operations/debian-acceptance.md) now exists; full Debian workload/boot acceptance remains open. Native Arch testing is deferred by user instruction on 2026-11-16 and is excluded from the current release gates. Retain its implementation/package mappings and label native support unverified.
 
 - One authoritative server-man YAML for application settings, managed containers, VMs and Samba/NFS shares. Native definitions are derived state.
 - Podman Quadlet and Compose, Docker Compose, KVM/libvirt and Incus VMs. Configure/update, start/stop and independent boot enable/disable through the same validated web/MCP functions.
