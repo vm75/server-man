@@ -4,7 +4,7 @@ Status: active, 2026-11-15. This checklist supersedes the broader plan's release
 
 ## Scope
 
-First deployment: this Ubuntu 26.10 machine, as its workload account. Debian and Arch Linux remain support targets. [Debian 13 installer/prerequisite evidence](../operations/debian-acceptance.md) now exists; full Debian workload/boot and fresh Arch acceptance remain open.
+First deployment: this Ubuntu 26.10 machine, as its workload account. Debian and Arch Linux remain support targets. [Debian 13 installer/prerequisite evidence](../operations/debian-acceptance.md) now exists; full Debian workload/boot acceptance remains open. Native Arch testing is deferred by user instruction on 2026-11-16 and is excluded from the current release gates. Retain its implementation/package mappings and label native support unverified.
 
 - One authoritative server-man YAML for application settings, managed containers, VMs and Samba/NFS shares. Native definitions are derived state.
 - Podman Quadlet and Compose, Docker Compose, KVM/libvirt and Incus VMs. Configure/update, start/stop and independent boot enable/disable through the same validated web/MCP functions.
@@ -12,6 +12,7 @@ First deployment: this Ubuntu 26.10 machine, as its workload account. Debian and
 - Host system services and software remain direct operations outside workload YAML. Preserve rootless workload ownership and unmanaged share configuration/data.
 - Existing supported VM profiles are the initial boundary: prepared existing disks for libvirt; local images and explicit initialized project/pool/network for Incus. Advanced guest profiles and destructive VM removal are not deployment prerequisites.
 - Backup, archival, restore and their native acceptance are deferred. Preserve existing capture/recovery code and tests. Pending recovery journals continue to block unsafe mutations; never bypass them to enable deployment.
+- Native Arch installation/workload/boot testing is deferred. Do not provision an Arch test host or make its acceptance a condition of this deployment; existing shared fixture coverage does not certify native Arch support.
 - Use the canonical `server-man` spelling throughout; no backward compatibility or migration layer.
 
 ## Deployment sequence
@@ -30,6 +31,10 @@ First deployment: this Ubuntu 26.10 machine, as its workload account. Debian and
 ## Completion boundary
 
 A running web service is an application deployment, not proof that all workloads are ready. Distinguish app health, provider availability, fixture coverage, live lifecycle, boot and client checks. Do not claim Debian/Arch support verified from Ubuntu checks. Release scope excludes backup/restore; the broader declarative phase remains incomplete until its retained future requirements pass.
+
+The current scope above supersedes older references to Arch acceptance gates in the dated evidence below. Arch testing resumes only when requested; its deferral does not waive the remaining active Ubuntu/Debian checks.
+
+Deferral verification: documentation-only update; `git diff --check` passed. No runtime or package changes were made.
 
 Deployment evidence: [Ubuntu first deployment](../operations/ubuntu-first-deployment.md). Application is installed, enabled and serving HTTP 200. Authenticated readiness reports the unified configuration valid; initial missing-file behavior is covered separately. Docker/Incus account access is verified; Incus initialization remains pending; no workload/share lifecycle acceptance is claimed. Explicit user approval allowed the helper rule; its isolated syntax check passed. Full sudoers validation found an unrelated existing file-mode issue, recorded in the operations note.
 

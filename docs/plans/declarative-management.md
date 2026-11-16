@@ -2,6 +2,8 @@
 
 Status: implementation in progress; archival/backup/restore deferred on 2026-11-15. First deployment follows the [single-server release plan](single-server-release.md); native release acceptance remains incomplete. Created: 2026-11-14.
 
+Updated 2026-11-16: native Arch testing is deferred by user instruction and excluded from current acceptance/completion gates. Retain Arch implementation/package mappings as an unverified support target; do not start Arch guest provisioning or native tests until requested. Existing shared command fixtures are not native Arch certification. Older evidence/gate wording is superseded by this scope decision.
+
 This document is the scope and progress authority for the next server-man phase, linked from [the implementation tracker](implementation.md). All implementation checkboxes start unchecked. Commit each verified implementation step with its tracking update. Record evidence and limits, not intentions, before checking a step complete. This planning change does not authorize running mutations against development-host workloads.
 
 ## Product goal and agreed scope

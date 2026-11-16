@@ -150,7 +150,7 @@ For historical host configuration and verification, see the
 
 ## First Ubuntu deployment
 
-See the [current deployment record](operations/ubuntu-first-deployment.md) for application access, installed dependencies and remaining provider setup. A [fresh Debian 13 installer follow-up](operations/debian-acceptance.md) verifies corrected dependency installation and five provider prerequisite checks; Debian workload/boot acceptance and fresh Arch installation remain open.
+See the [current deployment record](operations/ubuntu-first-deployment.md) for application access, installed dependencies and remaining provider setup. A [fresh Debian 13 installer follow-up](operations/debian-acceptance.md) verifies corrected dependency installation and five provider prerequisite checks; Debian workload/boot acceptance remains open. Native Arch testing is deferred by user instruction, excluded from current release gates and not represented as verified support.
 
 ## Docker boot readiness
 
@@ -166,6 +166,6 @@ Managed Podman Compose explicitly uses `podman-compose`, installed by the Podman
 
 Both Podman boot paths require the packaged user unit `podman-user-wait-network-online.service`. Quadlet adds it natively; generated Compose launchers use the same dependency because user units cannot wait directly on the system network-online target. The dependency starts the helper when needed; do not enable it separately. A missing/masked/unreadable helper appears as a boot prerequisite while current-run Start/Stop remains available. Use a Podman package providing the unit and recheck. Server-man does not install a compatibility shim.
 
-The Incus VM preset explicitly includes QEMU utilities, OVMF, the QEMU SPICE module and dnsmasq-base on Debian/Ubuntu; repository recommendations are disabled, so these cannot be left implicit. Arch's preset includes cdrtools for VM configuration media alongside Incus and its native QEMU dependencies. The initial verified release architecture is amd64; other architectures, full Debian workload acceptance and fresh Arch installation remain acceptance gates.
+The Incus VM preset explicitly includes QEMU utilities, OVMF, the QEMU SPICE module and dnsmasq-base on Debian/Ubuntu; repository recommendations are disabled, so these cannot be left implicit. Arch's preset includes cdrtools for VM configuration media alongside Incus and its native QEMU dependencies; native Arch testing is deferred. The initial verified release architecture is amd64; other architectures and full Debian workload acceptance remain open.
 
 On Debian, the Docker preset explicitly installs `docker.io`, `docker-cli` and `docker-compose`. Debian splits the CLI from the daemon and recommends it rather than requiring it; installation with recommendations disabled needs the explicit client package. Ubuntu uses its native `docker-compose-v2` package. Both guided installation and Software dependency setup use this same package policy.

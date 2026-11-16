@@ -54,7 +54,7 @@ All seven targets now have the selected operation evidence above across the reco
 
 ## Outstanding evidence
 
-An uninterrupted final-build matrix, daemon restart, broader guest OS/application health, Debian/Arch fresh installations and broader supported profiles remain separate gates. Actual guest power cycles, including a normal-environment enabled/disabled pair after the network-ordering correction, and isolated share clients are recorded below. These do not prove reliability across all profiles or separate physical client hosts. The earlier Netavark failure's cause is not proven; a subsequent passing run is not causal proof. Archival/restore acceptance is deferred by user instruction.
+An uninterrupted final-build matrix, daemon restart, broader guest OS/application health, Debian workload acceptance and broader supported profiles remain separate gates. Native Arch testing is deferred by user instruction and excluded from the current release gates. Actual guest power cycles, including a normal-environment enabled/disabled pair after the network-ordering correction, and isolated share clients are recorded below. These do not prove reliability across all profiles or separate physical client hosts. The earlier Netavark failure's cause is not proven; a subsequent passing run is not causal proof. Archival/restore acceptance is deferred by user instruction.
 
 
 ## Initial cold-boot observation

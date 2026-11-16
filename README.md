@@ -4,6 +4,8 @@ A lightweight Linux server manager inspired by Cockpit, with a responsive web in
 
 The immediate goal is a [single-server deployment](docs/plans/single-server-release.md), first on Ubuntu, with Debian and Arch Linux as support targets. One portable YAML configuration owns managed containers, VMs, storage references and file shares. Applications supports Podman Quadlet (default), Podman Compose, Docker Compose, existing-disk KVM/libvirt and local Incus VMs. Configuration and File shares provide typed editors and reviewed changes. Start/Stop controls current execution; Enable/Disable controls boot startup independently. Native lifecycle and boot acceptance remains incomplete; see [current behavior and limits](docs/design/declarative.md).
 
+Native Arch testing is deferred. Arch remains an unverified support target and does not block the current release.
+
 Backup/restore is deferred and is not required for the initial deployment. Partial capture and interrupted-capture recovery remain available, but captures are not restorable backups. Existing recovery journals still require explicit resolution before managed mutations. The [broader declarative plan](docs/plans/declarative-management.md) retains future work.
 
 The overview provides bounded Linux resource histories and process inventory. Services manages host system/user systemd units and bounded journal output. Updates manages native packages directly on the host. These host operations remain outside workload configuration. Managed application units shown in Services route lifecycle and startup changes through the application's configuration and coordinator.
