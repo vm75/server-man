@@ -1,0 +1,24 @@
+# Debian disposable installation acceptance
+
+Recorded 2026-11-16 UTC. This is a dedicated Debian 13 guest used for distribution acceptance, separate from the installed Ubuntu workstation and its preserved test guest. It is not a claim of full Debian workload, boot or share-client acceptance.
+
+The official Debian trixie genericcloud amd64 build is 20261111-2659, image `debian-13-genericcloud-amd64-20261111-2659.qcow2`, 341901312 bytes. Publisher HTTPS SHA512SUMS from the [fixed release directory](https://cloud.debian.org/images/cloud/trixie/20261111-2659/) matched:
+
+```text
+3247873136ba09b060fab45e9c115239f81c1d401fce00b8fa9b872013f7135d6a40b12462ab5ac03b9fa4ed5955dd0e8d1c900109a939ad7a0a4dafe7dea47b
+```
+
+No detached-signature verification is claimed. The guest uses a private sparse 24 GiB overlay, two vCPUs/6 GiB RAM and nested KVM. It shares no host filesystem, existing workload or physical device. SSH uses a private generated key and pinned host key on loopback port 22473. Its fixture hostname is server-man-test and account manager is UID/GID 1000, with broad test-only preparation sudo access; this does not establish restricted-sudo-only acceptance. Keys/seed/logs are private ignored artifacts. The completed Ubuntu guest was verified idle and gracefully powered off; its disk and retained Incus data were preserved. The workstation was not rebooted.
+
+## Initial release installation
+
+The actual packaged release `install.sh --user manager --backends all --yes` ran on the fresh guest, including repository dependency installation, without `--skip-packages`. It completed on 2c15260. Native inspection verified:
+
+- Active system server-man service running as UID 1000/manager, with docker, libvirt and incus-admin groups in the actual process.
+- One private owner-0600 YAML and token, no JSON bootstrap.
+- Root-owned 0755 helper and the exact no-argument manager helper rule, passing isolated visudo validation.
+- Installed version 0.1.0-alpha.1+g2c15260a7542, HTTP health 200 and nested /dev/kvm available.
+
+The five real shared backend prerequisite functions then ran as manager with its user bus. Podman Quadlet, Podman Compose, libvirt and Incus returned zero issues. Docker correctly reported a missing executable. Actual Debian repository/package status confirmed docker.io and docker-compose installed, docker-cli absent, and both packages only recommending docker-cli. The [native package relationship](https://packages.debian.org/trixie/docker.io) explains why no-recommends installation omitted it.
+
+The shared Debian dependency preset now explicitly requests docker-cli for guided/source/release installation and Software dependency setup. Command fixtures and full race/type checks cover the correction; repaired installer execution and native recheck are recorded separately when performed. No workstation package was installed or refreshed by this Debian acceptance work. Incus pools/networks and managed workloads/shares have not been initialized in this guest.

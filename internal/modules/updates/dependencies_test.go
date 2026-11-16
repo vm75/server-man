@@ -53,6 +53,24 @@ func TestPodmanInstallIncludesRootlessNetworkHelper(t *testing.T) {
 	}
 }
 
+func TestDebianDockerInstallIncludesClientWithoutRecommendations(t *testing.T) {
+	b, r := fixture(t, "apt")
+	b.distributionID = "debian"
+	if _, err := b.InstallDependencies(context.Background(), "docker", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	commands := r.recorded()
+	args := commands[len(commands)-1].Args
+	if !slices.Contains(args, "--no-install-recommends") {
+		t.Fatal("dependency installation policy changed", args)
+	}
+	for _, name := range []string{"docker.io", "docker-cli", "docker-compose"} {
+		if !slices.Contains(args, name) {
+			t.Fatal("Docker runtime/provider is incomplete", name, args)
+		}
+	}
+}
+
 func TestIncusInstallIncludesVMDependenciesWithoutRecommendations(t *testing.T) {
 	for _, distribution := range []string{"debian", "ubuntu"} {
 		packages, err := DependencyPackages("apt", distribution, "incus")

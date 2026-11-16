@@ -37,6 +37,9 @@ func TestBackendPlanAndDistributionPackages(t *testing.T) {
 		if !slices.Contains(packages, want) {
 			t.Fatal(packages)
 		}
+		if distro == "debian" && !slices.Contains(packages, "docker-cli") {
+			t.Fatal("Debian no-recommends plan omits Docker client", packages)
+		}
 	}
 	if _, _, err := packagePlan("unsupported", targets); err == nil {
 		t.Fatal("unsupported distribution accepted")

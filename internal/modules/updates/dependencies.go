@@ -34,7 +34,9 @@ func dependencyPackageNames(manager, distribution, target string) (string, error
 			if distribution == "ubuntu" {
 				return "docker.io docker-compose-v2", nil
 			}
-			return "docker.io docker-compose", nil
+			// Debian splits the client from the daemon and only recommends it.
+			// Our no-recommends installation must request both explicitly.
+			return "docker.io docker-cli docker-compose", nil
 		case "dnf":
 			return "moby-engine docker-compose", nil
 		case "pacman", "zypper":
