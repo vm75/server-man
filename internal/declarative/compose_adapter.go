@@ -43,6 +43,42 @@ func (p *Compose) command(file, id string, args ...string) core.Command {
 func (p *Compose) userCommand(args ...string) core.Command {
 	return userSystemdCommand(p.Systemctl, args...)
 }
+func (p *Compose) bootProperties(ctx context.Context, id string) (map[string]string, error) {
+	output, err := p.Runner.Capture(ctx, p.userCommand("show", composeUnit(id), "--property=LoadState,ActiveState,UnitFileState,NeedDaemonReload,FragmentPath,DropInPaths"))
+	if err != nil {
+		return nil, errors.New("cannot inspect Compose boot unit")
+	}
+	fields := map[string]string{}
+	for _, line := range strings.Split(output, "\n") {
+		k, v, ok := strings.Cut(line, "=")
+		if ok {
+			fields[k] = v
+		}
+	}
+	return fields, nil
+}
+
+func (p *Compose) removeBootUnit(ctx context.Context, key, id string) error {
+	fields, err := p.bootProperties(ctx, id)
+	if err != nil {
+		return err
+	}
+	if fields["LoadState"] == "not-found" && fields["ActiveState"] == "inactive" {
+		return nil
+	}
+	if fields["LoadState"] != "loaded" || fields["FragmentPath"] != p.unitFile(key) || fields["DropInPaths"] != "" || fields["NeedDaemonReload"] != "no" {
+		return errors.New("Compose boot unit identity or unmanaged overrides prevent removal")
+	}
+	if fields["ActiveState"] != "active" && fields["ActiveState"] != "inactive" && fields["ActiveState"] != "failed" {
+		return errors.New("wait for the Compose boot operation to finish before removal")
+	}
+	for _, operation := range []string{"stop", "disable"} {
+		if err = p.Runner.Run(ctx, p.userCommand(operation, composeUnit(id)), io.Discard); err != nil {
+			return errors.New("Compose boot unit removal failed")
+		}
+	}
+	return nil
+}
 func (p *Compose) Validate(ctx context.Context, c Config, key string) error {
 	if p.Program == "" || p.Systemctl == "" {
 		return errors.New("container engine, compatible Compose provider and user systemd are required")
@@ -178,19 +214,11 @@ func (p *Compose) Inspect(ctx context.Context, c Config, key string) (Observatio
 	}
 	obs.Registered = obs.Matches
 	// Native boot link state is part of registered configuration, not runtime state.
-	cmd := p.userCommand("show", composeUnit(id), "--property=LoadState,UnitFileState,NeedDaemonReload")
-	output, err := p.Runner.Capture(ctx, cmd)
+	fields, err := p.bootProperties(ctx, id)
 	if err != nil {
 		return obs, errors.New("cannot inspect Compose boot unit")
 	}
-	fields := map[string]string{}
-	for _, line := range strings.Split(output, "\n") {
-		k, v, ok := strings.Cut(line, "=")
-		if ok {
-			fields[k] = v
-		}
-	}
-	if fields["LoadState"] != "loaded" || fields["NeedDaemonReload"] != "no" {
+	if fields["LoadState"] != "loaded" || fields["NeedDaemonReload"] != "no" || fields["FragmentPath"] != p.unitFile(key) || fields["DropInPaths"] != "" {
 		obs.Matches = false
 	}
 	if c.Services[id].Enabled {
@@ -283,14 +311,16 @@ func (p *Compose) Apply(ctx context.Context, previous, desired Config, key, mode
 		}
 	}
 	if !exists {
+		// Containers have already been verified stopped. Retire the owned active
+		// oneshot before deleting its source, without touching foreign units.
+		if err = p.removeBootUnit(ctx, key, id); err != nil {
+			return err
+		}
 		// Native down uses only the previously owned project file; never volume flags.
 		if had {
 			if err = p.Runner.Run(ctx, p.command(p.file(key), id, "down"), io.Discard); err != nil {
 				return errors.New("Compose project removal failed")
 			}
-		}
-		if err = p.Runner.Run(ctx, p.userCommand("disable", composeUnit(id)), io.Discard); err != nil {
-			return errors.New("boot unit removal failed")
 		}
 	}
 	if err = publishArtifacts(p.resourceDir(key), before, after); err != nil {

@@ -121,7 +121,9 @@ func RenderComposeBoot(c Config, key, program, file string) ([]byte, error) {
 		}
 		fmt.Fprintf(&b, "Requires=%s\nAfter=%s\n", composeUnit(dep), composeUnit(dep))
 	}
-	b.WriteString("\n[Service]\nType=oneshot\nRemainAfterExit=no\nTimeoutStartSec=900\n")
+	// Keep the launcher cgroup alive: podman-compose's detached children can
+	// remain in it. An inactive oneshot would immediately terminate them.
+	b.WriteString("\n[Service]\nType=oneshot\nRemainAfterExit=yes\nTimeoutStartSec=900\n")
 	for _, env := range composeEnvironment(s.Engine) {
 		fmt.Fprintf(&b, "Environment=%s\n", unitValue(env))
 	}

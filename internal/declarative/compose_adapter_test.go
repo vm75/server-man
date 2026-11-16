@@ -24,17 +24,27 @@ func composeFixture(t *testing.T) (*Compose, Config, *composeRecorder) {
 	cfg.Services["website"] = service
 	r := &composeRecorder{}
 	p := &Compose{Store: c.Store, Engine: "podman", Program: "/usr/bin/podman", Systemctl: "/usr/bin/systemctl", Directory: filepath.Join(t.TempDir(), "runtime"), UnitDirectory: filepath.Join(t.TempDir(), "units"), Runner: r}
+	r.unitFile = p.unitFile("service/website")
 	return p, cfg, r
 }
 
 type composeRecorder struct {
-	commands   []core.Command
-	containers []managedContainer
-	enabled    bool
+	commands     []core.Command
+	containers   []managedContainer
+	enabled      bool
+	unitFile     string
+	unitFields   map[string]string
+	failBootStop bool
 }
 
 func (r *composeRecorder) Run(_ context.Context, cmd core.Command, _ io.Writer) error {
 	r.commands = append(r.commands, cmd)
+	if len(cmd.Args) > 4 && cmd.Args[3] == "link" {
+		r.unitFile = cmd.Args[4]
+	}
+	if len(cmd.Args) > 3 && cmd.Args[3] == "stop" && r.failBootStop {
+		return errors.New("fixture stop denied")
+	}
 	return nil
 }
 func (r *composeRecorder) Capture(_ context.Context, cmd core.Command) (string, error) {
@@ -44,7 +54,15 @@ func (r *composeRecorder) Capture(_ context.Context, cmd core.Command) (string, 
 		if r.enabled {
 			enabled = "enabled"
 		}
-		return "LoadState=loaded\nUnitFileState=" + enabled + "\nNeedDaemonReload=no\n", nil
+		fields := map[string]string{"LoadState": "loaded", "ActiveState": "inactive", "UnitFileState": enabled, "NeedDaemonReload": "no", "FragmentPath": r.unitFile, "DropInPaths": ""}
+		for k, v := range r.unitFields {
+			fields[k] = v
+		}
+		var output strings.Builder
+		for k, v := range fields {
+			output.WriteString(k + "=" + v + "\n")
+		}
+		return output.String(), nil
 	}
 	if len(cmd.Args) > 0 && cmd.Args[0] == "ps" {
 		rows := []any{}
@@ -83,8 +101,65 @@ func TestComposeLiteralRenderingAndNoRestartOwnerConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(boot)
-	if strings.Contains(text, "Restart=") || strings.Contains(text, "ExecStop=") || !strings.Contains(text, "Type=oneshot") || !strings.Contains(text, "RemainAfterExit=no") {
+	if strings.Contains(text, "Restart=") || strings.Contains(text, "ExecStop=") || !strings.Contains(text, "Type=oneshot") || !strings.Contains(text, "RemainAfterExit=yes") {
 		t.Fatal(text)
+	}
+}
+
+func TestComposeRemovalRetiresOnlyOwnedCompletedBootLauncher(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		fields           map[string]string
+		failStop, refuse bool
+	}{
+		{"active completed launcher", map[string]string{"ActiveState": "active"}, false, false},
+		{"missing launcher", map[string]string{"LoadState": "not-found", "ActiveState": "inactive", "FragmentPath": ""}, false, false},
+		{"foreign fragment", map[string]string{"FragmentPath": "/foreign/unit.service"}, false, true},
+		{"unmanaged override", map[string]string{"DropInPaths": "/foreign/override.conf"}, false, true},
+		{"pending boot launch", map[string]string{"ActiveState": "activating"}, false, true},
+		{"stale manager", map[string]string{"NeedDaemonReload": "yes"}, false, true},
+		{"stop failure", map[string]string{"ActiveState": "active"}, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, cfg, r := composeFixture(t)
+			if err := p.Apply(context.Background(), Config{Version: 1}, cfg, "service/website", "now"); err != nil {
+				t.Fatal(err)
+			}
+			r.commands = nil
+			r.unitFields = tc.fields
+			r.failBootStop = tc.failStop
+			err := p.Apply(context.Background(), cfg, Config{Version: 1}, "service/website", "now")
+			if (err != nil) != tc.refuse {
+				t.Fatal(err)
+			}
+			stop, down := -1, -1
+			for n, cmd := range r.commands {
+				if len(cmd.Args) > 3 && cmd.Args[3] == "stop" {
+					stop = n
+				}
+				if len(cmd.Args) > 0 && cmd.Args[0] == "compose" && slices.Contains(cmd.Args, "down") {
+					down = n
+				}
+			}
+			if tc.refuse {
+				if down >= 0 || (stop >= 0 && !tc.failStop) {
+					t.Fatal("refused removal mutated native workload/unit", r.commands)
+				}
+				if _, err := os.Stat(p.file("service/website")); err != nil {
+					t.Fatal("refusal removed source", err)
+				}
+				if _, err := os.Stat(p.unitFile("service/website")); err != nil {
+					t.Fatal("refusal removed boot source", err)
+				}
+			} else {
+				if down < 0 || (tc.name != "missing launcher" && (stop < 0 || stop > down)) {
+					t.Fatal("boot envelope not retired before project removal", r.commands)
+				}
+				if _, err := os.Stat(p.unitFile("service/website")); !os.IsNotExist(err) {
+					t.Fatal("boot source remains", err)
+				}
+			}
+		})
 	}
 }
 func TestComposeDefineDoesNotStartAndTogglePreservesExecution(t *testing.T) {

@@ -53,3 +53,8 @@ All seven targets now have the selected operation evidence above across the reco
 ## Outstanding evidence
 
 An uninterrupted final-build matrix, actual host reboot and daemon restart, broader guest OS/application health, SMB/NFS clients, Debian/Arch fresh installations and broader supported profiles remain separate gates. Do not infer them from a successful process start, autostart setting or daemon reload. Archival/restore acceptance is deferred by user instruction.
+
+
+## Initial cold-boot observation
+
+Five enabled workloads remained stopped before a deliberate graceful shutdown/power-on of the disposable guest. Its boot ID changed. Raw VM process observations before provider queries proved autonomous libvirt/Incus startup, and the application/user manager/provider services were active. Four workloads reported running/matching state; Podman Compose's success-returning inactive oneshot terminated its detached container's cgroup. Its command matched the fixture exactly and exited 0. A temporary native unit proved that RemainAfterExit=yes preserves the same container after main-command completion, and explicit unit stop terminates it. The launcher correction and safe owned-unit retirement have full fixture/race/type evidence; a corrected cold boot and disabled-running boot cycle are still required. Recovery stopped/disabled only the known boot fixtures and preserved the retained Incus definition/disks and shared data.
