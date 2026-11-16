@@ -22,6 +22,8 @@ Resource fingerprints include storage/private-file/network references. Changes a
 
 ## Initial Quadlet adapter
 
+Unit serialization distinguishes raw scalar directives from tokenized words. Quadlet Image, Volume and EnvironmentFile values and Compose WorkingDirectory paths use literal scalar encoding; Environment and Exec retain word quoting. All forms escape systemd percent specifiers, and ambiguous controls/backslashes or outer whitespace are refused before publication. Isolated native generator tests check the resulting command line for unwanted literal argument quotes.
+
 `Quadlet` renders private owned `.container` and `.network` sources below the application account's user Quadlet search directory (`$XDG_CONFIG_HOME/containers/systemd/server-man/<service>`). Names are deterministic. Containers share an application network with container-ID DNS aliases; applications are not implicitly pods. Fixed generator dry-runs validate isolated candidates and require every expected service in output. This does not launch containers or reload host services.
 
 Publication rejects foreign/manual changes and final symlinks, atomically replaces owned files and removes only known prior outputs. A user-manager reload registers definitions. New applications remain stopped. Immediate edits restart only previously running members when runtime settings changed. Enable/disable changes source `[Install]` boot dependencies without restarting members or invoking `systemctl enable` on generated services. Source and active-container fingerprints distinguish registered settings from running settings; deferred changes can report `restart_required`.

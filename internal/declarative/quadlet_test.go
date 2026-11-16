@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"server-man/internal/core"
 )
@@ -176,6 +177,57 @@ func TestNativeQuadletEscaping(t *testing.T) {
 	for _, data := range files {
 		if strings.Contains(string(data), "\nExecStartPre=") {
 			t.Fatal("unescaped directive injection")
+		}
+	}
+}
+
+func TestNativeQuadletScalarDirectivesDoNotAddLiteralArgumentQuotes(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	q := NewQuadlet(c.Store, core.Runner{})
+	if q.Generator == "" {
+		t.Skip("Quadlet generator not installed")
+	}
+	envFile := filepath.Join(filepath.Dir(c.Store.Path), "fixture.env")
+	if err := os.WriteFile(envFile, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Secrets = map[string]string{"fixture": "fixture.env"}
+	service := cfg.Services["website"]
+	container := service.Containers["web"]
+	container.EnvFiles = []string{"fixture"}
+	container.Mounts[0].ReadOnly = true
+	service.Containers["web"] = container
+	cfg.Services["website"] = service
+	files, err := RenderQuadlet(c.Store, cfg, "service/website")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for name, data := range files {
+		if err = os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	output, err := q.Runner.Capture(context.Background(), core.Command{Program: q.Generator, Args: []string{"--user", "--dryrun"}, Env: []string{"QUADLET_UNIT_DIRS=" + dir}, Timeout: 15 * time.Second})
+	if err != nil {
+		t.Fatal("native generator rejected fixture")
+	}
+	mount := c.Store.Resolve(cfg.Storage["content"].Path) + ":/srv/content:ro"
+	for _, value := range []string{container.Image, envFile, mount} {
+		if !strings.Contains(output, value) || strings.Contains(output, `\"`+value) || strings.Contains(output, value+`\"`) {
+			t.Fatal("native generator retained unwanted literal quotes around a scalar directive")
+		}
+	}
+}
+
+func TestUnitScalarValuesEscapeSpecifiersAndRejectAmbiguousLines(t *testing.T) {
+	value, err := unitScalarValue("/tmp/a b$literal%name:/fixture:ro")
+	if err != nil || value != "/tmp/a b$literal%%name:/fixture:ro" {
+		t.Fatal(value, err)
+	}
+	for _, value := range []string{"/tmp/path\nExecStart=/bin/false", "/tmp/back\\slash", " /tmp/leading", "/tmp/trailing ", "/tmp/path\t"} {
+		if _, err := unitScalarValue(value); err == nil {
+			t.Fatal("ambiguous scalar accepted")
 		}
 	}
 }

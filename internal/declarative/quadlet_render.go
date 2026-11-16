@@ -6,7 +6,6 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -17,8 +16,6 @@ func quadletBase(service, container string) string {
 }
 func quadletNetwork(service string) string { return "sm-network-" + digest([]byte(service))[:24] }
 
-// unitValue quotes one systemd/Quadlet token and escapes specifier expansion.
-func unitValue(s string) string { return strconv.Quote(strings.ReplaceAll(s, "%", "%%")) }
 func quadletUnits(c Config, id string) []string {
 	names := slices.Sorted(maps.Keys(c.Services[id].Containers))
 	units := make([]string, 0, len(names))
@@ -27,6 +24,7 @@ func quadletUnits(c Config, id string) []string {
 	}
 	return units
 }
+
 func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -54,7 +52,11 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 			}
 		}
 		b.WriteString("\n[Container]\n")
-		fmt.Fprintf(&b, "Image=%s\nContainerName=%s\nNetwork=%s.network\nNetworkAlias=%s\n", unitValue(v.Image), quadletBase(id, name), network, name)
+		image, err := unitScalarValue(v.Image)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Fprintf(&b, "Image=%s\nContainerName=%s\nNetwork=%s.network\nNetworkAlias=%s\n", image, quadletBase(id, name), network, name)
 		fmt.Fprintf(&b, "Label=io.server-man.service=%s\nLabel=io.server-man.container=%s\nLabel=io.server-man.fingerprint=%s\n", id, name, fingerprint)
 		b.WriteString("NoNewPrivileges=true\n")
 		for _, port := range v.Ports {
@@ -68,7 +70,11 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 			if !filepath.IsAbs(path) {
 				return nil, errors.New("manifest path must be absolute")
 			}
-			fmt.Fprintf(&b, "EnvironmentFile=%s\n", unitValue(path))
+			value, err := unitScalarValue(path)
+			if err != nil {
+				return nil, errors.New("private file path cannot be represented by Quadlet EnvironmentFile syntax")
+			}
+			fmt.Fprintf(&b, "EnvironmentFile=%s\n", value)
 		}
 		for _, m := range v.Mounts {
 			path := store.Resolve(c.Storage[m.Storage].Path)
@@ -79,7 +85,11 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 			if m.ReadOnly {
 				suffix = ":ro"
 			}
-			fmt.Fprintf(&b, "Volume=%s\n", unitValue(path+":"+m.Target+suffix))
+			value, err := unitScalarValue(path + ":" + m.Target + suffix)
+			if err != nil {
+				return nil, errors.New("mount path cannot be represented by Quadlet Volume syntax")
+			}
+			fmt.Fprintf(&b, "Volume=%s\n", value)
 		}
 		if v.MemoryMiB > 0 {
 			fmt.Fprintf(&b, "Memory=%dm\n", v.MemoryMiB)

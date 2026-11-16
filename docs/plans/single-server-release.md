@@ -112,3 +112,11 @@ Verification: `make check test` passed (zero frontend diagnostics and full Go ra
 ## Native verifier response correction (2026-11-15)
 
 The first live attempt refused before resource writes because the verifier incorrectly expected `managed_config_check` to return a wrapped readiness response. The actual operation returns Health directly. The verifier and in-memory fixture now consume that shape, and the official SDK test explicitly checks the real direct Health response. `npm --prefix tools/mcp run verify` passed all seven contracts and SDK stdio/HTTP parity. Before retry, the failed pre-write log was retained and absence of an apply journal was verified. The subsequent attempt passed definition preflight for all seven selected targets and reached a real Quadlet start, which exposed a separate native renderer bug recorded below; no full native matrix pass is claimed.
+
+## Native Quadlet scalar correction (2026-11-15)
+
+The live all-target run passed readonly preflight and the first Quadlet stopped-definition/update/enable checks, then failed its first start with a real native error: the read-only Volume option arrived as `ro` plus a literal quote. The generator had accepted the source, so the old generator-only name check did not establish runnable CLI arguments.
+
+Image, Volume and EnvironmentFile now use literal scalar encoding rather than token quoting. Shared native-unit value helpers distinguish these forms; Compose WorkingDirectory reuses the same scalar rule. Percent specifiers remain literal, while ambiguous control/backslash/outer-whitespace values fail before publication. Environment/Exec token handling is preserved. `make check test` passed with zero frontend diagnostics and the full Go race suite, including an actual installed-generator regression that rejects extra literal quotes in emitted scalar arguments.
+
+Operator recovery was explicit and confined to the disposable guest: stop, boot-disable and remove the one failed definition through its exact central plan, then verify/remove only its unused derived network helper/network and confirm the data sentinel remained unchanged. No blind runner cleanup, host workload change or persistent data deletion occurred. The corrected build still needs a new native matrix attempt; no full native pass is claimed.

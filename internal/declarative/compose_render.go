@@ -112,13 +112,11 @@ func RenderComposeBoot(c Config, key, program, file string) ([]byte, error) {
 		fmt.Fprintf(&b, "Requires=%s\nAfter=%s\n", composeUnit(dep), composeUnit(dep))
 	}
 	b.WriteString("\n[Service]\nType=oneshot\nRemainAfterExit=no\nTimeoutStartSec=900\nEnvironment=COMPOSE_DISABLE_ENV_FILE=1\nEnvironment=COMPOSE_ANSI=never\nEnvironment=PODMAN_COMPOSE_WARNING_LOGS=false\n")
-	directory := filepath.Dir(file)
-	// WorkingDirectory is a single path directive, not an Exec argument: quotes
-	// would become part of the path. Reject ambiguous line/path escapes.
-	if !literal(directory) || strings.TrimSpace(directory) != directory || strings.Contains(directory, "\\") {
+	directory, err := unitScalarValue(filepath.Dir(file))
+	if err != nil {
 		return nil, errors.New("Compose working directory contains unsupported whitespace or path escapes")
 	}
-	b.WriteString("WorkingDirectory=" + strings.ReplaceAll(directory, "%", "%%") + "\n")
+	b.WriteString("WorkingDirectory=" + directory + "\n")
 	args := append([]string{program}, composeArguments(file, id, "up", "--detach", "--no-build")...)
 	b.WriteString("ExecStart=")
 	for i, arg := range args {
