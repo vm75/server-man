@@ -4,7 +4,7 @@ Status: active. Updated: 2026-10-16. Check off a step only after its acceptance 
 
 ## Current deployment priority (2026-11-15)
 
-Deploy first on this Ubuntu machine, retaining Debian and Arch Linux as support targets. Focus on container/VM configuration and lifecycle, central Samba/NFS shares, and actionable prerequisite alerts. Backup/restore is deferred; preserve partial implementation. Follow the [single-server release plan](single-server-release.md). Full declarative-phase completion is separate from this initial deployment.
+Prioritize a single-server Ubuntu reference deployment, retaining Debian and Arch Linux as support targets. The product must not depend on a specific workstation, account, or filesystem layout. Focus on container/VM configuration and lifecycle, central Samba/NFS shares, and actionable prerequisite alerts. Backup/restore is deferred; preserve partial implementation. Follow the [single-server release plan](single-server-release.md). Full declarative-phase completion is separate from this initial deployment.
 
 Updated 2026-11-16: defer native Arch testing per user instruction. Keep Arch implementation/package mappings, mark native support unverified, and exclude its test-host/install/workload/boot acceptance from current release gates. Continue active Ubuntu/Debian work; do not resume native Arch testing until requested.
 
