@@ -15,6 +15,8 @@ Native versions:
 | Docker | 29.7.2 |
 | Docker Compose | 2.40.3+ds2-0ubuntu2 |
 | libvirt | 12.6.0 |
+| QEMU | 11.0.3 |
+| QEMU SPICE module package | 1:11.0.3+ds-2ubuntu2 |
 | Incus client/server | 7.0.1 |
 | Samba | 4.24.7 |
 | NFS server package | 1:2.9.1-1ubuntu1 |
@@ -32,9 +34,9 @@ The official SDK runner uses the same typed revision-pinned configuration edits 
 | Podman Compose | Full lifecycle sequence passed on 2088bc4 |
 | Docker Compose | Full lifecycle sequence passed on 2088bc4 |
 | libvirt | Full lifecycle sequence passed on 449e3bd, with serial boot readiness verified before shutdown |
-| Incus | Stopped creation failed on an unsupported query mutation flag; retained for correction |
-| Samba | Native setup passed; central publication sequence pending |
-| NFS | Native setup passed; central publication sequence pending |
+| Incus | Stopped creation/update/enable passed on 7744ccf; reviewed lifecycle continuation passed on a5916d5; retained stopped/boot-disabled |
+| Samba | Central definition/update/publication/unpublication/removal passed on a5916d5 |
+| NFS | Central definition/update/publication/unpublication/removal passed on a5916d5 |
 
 The full lifecycle sequence comprises stopped definition/update, enable without start, disable without stop, current start/stop/restart, stop while enabled, a deferred runtime update followed by shutdown/start, stable VM identity where applicable, and removal retaining external data. Incus is deliberately retained stopped and boot-disabled after its sequence because destructive removal/export is deferred. Container removal and the unchanged data sentinel were verified before subsequent cases.
 
@@ -44,6 +46,10 @@ Native verification exposed and corrected unsupported podman-compose project-dir
 
 Failures stop the runner. Retained fixture recovery is explicit and reviewed, preserves data, and uses central apply/recovery wherever possible. One stopped Compose removal required checking/deleting only its known generated files after the wrong provider prevented native down; central recovery then verified removal without replay. No failed run is counted as an all-target pass.
 
+The last Incus start initially failed before QEMU startup because the SPICE module was omitted by no-recommends package installation. The corrected preset was installed only in the guest, and the revised native readiness check returned zero issues. An explicit inspected-fixture continuation then verified start/disable/enable/deferred memory edit/stop/start/restart/stop/disable, stable UUID/MAC, both share protocols and unchanged server/storage/binding/private-file references. Serial login was checked before VM shutdown requests. Native inventory and final configuration health passed; the shared data sentinel remained byte-identical. No existing Incus instance or root storage was deleted. The two share cases preserved their observed unmanaged inventories; this is not a remote client test or proof of preservation across every unmanaged configuration.
+
+All seven targets now have the selected operation evidence above across the recorded builds and reviewed continuations. There has not been one uninterrupted all-target harness pass on a fresh guest with the final build.
+
 ## Outstanding evidence
 
-The remaining lifecycle targets, actual host reboot and daemon restart, guest OS/application health, SMB/NFS clients, Debian/Arch fresh installations and broader supported profiles remain separate gates. Do not infer them from a successful process start, autostart setting or daemon reload. Archival/restore acceptance is deferred by user instruction.
+An uninterrupted final-build matrix, actual host reboot and daemon restart, broader guest OS/application health, SMB/NFS clients, Debian/Arch fresh installations and broader supported profiles remain separate gates. Do not infer them from a successful process start, autostart setting or daemon reload. Archival/restore acceptance is deferred by user instruction.
