@@ -65,7 +65,7 @@ func ReadServer(data []byte) (*Config, error) {
 	typed := yaml.NewDecoder(bytes.NewReader(data))
 	typed.KnownFields(true)
 	if err := typed.Decode(&document); err != nil {
-		return nil, errors.New("configuration contains invalid server settings, an unknown field or incorrect field type")
+		return nil, errors.New("configuration contains invalid server settings, an unknown field or incorrect field type" + yamlutil.SafeLineLocation(err))
 	}
 	if document.Version != 1 {
 		return nil, errors.New("unsupported configuration version; expected 1")

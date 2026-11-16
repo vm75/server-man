@@ -118,3 +118,11 @@ func TestDefaultUnifiedPathAndResourceRepair(t *testing.T) {
 		t.Fatal("public configuration accepted")
 	}
 }
+
+// The startup parser must not echo values from private YAML on a typed error.
+func TestReadServerReportsSafeTypeErrorLocation(t *testing.T) {
+	_, err := ReadServer([]byte("version: 1\nservices: {}\nextra_field: private-server-secret\n"))
+	if err == nil || !strings.Contains(err.Error(), "line 3") || strings.Contains(err.Error(), "private-server-secret") {
+		t.Fatalf("unexpected private startup diagnostic: %v", err)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -42,4 +43,20 @@ func CheckStructure(ctx context.Context, node *yaml.Node, maxDepth, maxNodes int
 		return nil
 	}
 	return visit(node, 0)
+}
+
+// SafeLineLocation extracts only a parser line number from a YAML error.
+// Parser diagnostics can echo scalar values (including secret references), so
+// callers must never return the original decoder error to an API or journal.
+var safeLinePattern = regexp.MustCompile(`(?:^|[^[:alnum:]_])line ([1-9][0-9]{0,5})(?:[^[:digit:]]|$)`)
+
+func SafeLineLocation(err error) string {
+	if err == nil {
+		return ""
+	}
+	match := safeLinePattern.FindStringSubmatch(err.Error())
+	if len(match) != 2 {
+		return ""
+	}
+	return " at line " + match[1]
 }

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"server-man/internal/config"
+	"server-man/internal/yamlutil"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -106,7 +107,7 @@ func Parse(data []byte) (Config, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	var node yaml.Node
 	if err := dec.Decode(&node); err != nil {
-		return c, errors.New("invalid YAML configuration")
+		return c, errors.New("invalid YAML configuration" + yamlutil.SafeLineLocation(err))
 	}
 	if len(node.Content) != 1 || node.Content[0].Kind != yaml.MappingNode {
 		return c, errors.New("configuration must be one mapping")
@@ -120,8 +121,8 @@ func Parse(data []byte) (Config, error) {
 	}
 	typed := yaml.NewDecoder(bytes.NewReader(data))
 	typed.KnownFields(true)
-	if typed.Decode(&c) != nil {
-		return c, errors.New("configuration contains an unknown field or incorrect field type")
+	if err := typed.Decode(&c); err != nil {
+		return c, errors.New("configuration contains an unknown field or incorrect field type" + yamlutil.SafeLineLocation(err))
 	}
 	return c, c.Validate()
 }

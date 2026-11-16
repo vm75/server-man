@@ -328,3 +328,28 @@ func TestPackagedExampleIsAStoppedPortableDefinition(t *testing.T) {
 		t.Fatal(health.Issues)
 	}
 }
+
+// Error locations help users repair manually copied configurations without
+// exposing the unknown key's value or the parser's potentially sensitive text.
+func TestParseReportsSanitizedYAMLLineNumbers(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		want string
+	}{
+		{"unknown field", "version: 1\nservices:\n  example:\n    kind: container\n    private_unknown: secret-inline-value\n", "line 5"},
+		{"invalid type", "version: 1\nservices: private-type-value\n", "line 2"},
+		{"syntax failure", "version: 1\nservices: [private-syntax-value\n", "line 2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Parse([]byte(tc.input))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected sanitized %s location: %v", tc.want, err)
+			}
+			for _, forbidden := range []string{"secret-inline-value", "private-type-value", "private-syntax-value"} {
+				if strings.Contains(err.Error(), forbidden) {
+					t.Fatal("secret scalar appeared in diagnostic", err)
+				}
+			}
+		})
+	}
+}
