@@ -1,6 +1,40 @@
 package declarative
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"time"
+
+	"server-man/internal/core"
+)
+
+const podmanNetworkOnlineUnit = "podman-user-wait-network-online.service"
+
+// Quadlet and Compose user launchers share Podman's packaged bridge to the
+// system network-online target. Its current activity/enabled state is irrelevant:
+// the workload's dependency starts it at boot, without a global enable operation.
+func podmanBootIssues(ctx context.Context, program string, runner core.Executor, target string) []Issue {
+	if program == "" {
+		return nil // userManagerIssues reports the missing program.
+	}
+	issue := Issue{"unknown", "backend/" + target, "autostart", "podman_network_wait_unknown", "Podman's boot network wait unit could not be checked.", "Install a Podman package providing podman-user-wait-network-online.service and check access to the account's user manager, then recheck."}
+	cmd := userSystemdCommand(program, "show", podmanNetworkOnlineUnit, "--property=LoadState", "--value")
+	cmd.Timeout = 3 * time.Second
+	output, err := runner.Capture(ctx, cmd)
+	if err != nil {
+		return []Issue{issue}
+	}
+	switch strings.TrimSpace(output) {
+	case "loaded":
+		return nil
+	case "not-found", "masked", "error", "bad-setting":
+		issue.Severity = "error"
+		issue.Code = "podman_network_wait_unavailable"
+		issue.Message = "Podman's boot network wait unit is missing or unavailable."
+	}
+	return []Issue{issue}
+}
 
 // Use Podman's effective configuration and its own helper discovery rather than
 // assuming the server process and engine search the same executable paths.

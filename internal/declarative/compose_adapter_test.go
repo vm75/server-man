@@ -108,6 +108,15 @@ func TestComposeLiteralRenderingAndNoRestartOwnerConflict(t *testing.T) {
 	if strings.Contains(text, "Restart=") || strings.Contains(text, "ExecStop=") || !strings.Contains(text, "Type=oneshot") || !strings.Contains(text, "RemainAfterExit=yes") {
 		t.Fatal(text)
 	}
+	if !strings.Contains(text, "Wants="+podmanNetworkOnlineUnit+"\nAfter="+podmanNetworkOnlineUnit+"\n") {
+		t.Fatal("Podman user launcher lacks native host-network ordering", text)
+	}
+	s.Engine = "docker"
+	cfg.Services["website"] = s
+	boot, err = RenderComposeBoot(cfg, "service/website", "/usr/bin/docker", p.file("service/website"))
+	if err != nil || strings.Contains(string(boot), podmanNetworkOnlineUnit) {
+		t.Fatal("Docker acquired a Podman dependency", err)
+	}
 }
 
 func TestComposeRemovalRetiresOnlyOwnedCompletedBootLauncher(t *testing.T) {

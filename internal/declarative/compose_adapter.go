@@ -452,6 +452,9 @@ func (p *Compose) Prerequisites(ctx context.Context) []Issue {
 		}
 	}
 	issues = append(issues, userManagerIssues(ctx, p.Systemctl, p.Runner, p.Engine+"/compose")...)
+	if p.Engine == "podman" {
+		issues = append(issues, podmanBootIssues(ctx, p.Systemctl, p.Runner, "podman/compose")...)
+	}
 	if p.Engine == "docker" && p.Systemctl != "" {
 		issues = append(issues, p.dockerBootIssues(ctx)...)
 	}

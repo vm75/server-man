@@ -114,6 +114,11 @@ func RenderComposeBoot(c Config, key, program, file string) ([]byte, error) {
 	}
 	var b strings.Builder
 	b.WriteString(ownedHeader + "[Unit]\nDescription=server-man Compose boot startup\n")
+	if s.Engine == "podman" {
+		// User units cannot order against the system network-online.target.
+		// Use the same packaged bridge that Quadlet adds for rootless boot.
+		fmt.Fprintf(&b, "Wants=%s\nAfter=%s\n", podmanNetworkOnlineUnit, podmanNetworkOnlineUnit)
+	}
 	for _, dep := range s.DependsOn {
 		ds := c.Services[dep]
 		if ds.Backend != "compose" || ds.Engine != s.Engine {

@@ -3,15 +3,91 @@ package declarative
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"server-man/internal/core"
 )
 
 const podmanNetworkFixture = `"networkBackendInfo":{"backend":"netavark","path":"/fixture/netavark","dns":{"path":"/fixture/aardvark-dns"}}`
+
+type podmanBootRecorder struct {
+	podmanInfoRecorder
+	output  string
+	failure error
+}
+
+func (r *podmanBootRecorder) Capture(ctx context.Context, cmd core.Command) (string, error) {
+	if slices.Contains(cmd.Args, podmanNetworkOnlineUnit) {
+		r.commands = append(r.commands, cmd)
+		return r.output, r.failure
+	}
+	return r.podmanInfoRecorder.Capture(ctx, cmd)
+}
+
+func TestPodmanNetworkWaitReadinessAndBootOnlyBlocking(t *testing.T) {
+	for _, tc := range []struct {
+		name, output, code, severity string
+		failure                      error
+	}{
+		{name: "loaded", output: "loaded\n"},
+		{name: "missing", output: "not-found\n", code: "podman_network_wait_unavailable", severity: "error"},
+		{name: "masked", output: "masked\n", code: "podman_network_wait_unavailable", severity: "error"},
+		{name: "malformed", output: "private-native-output", code: "podman_network_wait_unknown", severity: "unknown"},
+		{name: "failed", failure: errors.New("private-native-output"), code: "podman_network_wait_unknown", severity: "unknown"},
+	} {
+		for _, backend := range []string{"quadlet", "compose"} {
+			t.Run(tc.name+"/"+backend, func(t *testing.T) {
+				r := &podmanBootRecorder{output: tc.output, failure: tc.failure}
+				issues := podmanBootIssues(context.Background(), "systemctl", r, "podman/"+backend)
+				if tc.code == "" {
+					if len(issues) != 0 {
+						t.Fatal(issues)
+					}
+				} else {
+					if len(issues) != 1 || issues[0].Code != tc.code || issues[0].Severity != tc.severity || issues[0].Resource != "backend/podman/"+backend || issues[0].Field != "autostart" {
+						t.Fatal(issues)
+					}
+					if strings.Contains(fmt.Sprint(issues), "private-native-output") {
+						t.Fatal("native output leaked")
+					}
+					c, cfg, _ := coordinatorFixture(t)
+					s := cfg.Services["website"]
+					s.Backend = backend
+					cfg.Services["website"] = s
+					c.Adapters = map[string]Adapter{"podman/" + backend: &probeAdapter{issues: issues}}
+					if err := c.readinessError(context.Background(), cfg, "website", false); err != nil {
+						t.Fatal("boot issue blocked current start", err)
+					}
+					if err := c.readinessError(context.Background(), cfg, "website", true); err == nil {
+						t.Fatal("boot issue allowed enable")
+					}
+				}
+				if len(r.commands) != 1 {
+					t.Fatal(r.commands)
+				}
+				cmd := r.commands[0]
+				if cmd.Timeout != 3*time.Second || !slices.Contains(cmd.Args, "--user") || !slices.Contains(cmd.Args, "--property=LoadState") {
+					t.Fatal(cmd)
+				}
+			})
+		}
+	}
+	// Both native adapters must call the same check, not just expose the helper.
+	r := &podmanBootRecorder{output: "not-found"}
+	q := &Quadlet{Podman: "podman", Generator: "quadlet", Systemctl: "systemctl", Runner: r}
+	p := &Compose{Engine: "podman", Program: "podman", Systemctl: "systemctl", Runner: r}
+	for _, issues := range [][]Issue{q.Prerequisites(context.Background()), p.Prerequisites(context.Background())} {
+		if !slices.ContainsFunc(issues, func(i Issue) bool { return i.Code == "podman_network_wait_unavailable" }) {
+			t.Fatal(issues)
+		}
+	}
+}
 
 func TestPodmanEffectiveNetworkPrerequisites(t *testing.T) {
 	for _, tc := range []struct {

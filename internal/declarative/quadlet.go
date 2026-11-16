@@ -323,5 +323,6 @@ func (q *Quadlet) Prerequisites(ctx context.Context) []Issue {
 		}
 	}
 	issues = append(issues, userManagerIssues(ctx, q.Systemctl, q.Runner, "podman/quadlet")...)
+	issues = append(issues, podmanBootIssues(ctx, q.Systemctl, q.Runner, "podman/quadlet")...)
 	return issues
 }
