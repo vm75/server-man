@@ -2,7 +2,7 @@
 
 > **Anonymized historical record, not a machine-specific installation requirement.** Hostname, workload account, checkout directory, interface and LAN addresses are placeholders here. `WORKLOAD_USER` is a replaceable account name, `/path/to/server-man` is a replaceable checkout, and `192.0.2.10`/`192.0.2.0/24` are reserved documentation addresses that will not route to a real deployment. Substitute actual values before adapting any command; do not run this historical mutation ledger as an installer. See [guided installation](../installation.md) for current supported instructions.
 
-Date: 2026-10-16. Host: `example-host`, Ubuntu 26.10, account `WORKLOAD_USER` (UID 1000).
+Date: 2026-10-16. Host: `example-host`, Ubuntu 26.10, account `WORKLOAD_USER` (UID selected by the host).
 Checkout: `/path/to/server-man`, real Git directory `.git`, starting commit
 `a95fc91`. Existing untracked `HANDOFF.md` is preserved and excluded from commits.
 The task attachment explicitly authorizes server preparation, dependency installation,
@@ -310,7 +310,7 @@ host network changes were applied. Final service and verification results are be
 - User `server-man.service` is enabled and active, running the installed revision
   `e4424dd`, with zero restarts. System `server-man.service` is disabled/inactive.
   Installed and built binary hashes match. User `podman.socket` is enabled/active
-  at `/run/user/1000/podman/podman.sock`; no root Podman service was enabled.
+  at `/run/user/WORKLOAD_UID/podman/podman.sock`; no root Podman service was enabled.
   `loginctl show-user WORKLOAD_USER -p Linger` reports `yes`.
 - First app start created `~/.config/server-man/token` (0600),
   `~/.local/state/server-man` (0700), and its `audit.jsonl` (0600), owned by
