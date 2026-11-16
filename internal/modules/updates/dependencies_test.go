@@ -88,3 +88,28 @@ func TestIncusInstallIncludesVMDependenciesWithoutRecommendations(t *testing.T) 
 		t.Fatal(packages, err)
 	}
 }
+
+func TestDependencyPresetsUseUnpinnedNativeRepositoryCandidates(t *testing.T) {
+	for _, host := range []struct {
+		manager, distribution string
+		targets []string
+	}{
+		{"apt", "ubuntu", []string{"podman", "docker", "incus", "samba", "nfs", "virtualization"}},
+		{"apt", "debian", []string{"podman", "docker", "incus", "samba", "nfs", "virtualization"}},
+		{"pacman", "arch", []string{"podman", "docker", "incus", "samba", "nfs", "virtualization"}},
+		{"dnf", "fedora", []string{"podman", "docker", "samba", "nfs", "virtualization"}},
+		{"zypper", "opensuse-tumbleweed", []string{"podman", "docker", "samba", "nfs", "virtualization"}},
+	} {
+		for _, target := range host.targets {
+			names, err := DependencyPackages(host.manager, host.distribution, target)
+			if err != nil || len(names) == 0 {
+				t.Fatal(host, target, names, err)
+			}
+			for _, name := range names {
+				if !installPackageName.MatchString(name) {
+					t.Fatal("preset pins a version or selects a repository", host, target, name)
+				}
+			}
+		}
+	}
+}

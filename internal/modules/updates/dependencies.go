@@ -18,7 +18,19 @@ func (b *Backend) dependencyPackages(target string) (string, error) {
 // It returns only native repository package names.
 func DependencyPackages(manager, distribution, target string) ([]string, error) {
 	packages, err := dependencyPackageNames(manager, distribution, target)
-	return strings.Fields(packages), err
+	if err != nil {
+		return nil, err
+	}
+	// Keep installation rolling with the native repository candidate, never
+	// a version constraint or an alternate repository selector. This is shared
+	// by guided installation and the Software dependency workflow.
+	names := strings.Fields(packages)
+	for _, name := range names {
+		if !installPackageName.MatchString(name) {
+			return nil, core.Invalid("invalid unpinned native dependency package")
+		}
+	}
+	return names, nil
 }
 
 func dependencyPackageNames(manager, distribution, target string) (string, error) {
