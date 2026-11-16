@@ -34,7 +34,7 @@ const fixtures = {
   managed_config_history: () => ({entries:[{revision:'c'.repeat(64),modifiedAt:new Date().toISOString(),valid:true}]}),
   managed_config_history_read: args => ({revision:args.target,content:'version: 1\n',valid:true}),
   managed_config_revert_plan: args => ({plan:{baseRevision:args.revision,desiredRevision:args.target,changes:[{resource:'service/website',backend:'podman/quadlet',operation:'update'}],files:{issues:[]}}}),
-  managed_config_readiness: () => ({ configured: true, valid: readinessScenario !== 'invalid', ...(readinessScenario === 'invalid' ? {error:'Configuration is invalid or inaccessible; open Configuration to repair it.'} : {health: {checkedAt:new Date().toISOString(), runtimeCheckedAt:new Date().toISOString(), issues: readinessScenario === 'healthy' ? [] : readinessScenario === 'unknown' ? [{severity:'unknown',resource:'service/website',field:'runtime',code:'check_cancelled',message:'Backend checks could not complete.',remedy:'Restore backend access and retry.'}] : fixtures.managed_services().health.issues}}) }),
+  managed_config_readiness: () => ({ configured: true, valid: readinessScenario !== 'invalid', ...(readinessScenario === 'invalid' ? {error:'Configuration is invalid or inaccessible; open Configuration to repair it.'} : {health: {checkedAt:new Date().toISOString(), runtimeCheckedAt:new Date().toISOString(), issues: readinessScenario === 'healthy' ? [] : readinessScenario === 'unknown' ? [{severity:'unknown',resource:'service/website',field:'runtime',code:'check_cancelled',message:'Backend checks could not complete.',remedy:'Restore backend access and retry.'}] : readinessScenario === 'warning' ? [{severity:'warning',resource:'storage/vm-root',field:'source.path',code:'initial_asset_unavailable',message:'Initial image asset is unavailable.',remedy:'Restore the asset when provisioning a new disk; the existing disk remains usable.'}] : fixtures.managed_services().health.issues}}) }),
   managed_config_check: () => ({ checkedAt:new Date().toISOString(), issues:[] }),
   managed_config_model: () => ({ revision: 'a'.repeat(64), config: { version: 1, services: {}, shares: {}, storage: { documents: {path:'data/documents',kind:'directory'}, 'vm-root': {path:'data/vm-root.qcow2',kind:'file',format:'qcow2',source:{path:'assets/base.qcow2',format:'qcow2',sha256:'e'.repeat(64)}} }, bindings: { lan:{kind:'network',name:'default'}, pool:{kind:'pool',name:'default'}, project:{kind:'project',name:'default'} }, secrets: {} } }),
   managed_config_read: () => ({ content: 'version: 1\n', revision: 'a'.repeat(64), valid: true }),
@@ -228,6 +228,10 @@ async function exerciseManagement(page) {
   readinessScenario = 'unknown'
   await globalHealth.getByRole('button',{name:'Recheck requirements',exact:true}).click()
   await globalHealth.getByText('Configuration readiness is uncertain',{exact:true}).waitFor()
+  readinessScenario = 'warning'
+  await globalHealth.getByRole('button',{name:'Recheck requirements',exact:true}).click()
+  await globalHealth.getByText('Configuration warnings',{exact:true}).waitFor()
+  await globalHealth.getByText('Warnings alone do not prevent workloads from starting.',{exact:false}).waitFor()
   readinessScenario = 'invalid'
   await globalHealth.getByRole('button',{name:'Recheck requirements',exact:true}).click()
   await globalHealth.getByText('Workload configuration needs repair',{exact:true}).waitFor()

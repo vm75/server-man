@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "verify": "node disposable-checks.test.mjs && node verify.mjs",
-    "verify:guest-contracts": "node disposable-checks.test.mjs",
+    "verify": "npm run verify:guest-contracts && node verify.mjs",
+    "verify:guest-contracts": "node disposable-checks.test.mjs && node vm-fixture-boot.test.mjs",
     "verify:guest": "node verify-vm.mjs"
   },
   "devDependencies": {

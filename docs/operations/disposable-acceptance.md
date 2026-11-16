@@ -69,7 +69,7 @@ Each mutation runs as a tracked job with a 25-minute deadline. At deadline the r
 
 A native run proves only its selected observable checks on its recorded guest/provider versions. It does not prove actual host reboot/daemon-restart policy, guest OS/application health, SMB/NFS client access, portable restore, every distribution or unrelated host settings. Those remain separate acceptance gates.
 
-`make mcp-test` includes seven in-memory guard/workflow contract tests plus the usual official SDK checks. Contracts verify refusal conditions, safe target selection, central mutation vocabulary and detection of broken enable/disable or configuration-preservation semantics. They neither start a guest nor substitute for a native run. The native entry point is never executed by ordinary checks or CI automatically.
+`make mcp-test` includes seven in-memory guard/workflow contract tests, five mocked VM serial-console precondition tests and the usual official SDK checks. Contracts verify refusal conditions, safe target selection, central mutation vocabulary, enable/disable and configuration preservation, and safe fixed libvirt/Incus serial console commands. They neither start a guest nor substitute for a native run. The native entry point is never executed by ordinary checks or CI automatically.
 
 ## Isolated share-client follow-up
 

@@ -176,6 +176,7 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		}
 	}
 	fmt.Fprintf(out, "Account: %s (%s)\nBackends: %s\nPackage manager: %s\nPackages: %s\nSkip package installation: %t\nGroups: %s\n", p.Account, p.UID, strings.Join(targets, ", "), manager, strings.Join(packages, " "), *skip, strings.Join(p.Groups, ", "))
+	fmt.Fprintln(out, "Package policy: unpinned latest candidates from the configured native distribution repositories; no upstream repository additions or exact version locks. --skip-packages preserves installed versions.")
 	fmt.Fprintln(out, "Host units to enable/start:", strings.Join(hostUnits(targets), ", "))
 	fmt.Fprintln(out, "Install: /usr/local/bin/server-man, /usr/local/libexec/server-man-admin, /usr/local/sbin/server-man-install")
 	fmt.Fprintf(out, "Privilege rule: %s ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/server-man-admin \"\"\n", p.Account)

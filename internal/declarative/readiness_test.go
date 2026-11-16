@@ -153,3 +153,73 @@ func TestConfigurationReadinessSurvivesRelocationAndRepairWithoutActivation(t *t
 		t.Fatal("repair did not clear blockers or check applied resources", repaired, probe.calls)
 	}
 }
+
+func TestManagedRuntimeObservedDespiteStartupBlocker(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	probe := &probeAdapter{
+		fakeAdapter: fakeAdapter{active: true, matches: map[string]bool{"service/website": true}},
+		issues: []Issue{{"error", "backend/podman/quadlet", "podman", "missing_dependency", "Backend startup prerequisite is missing.", "Repair the dependency."}},
+	}
+	c.Adapters["podman/quadlet"] = probe
+	if _, err := c.Store.Save(cfg, "missing"); err != nil {
+		t.Fatal(err)
+	}
+	result, err := c.ServiceStatuses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventory := result.(map[string]any)
+	rows := inventory["services"].([]ServiceStatus)
+	if len(rows) != 1 {
+		t.Fatalf("expected one application, got %d", len(rows))
+	}
+	if rows[0].State != "running" || !rows[0].Registered || rows[0].Configuration != "restart_required" {
+		t.Fatalf("startup blocker hid native observed state: %+v", rows[0])
+	}
+	found := false
+	for _, issue := range rows[0].Issues {
+		if issue.Code == "missing_dependency" && issue.Severity == "error" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("observed runtime state dropped startup blocker: %+v", rows[0])
+	}
+}
+
+func TestIncompleteApplyJournalBlocksStartupUntilReviewedRetry(t *testing.T) {
+	c, cfg, adapter := coordinatorFixture(t)
+	adapter.fail = "service/website"
+	j, err := c.SaveApply(context.Background(), cfg, "missing", "now")
+	if err == nil || j.Stage != "failed" {
+		t.Fatal("expected failed staged apply", j, err)
+	}
+	hasIssue := func(code, severity string) bool {
+		for _, issue := range c.Preflight(context.Background(), cfg, false).Issues {
+			if issue.Resource == "service/website" && issue.Code == code && issue.Severity == severity {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasIssue("apply_incomplete", "error") {
+		t.Fatal("pending apply is absent from service readiness")
+	}
+	if err := c.readinessError(context.Background(), cfg, "website", false); err == nil {
+		t.Fatal("incomplete apply allowed activation")
+	}
+	adapter.matches["service/website"] = true
+	adapter.fail = ""
+	if j, err = c.Retry(context.Background()); err != nil || j.Stage != "complete" {
+		t.Fatal("reviewed retry failed", j, err)
+	}
+	if hasIssue("apply_incomplete", "error") {
+		t.Fatal("completed retry left a stale startup blocker")
+	}
+	if err := os.WriteFile(c.Store.Path+".apply.json", []byte("{"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !hasIssue("apply_unavailable", "unknown") {
+		t.Fatal("invalid apply journal was not reported as unknown")
+	}
+}

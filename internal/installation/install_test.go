@@ -25,7 +25,7 @@ func TestBackendPlanAndDistributionPackages(t *testing.T) {
 		}
 		seen := map[string]bool{}
 		for _, p := range packages {
-			if seen[p] || strings.ContainsAny(p, " /;") {
+			if seen[p] || strings.ContainsAny(p, " /;=@<>:") {
 				t.Fatal(packages)
 			}
 			seen[p] = true

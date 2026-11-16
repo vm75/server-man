@@ -143,6 +143,15 @@ func TestPendingBackupBlocksManagedMutationsAndRaisesGlobalAlert(t *testing.T) {
 	if health.Health == nil || !slices.ContainsFunc(health.Health.Issues, func(i Issue) bool { return i.Code == "backup_recovery" }) {
 		t.Fatal("missing global recovery blocker", health)
 	}
+	inventory, err := c.ServiceStatuses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, service := range inventory.(map[string]any)["services"].([]ServiceStatus) {
+		if !slices.ContainsFunc(service.Issues, func(i Issue) bool { return i.Code == "backup_recovery" }) {
+			t.Fatal("missing resource-level recovery blocker", service.ID)
+		}
+	}
 	if len(a.actions) != 0 {
 		t.Fatal("inspection activated workloads", a.actions)
 	}

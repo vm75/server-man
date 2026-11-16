@@ -11,7 +11,9 @@
   let stopped = false
   let queued = false
   const issues = $derived(readiness?.health?.issues ?? [])
-  const uncertain = $derived(issues.some(issue => issue.severity === 'unknown'))
+  const blockers = $derived(issues.filter(issue => issue.severity === 'error'))
+  const unknown = $derived(issues.filter(issue => issue.severity === 'unknown'))
+  const warnings = $derived(issues.filter(issue => issue.severity === 'warning'))
 
   async function load(refresh = false) {
     if (controller) { queued = true; return }
@@ -51,11 +53,13 @@
 {#if !readiness || error || readiness.error || issues.length}
 <section class="panel configuration-health" aria-label="Configuration readiness" aria-busy={checking}>
   <div role="status">
-    <strong>{!readiness ? 'Readiness not checked' : readiness.error ? 'Workload configuration needs repair' : error || uncertain ? 'Configuration readiness is uncertain' : 'Workload configuration alert'}</strong>
+    <strong>{!readiness ? 'Readiness not checked' : readiness.error ? 'Workload configuration needs repair' : error ? 'Configuration readiness is uncertain' : blockers.length ? 'Workload configuration alert' : unknown.length ? 'Configuration readiness is uncertain' : 'Configuration warnings'}</strong>
     {#if checking}<p>Checking configuration requirements…</p>{/if}
     {#if error}<p class="form-error">{error} Previous issues remain visible until checks succeed.</p>{/if}
     {#if readiness?.error}<p>{readiness.error}</p>{/if}
-    {#if issues.length}<p>{issues.length} configuration {issues.length === 1 ? 'issue requires' : 'issues require'} attention. Repair the affected requirements before starting workloads.</p>{/if}
+    {#if blockers.length}<p>{blockers.length} startup {blockers.length === 1 ? 'blocker' : 'blockers'} found. Repair affected requirements before starting those workloads.</p>{/if}
+    {#if unknown.length}<p>{unknown.length} {unknown.length === 1 ? 'readiness check is' : 'readiness checks are'} inconclusive. Recheck when the provider is available.</p>{/if}
+    {#if !blockers.length && !unknown.length && warnings.length}<p>{warnings.length} configuration {warnings.length === 1 ? 'warning' : 'warnings'} to review. Warnings alone do not prevent workloads from starting.</p>{/if}
     {#if readiness?.health}<p class="resource-hint">Files checked {new Date(readiness.health.checkedAt).toLocaleString()}. {#if readiness.health.runtimeCheckedAt}Native requirements checked {new Date(readiness.health.runtimeCheckedAt).toLocaleString()}.{/if}</p>{/if}
   </div>
   <div class="health-actions">

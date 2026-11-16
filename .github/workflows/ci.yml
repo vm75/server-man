@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-24.04
+    # Podman 5.x Quadlet syntax is covered by native generator tests.
+    # GitHub's Ubuntu 24.04 image reverted Podman to 4.9.3 in Sep 2026.
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
