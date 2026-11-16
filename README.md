@@ -99,6 +99,8 @@ Open **Agent access** in the UI for discovery and connection details. The runnin
 /absolute/path/to/server-man -transport stdio -config /absolute/path/to/server-man.yaml
 ```
 
+Applications shows observed aggregate and individual container states and supports explicit, bounded recent log requests for Podman Quadlet, Podman/Docker Compose and Incus instance diagnostics. Log content may contain private application data, so it is never collected during routine status refreshes; libvirt guest logs remain a guest-side concern.
+
 Use HTTP to share the web server's jobs and history. A local stdio process has its own history and cancels unfinished work when it exits. See [MCP connection details and Hermes/OpenClaw examples](docs/design/mcp.md) for setup, schemas, protocol limits, and the verification scope. `make mcp-test` checks both transports with the official SDK; Node and its SDK are only verification dependencies.
 
 See [architecture](ARCHITECTURE.md) for shared operation boundaries, resource limits, and authentication, and [project guidance](AGENTS.md) for working commands.

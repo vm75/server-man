@@ -107,10 +107,30 @@ func (i *Incus) Logs(ctx context.Context, c Config, key string, tail int) (Manag
 	if err != nil {
 		return ManagedLogs{}, core.Unavailable("Incus project binding is unavailable")
 	}
-	// Incus does not expose a portable tail option for --show-log. Bound the
-	// retained output instead; the log contains native instance diagnostics.
+	// Incus does not expose a portable tail option for --show-log. Bound
+	// the output and trim the retained text to the requested recent lines.
 	command := core.Command{Program: i.Program, Args: []string{"--force-local", "--project", project, "info", "local:" + incusInstance(id), "--show-log"}}
-	return boundedManagedLogs(ctx, i.Runner, command, "incus-instance")
+	logs, err := boundedManagedLogs(ctx, i.Runner, command, "incus-instance")
+	if err != nil { return ManagedLogs{}, err }
+	var clipped bool
+	logs.Text, clipped = lastManagedLines(logs.Text, tail)
+	logs.Truncated = logs.Truncated || clipped
+	return logs, nil
+}
+
+// lastManagedLines keeps only the newest lines when a native reader lacks
+// its own tail flag. The input has already been bounded to 128 KiB.
+func lastManagedLines(text string, limit int) (string, bool) {
+	end := len(text)
+	if end > 0 && text[end-1] == '\n' { end-- }
+	count := 0
+	for index := end - 1; index >= 0; index-- {
+		if text[index] == '\n' {
+			count++
+			if count >= limit { return text[index+1:], true }
+		}
+	}
+	return text, false
 }
 
 func RegisterManagedLogs(r *core.Registry, c Coordinator) error {

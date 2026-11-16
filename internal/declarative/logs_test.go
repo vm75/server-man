@@ -79,3 +79,20 @@ func TestManagedLogsRegistryIsReadOnlyAndRespectsConfiguration(t *testing.T) {
 	if _,err=r.Invoke(context.Background(),"managed_service_logs",request,"test");err==nil { t.Fatal("broken configuration allowed managed native log read") }
 	if len(recorder.commands)!=1 { t.Fatal("broken configuration invoked native log reader") }
 }
+
+func TestIncusNativeLogsKeepOnlyRequestedRecentLines(t *testing.T) {
+	for _, tc := range []struct{
+		text string
+		n int
+		want string
+		clipped bool
+	}{
+		{"first\nsecond\nthird\n",2,"second\nthird\n",true},
+		{"first\nsecond\nthird",1,"third",true},
+		{"first\nsecond\n",2,"first\nsecond\n",false},
+		{"single",1,"single",false},
+	} {
+		got, clipped := lastManagedLines(tc.text,tc.n)
+		if got != tc.want || clipped != tc.clipped { t.Fatalf("%q/%d => %q/%t",tc.text,tc.n,got,clipped) }
+	}
+}
