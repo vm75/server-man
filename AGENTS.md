@@ -35,6 +35,7 @@ server-man is a Linux administration application built with Go, Svelte 5, TypeSc
 
 - Never pass user input to a shell. Execute fixed programs with argument arrays and validate resource identifiers.
 - Do not copy secrets, environment file contents, or resolved Compose configuration into logs, fixtures, APIs, or Git.
+- Keep tracked code, deployment examples, and acceptance documents host-agnostic: derive home/config paths from the selected account or configuration, use replaceable account/path names and reserved documentation IPs, and keep actual hostnames, usernames, workstation paths, interface names, and LAN IP addresses in ignored local notes rather than Git. Historical acceptance records may retain test OS/version/outcomes but must anonymize machine identifiers.
 - Verification may read host inventory and metrics. Use temporary directories and command fixtures for operations that change containers, VMs, packages, shares, or services.
 - Do not modify `~/vms`; preserve its conventions through configurable discovery.
 - Share mutations may replace only owned fragments. Preserve unmanaged configuration and shared directory data; verify rollback with temporary files and native-command fixtures.
