@@ -41,9 +41,6 @@ func (c Coordinator) ConfigurationReadiness(ctx context.Context) ReadinessStatus
 		return ReadinessStatus{Configured: true, Error: "Configuration is invalid or inaccessible; open Configuration to repair it."}
 	}
 	health := c.Preflight(ctx, snapshot.Config, false)
-	if err := c.checkBackupIdle(); err != nil {
-		health.Issues = append(health.Issues, Issue{"error", "configuration", "backup", "backup_recovery", err.Error(), "Open Configuration to review backup recovery before managing workloads."})
-	}
 	return ReadinessStatus{Configured: true, Valid: true, Health: &health}
 }
 
