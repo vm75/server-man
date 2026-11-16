@@ -8,6 +8,7 @@ import (
 	"io"
 	"maps"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -27,7 +28,7 @@ func NewIncus(store Store, runner core.Executor) *Incus {
 	program, _ := exec.LookPath("incus")
 	return &Incus{Store: store, Program: program, Directory: store.Path + ".generated/incus", Runner: runner}
 }
-func (i *Incus) queryCommand(project, method, path string, payload any) (core.Command, error) {
+func (i *Incus) queryCommand(project, path string) core.Command {
 	if project != "" {
 		sep := "?"
 		if strings.Contains(path, "?") {
@@ -35,25 +36,10 @@ func (i *Incus) queryCommand(project, method, path string, payload any) (core.Co
 		}
 		path += sep + "project=" + url.QueryEscape(project)
 	}
-	args := []string{"--force-local", "query", "--request", method, "--raw"}
-	cmd := core.Command{Program: i.Program, Timeout: 5 * time.Second}
-	if method != "GET" {
-		data, err := json.Marshal(payload)
-		if err != nil {
-			return cmd, err
-		}
-		args = append(args, "--wait", "--data-file", "-")
-		cmd.Stdin = bytes.NewReader(data)
-		cmd.Timeout = 20 * time.Minute
-	}
-	cmd.Args = append(args, "local:"+path)
-	return cmd, nil
+	return core.Command{Program: i.Program, Args: []string{"--force-local", "query", "--request", "GET", "--raw", "local:" + path}, Timeout: 5 * time.Second}
 }
 func (i *Incus) get(ctx context.Context, project, path string, dest any) error {
-	cmd, err := i.queryCommand(project, "GET", path, nil)
-	if err != nil {
-		return err
-	}
+	cmd := i.queryCommand(project, path)
 	output, err := i.Runner.Capture(ctx, cmd)
 	if err != nil {
 		return errors.New("Incus local query failed")
@@ -71,12 +57,20 @@ func (i *Incus) get(ctx context.Context, project, path string, dest any) error {
 	}
 	return nil
 }
-func (i *Incus) mutate(ctx context.Context, project, method, path string, payload any) error {
-	cmd, err := i.queryCommand(project, method, path, payload)
-	if err != nil {
-		return err
+
+// Native init/config edit accept JSON (YAML subset) on stdin and wait for the
+// operation. This avoids query flags absent from packaged Incus clients and
+// keeps private definition payloads out of process arguments.
+func (i *Incus) run(ctx context.Context, project string, definition *incusDefinition, args ...string) error {
+	cmd := core.Command{Program: i.Program, Args: append([]string{"--force-local", "--project", project}, args...), Timeout: 20 * time.Minute}
+	if definition != nil {
+		data, err := json.Marshal(definition)
+		if err != nil {
+			return err
+		}
+		cmd.Stdin = bytes.NewReader(data)
 	}
-	if err = i.Runner.Run(ctx, cmd, io.Discard); err != nil {
+	if err := i.Runner.Run(ctx, cmd, io.Discard); err != nil {
 		return errors.New("Incus native operation failed")
 	}
 	return nil
@@ -204,7 +198,24 @@ func (i *Incus) Apply(ctx context.Context, previous, desired Config, key, mode s
 	_, id, _ := strings.Cut(key, "/")
 	_, exists := desired.Services[id]
 	if !exists {
-		return errors.New("Incus definition removal requires an explicit data-preserving export workflow")
+		_, found, err := i.read(ctx, previous, key)
+		if err != nil {
+			return err
+		}
+		if found {
+			return errors.New("Incus definition removal requires an explicit data-preserving export workflow")
+		}
+		// Failed creation has no native data to export. Remove only its checked
+		// generated definition, never an instance or storage object.
+		old, err := RenderIncus(previous, key)
+		if err != nil {
+			return err
+		}
+		data, err := encodeIncus(old)
+		if err != nil {
+			return err
+		}
+		return publishArtifacts(i.resourceDir(key), map[string][]byte{"instance.yaml": data}, map[string][]byte{})
 	}
 	definition, err := RenderIncus(desired, key)
 	if err != nil {
@@ -259,7 +270,7 @@ func (i *Incus) Apply(ctx context.Context, previous, desired Config, key, mode s
 	}
 	if found {
 		payload := mergeIncusVolatile(definition, actual)
-		if err = i.mutate(ctx, project, "PUT", incusPath(id), payload); err != nil {
+		if err = i.run(ctx, project, &payload, "config", "edit", "local:"+incusInstance(id)); err != nil {
 			return err
 		}
 	} else {
@@ -267,21 +278,23 @@ func (i *Incus) Apply(ctx context.Context, previous, desired Config, key, mode s
 		if image == "" || strings.HasPrefix(image, "-") || strings.ContainsAny(image, ":\x00\r\n") {
 			return errors.New("initial Incus creation requires a locally available image alias or fingerprint")
 		}
-		source := map[string]string{"type": "image", "alias": image}
-		if revisionPattern.MatchString(image) {
-			source = map[string]string{"type": "image", "fingerprint": image}
-		}
-		payload := struct {
-			incusDefinition
-			Name   string            `json:"name"`
-			Type   string            `json:"type"`
-			Source map[string]string `json:"source"`
-		}{definition, incusInstance(id), "virtual-machine", source}
-		if err = i.mutate(ctx, project, "POST", "/1.0/instances", payload); err != nil {
+		if err = i.run(ctx, project, &definition, "init", "local:"+image, "local:"+incusInstance(id), "--vm", "--no-profiles"); err != nil {
 			return err
 		}
 	}
 	return publishArtifacts(i.resourceDir(key), before, after)
+}
+
+func (i *Incus) VerifyRemoved(ctx context.Context, previous Config, key string) (bool, error) {
+	_, found, err := i.read(ctx, previous, key)
+	if err != nil || found {
+		return false, err
+	}
+	entries, err := os.ReadDir(i.resourceDir(key))
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	return err == nil && len(entries) == 0, err
 }
 func incusPoolChanged(c, previous Config, id string) bool {
 	a, b := c.Services[id].VM, previous.Services[id].VM
@@ -312,10 +325,10 @@ func (i *Incus) Action(ctx context.Context, c Config, key, action string) error 
 		// Store the known start revision without editing volatile native identities.
 		payload := mergeIncusVolatile(definition, actual)
 		payload.Config["user.server-man.active-runtime"] = definition.Config["user.server-man.runtime"]
-		if err = i.mutate(ctx, project, "PUT", incusPath(id), payload); err != nil {
+		if err = i.run(ctx, project, &payload, "config", "edit", "local:"+incusInstance(id)); err != nil {
 			return err
 		}
-		if err = i.mutate(ctx, project, "PUT", incusPath(id)+"/state", map[string]any{"action": "start", "timeout": 90, "force": false}); err != nil {
+		if err = i.run(ctx, project, nil, "start", "local:"+incusInstance(id)); err != nil {
 			return err
 		}
 		started, found, e := i.read(ctx, c, key)
@@ -328,7 +341,7 @@ func (i *Incus) Action(ctx context.Context, c Config, key, action string) error 
 		return nil
 	case "stop", "restart":
 		if actual.StatusCode != 102 {
-			if err = i.mutate(ctx, project, "PUT", incusPath(id)+"/state", map[string]any{"action": "stop", "timeout": 90, "force": false}); err != nil {
+			if err = i.run(ctx, project, nil, "stop", "local:"+incusInstance(id), "--timeout", "90"); err != nil {
 				return err
 			}
 		}

@@ -159,3 +159,10 @@ Current native evidence is consolidated in [the acceptance record](../operations
 
 
 Readiness-aware native retry: libvirt passed the complete stopped-edit/lifecycle/independent-autostart/deferred-update/removal sequence on 449e3bd, preserving identity and external data. The serial boot precondition worked across start/restart. The run then stopped on initial Incus creation; native inspection found no instance and an unsupported query mutation flag in the installed client. Incus and share gates remain open. Native JavaScript syntax and SDK/contract checks passed; the record now names the four verified workload targets without claiming an all-target pass.
+
+
+## Incus packaged-client mutation correction (2026-11-16)
+
+The installed Incus 7.0.1 client supports read-only query but not query's newer data-file flag, so first stopped creation failed before any native instance existed. Mutations now use its standard init/config edit stdin contracts and native start/stop commands, always with explicit local/project scope. Init explicitly selects a VM and no profiles; updates preserve volatile/native metadata; shutdown retains the 90-second bound and never passes force. Definition payloads remain outside process arguments and logs. No alternate-version branch or compatibility layer was added.
+
+A reviewed failed-creation removal now succeeds only after native inventory proves the instance absent, deleting only the checked derived definition and verifying continued absence. Existing Incus instance removal is still blocked pending the deferred data-retention workflow; no guest/storage deletion command is implemented. `make check test` passed (zero frontend diagnostics and full Go race suite). Updated fixtures cover native CLI/state semantics, explicit local/project/no-profile selection, stdin payload privacy, graceful-stop failure without a forced restart, volatile identity preservation, and absent-only generated-definition removal. Native packaged-client retry remains open.

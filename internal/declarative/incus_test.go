@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -77,42 +78,63 @@ func (r *incusRecorder) Capture(_ context.Context, c core.Command) (string, erro
 }
 func (r *incusRecorder) Run(_ context.Context, c core.Command, _ io.Writer) error {
 	r.commands = append(r.commands, c)
-	method, path := incusRequest(c)
-	u, _ := url.Parse(path)
-	data, err := io.ReadAll(c.Stdin)
-	if err != nil {
-		return err
+	if len(c.Args) < 5 || c.Args[0] != "--force-local" || c.Args[1] != "--project" || c.Args[2] != "managed" {
+		return errors.New("unscoped fixture mutation")
 	}
+	operation := c.Args[3]
+	var data []byte
 	var fields map[string]any
-	if err = json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	r.payloads = append(r.payloads, fields)
-	if method == "POST" && u.Path == "/1.0/instances" {
-		if err = json.Unmarshal(data, &r.actual); err != nil {
+	if operation == "init" || operation == "config" {
+		var err error
+		data, err = io.ReadAll(c.Stdin)
+		if err != nil {
 			return err
 		}
+		if err = json.Unmarshal(data, &fields); err != nil {
+			return err
+		}
+	} else {
+		if slices.Contains(c.Args, "--force") {
+			return errors.New("forced operation forbidden")
+		}
+		fields = map[string]any{"action": operation, "force": false}
+	}
+	r.payloads = append(r.payloads, fields)
+	if operation == "init" {
+		if !slices.Contains(c.Args, "--vm") || !slices.Contains(c.Args, "--no-profiles") {
+			return errors.New("unscoped guest creation")
+		}
+		if err := json.Unmarshal(data, &r.actual); err != nil {
+			return err
+		}
+		r.actual.Name, r.actual.Type = strings.TrimPrefix(c.Args[5], "local:"), "virtual-machine"
 		r.exists = true
 		r.actual.StatusCode = 102
 		r.actual.Status = "Stopped"
 		r.actual.Config["volatile.uuid"] = "daemon-owned-uuid"
 		r.actual.Config["volatile.vm.rtc_offset"] = "123"
 	}
-	if method == "PUT" && u.Path == "/1.0/instances/sm-guest" {
+	if operation == "config" {
+		if c.Args[4] != "edit" || c.Args[5] != "local:sm-guest" {
+			return errors.New("unexpected configuration edit")
+		}
 		var definition incusDefinition
-		if err = json.Unmarshal(data, &definition); err != nil {
+		if err := json.Unmarshal(data, &definition); err != nil {
 			return err
 		}
 		r.actual.incusDefinition = definition
 	}
-	if u.Path == "/1.0/instances/sm-guest/state" {
-		if fields["force"] != false {
-			return errors.New("forced operation forbidden")
+	if operation == "start" || operation == "stop" {
+		if c.Args[4] != "local:sm-guest" {
+			return errors.New("unexpected state target")
 		}
-		if fields["action"] == "start" {
+		if operation == "start" {
 			r.actual.StatusCode = 103
 			r.actual.Status = "Running"
 		} else {
+			if !slices.Equal(c.Args[5:], []string{"--timeout", "90"}) {
+				return errors.New("unbounded or forced stop")
+			}
 			if r.failStop {
 				return errors.New("fixture stop failure")
 			}
@@ -124,6 +146,9 @@ func (r *incusRecorder) Run(_ context.Context, c core.Command, _ io.Writer) erro
 }
 func TestIncusStoppedCreationExplicitBindingsAndNoProfiles(t *testing.T) {
 	i, c, r := incusFixture(t)
+	s := c.Services["guest"]
+	s.Description = "private-definition-value"
+	c.Services["guest"] = s
 	if err := i.Validate(context.Background(), c, "service/guest"); err != nil {
 		t.Fatal(err)
 	}
@@ -138,6 +163,9 @@ func TestIncusStoppedCreationExplicitBindingsAndNoProfiles(t *testing.T) {
 		t.Fatal(r.actual)
 	}
 	for _, cmd := range r.commands {
+		if strings.Contains(strings.Join(cmd.Args, " "), "private-definition-value") || slices.Contains(cmd.Args, "--data-file") {
+			t.Fatal("private definition or unsupported data flag in arguments", cmd.Args)
+		}
 		if len(cmd.Args) == 0 || cmd.Args[0] != "--force-local" {
 			t.Fatal("ambient remote allowed", cmd.Args)
 		}
@@ -145,6 +173,34 @@ func TestIncusStoppedCreationExplicitBindingsAndNoProfiles(t *testing.T) {
 		if strings.Contains(path, "/instances") && !strings.Contains(path, "project=managed") {
 			t.Fatal("ambient project allowed", path)
 		}
+		if cmd.Args[1] != "query" && (cmd.Args[1] != "--project" || cmd.Args[2] != "managed") {
+			t.Fatal("ambient mutation project allowed", cmd.Args)
+		}
+	}
+}
+
+func TestIncusAbsentCreationCanBeRemovedWithoutNativeDeletion(t *testing.T) {
+	i, cfg, r := incusFixture(t)
+	if err := i.Apply(context.Background(), Config{Version: 1}, cfg, "service/guest", "now"); err != nil {
+		t.Fatal(err)
+	}
+	r.exists = false // a failed/missing native instance; owned generated file remains
+	r.commands = nil
+	if err := i.Apply(context.Background(), cfg, Config{Version: 1}, "service/guest", "now"); err != nil {
+		t.Fatal(err)
+	}
+	if removed, err := i.VerifyRemoved(context.Background(), cfg, "service/guest"); err != nil || !removed {
+		t.Fatal(removed, err)
+	}
+	for _, cmd := range r.commands {
+		method, _ := incusRequest(cmd)
+		if method != "GET" {
+			t.Fatal("absence cleanup mutated native state", cmd.Args)
+		}
+	}
+	r.exists = true
+	if removed, err := i.VerifyRemoved(context.Background(), cfg, "service/guest"); err != nil || removed {
+		t.Fatal("native instance ignored", removed, err)
 	}
 }
 func TestIncusUpdatePreservesVolatileAndDefersRunningHardware(t *testing.T) {
@@ -220,8 +276,7 @@ func TestIncusBootPolicyDoesNotInterruptGuest(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cmd := range r.commands {
-		_, path := incusRequest(cmd)
-		if strings.Contains(path, "/state") {
+		if len(cmd.Args) > 3 && (cmd.Args[3] == "start" || cmd.Args[3] == "stop") {
 			t.Fatal("boot policy changed execution")
 		}
 	}
