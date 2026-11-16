@@ -38,7 +38,7 @@ func (p *Compose) unitFile(key string) string {
 	return filepath.Join(p.UnitDirectory, id, composeUnit(id))
 }
 func (p *Compose) command(file, id string, args ...string) core.Command {
-	return core.Command{Program: p.Program, Args: composeArguments(file, id, args...), Dir: filepath.Dir(file), Env: []string{"COMPOSE_ANSI=never", "COMPOSE_DISABLE_ENV_FILE=1", "PODMAN_COMPOSE_WARNING_LOGS=false"}, Timeout: 20 * time.Minute}
+	return core.Command{Program: p.Program, Args: composeArguments(file, id, args...), Dir: filepath.Dir(file), Env: composeEnvironment(p.Engine), Timeout: 20 * time.Minute}
 }
 func (p *Compose) userCommand(args ...string) core.Command {
 	return userSystemdCommand(p.Systemctl, args...)
@@ -396,7 +396,7 @@ func (p *Compose) Prerequisites(ctx context.Context) []Issue {
 		args          []string
 		code, message string
 	}{{[]string{"compose", "version"}, "compose_unavailable", "A compatible Compose provider is unavailable."}, {[]string{"info", "--format", "json"}, "engine_unavailable", "The engine runtime is inaccessible."}} {
-		if output, err := p.Runner.Capture(ctx, core.Command{Program: p.Program, Args: probe.args, Timeout: 4 * time.Second}); err != nil {
+		if output, err := p.Runner.Capture(ctx, core.Command{Program: p.Program, Args: probe.args, Env: composeEnvironment(p.Engine), Timeout: 4 * time.Second}); err != nil {
 			add("runtime", probe.code, probe.message, "Check engine/provider installation, socket access and the service account.")
 		} else if p.Engine == "podman" && probe.args[0] == "info" {
 			issues = append(issues, podmanInfoIssues(output, "compose", false)...)

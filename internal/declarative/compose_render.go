@@ -93,6 +93,16 @@ func composeArguments(file, id string, args ...string) []string {
 	return append([]string{"compose", "--project-name", composeProject(id), "--env-file", "/dev/null", "--file", file}, args...)
 }
 
+func composeEnvironment(engine string) []string {
+	env := []string{"COMPOSE_ANSI=never", "COMPOSE_DISABLE_ENV_FILE=1", "PODMAN_COMPOSE_WARNING_LOGS=false"}
+	if engine == "podman" {
+		// Podman otherwise prefers Docker's Compose plugin when both are installed,
+		// introducing an implicit API-socket dependency absent from podman-compose.
+		env = append(env, "PODMAN_COMPOSE_PROVIDER=podman-compose")
+	}
+	return env
+}
+
 // RenderComposeBoot creates a boot-only launcher. It never supervises containers
 // and never restarts them at daemon restart; the generated Compose restart policy
 // is explicitly "no". This keeps disabled boot policy independent of prior runs.
@@ -111,7 +121,10 @@ func RenderComposeBoot(c Config, key, program, file string) ([]byte, error) {
 		}
 		fmt.Fprintf(&b, "Requires=%s\nAfter=%s\n", composeUnit(dep), composeUnit(dep))
 	}
-	b.WriteString("\n[Service]\nType=oneshot\nRemainAfterExit=no\nTimeoutStartSec=900\nEnvironment=COMPOSE_DISABLE_ENV_FILE=1\nEnvironment=COMPOSE_ANSI=never\nEnvironment=PODMAN_COMPOSE_WARNING_LOGS=false\n")
+	b.WriteString("\n[Service]\nType=oneshot\nRemainAfterExit=no\nTimeoutStartSec=900\n")
+	for _, env := range composeEnvironment(s.Engine) {
+		fmt.Fprintf(&b, "Environment=%s\n", unitValue(env))
+	}
 	directory, err := unitScalarValue(filepath.Dir(file))
 	if err != nil {
 		return nil, errors.New("Compose working directory contains unsupported whitespace or path escapes")

@@ -360,6 +360,35 @@ func TestComposeRuntimeAndBootShareProviderArgumentsAndDirectory(t *testing.T) {
 	if !strings.Contains(text, "COMPOSE_DISABLE_ENV_FILE=1") || strings.Contains(text, "Restart=") {
 		t.Fatal("Compose environment/startup policy changed", text)
 	}
+	for _, env := range command.Env {
+		if !strings.Contains(text, "Environment="+unitValue(env)+"\n") {
+			t.Fatal("runtime and boot environment differ", env)
+		}
+	}
+}
+
+func TestComposeProviderSelectionAppliesToReadinessAndRuntime(t *testing.T) {
+	for _, engine := range []string{"podman", "docker"} {
+		p, cfg, r := composeFixture(t)
+		p.Engine = engine
+		s := cfg.Services["website"]
+		s.Engine = engine
+		cfg.Services["website"] = s
+		p.Prerequisites(context.Background())
+		command := p.command(p.file("service/website"), "website", "down")
+		r.commands = append(r.commands, command)
+		for _, cmd := range r.commands {
+			if len(cmd.Args) > 0 && (cmd.Args[0] == "compose" || cmd.Args[0] == "info") {
+				if slices.Contains(cmd.Env, "PODMAN_COMPOSE_PROVIDER=podman-compose") != (engine == "podman") {
+					t.Fatal(engine, cmd)
+				}
+			}
+		}
+		boot, err := RenderComposeBoot(cfg, "service/website", p.Program, p.file("service/website"))
+		if err != nil || strings.Contains(string(boot), "PODMAN_COMPOSE_PROVIDER=") != (engine == "podman") {
+			t.Fatal(engine, err, string(boot))
+		}
+	}
 }
 
 func TestComposeBootRejectsAmbiguousDirectoryDirectives(t *testing.T) {
