@@ -9,7 +9,14 @@ func podmanInfoIssues(output, backend string, requireCgroupsV2 bool) []Issue {
 		Host struct {
 			CgroupVersion      string `json:"cgroupVersion"`
 			RootlessNetworkCmd string `json:"rootlessNetworkCmd"`
-			Security           struct {
+			NetworkBackendInfo struct {
+				Backend string `json:"backend"`
+				Path    string `json:"path"`
+				DNS     struct {
+					Path string `json:"path"`
+				} `json:"dns"`
+			} `json:"networkBackendInfo"`
+			Security struct {
 				Rootless *bool `json:"rootless"`
 			} `json:"security"`
 			Pasta struct {
@@ -29,6 +36,22 @@ func podmanInfoIssues(output, backend string, requireCgroupsV2 bool) []Issue {
 	var issues []Issue
 	if requireCgroupsV2 && info.Host.CgroupVersion != "v2" {
 		issues = append(issues, issue("cgroups", "unsupported_cgroups", "Quadlet requires cgroup v2.", "Configure a host with cgroup v2 before activating Quadlet services."))
+	}
+	if info.Host.NetworkBackendInfo.Backend == "" {
+		unknown := issue("networkBackend", "network_backend_unknown", "Podman's application networking backend could not be verified.", "Check native Podman networking setup and recheck configuration.")
+		unknown.Severity = "unknown"
+		issues = append(issues, unknown)
+	} else if info.Host.NetworkBackendInfo.Backend != "netavark" {
+		issues = append(issues, issue("networkBackend", "unsupported_network_backend", "Managed Podman application networks require a verifiable Netavark backend.", "Check Podman's native network backend configuration and install its networking dependencies, then recheck."))
+	} else {
+		for _, dependency := range []struct{ field, name, path string }{
+			{"networkBackend", "netavark", info.Host.NetworkBackendInfo.Path},
+			{"dns", "aardvark-dns", info.Host.NetworkBackendInfo.DNS.Path},
+		} {
+			if dependency.path == "" {
+				issues = append(issues, issue(dependency.field, "missing_dependency", "A required Podman application networking component is missing: "+dependency.name+".", "Install the native "+dependency.name+" package through Software or rerun the installer with Podman selected, then recheck configuration."))
+			}
+		}
 	}
 	if !*info.Host.Security.Rootless {
 		return issues

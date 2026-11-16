@@ -2,6 +2,7 @@ package declarative
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"server-man/internal/core"
 )
+
+const podmanNetworkFixture = `"networkBackendInfo":{"backend":"netavark","path":"/fixture/netavark","dns":{"path":"/fixture/aardvark-dns"}}`
 
 func TestPodmanEffectiveNetworkPrerequisites(t *testing.T) {
 	for _, tc := range []struct {
@@ -23,7 +26,7 @@ func TestPodmanEffectiveNetworkPrerequisites(t *testing.T) {
 		{"unknown selection", "unrecognized-private-value", "", "", "network_helper_unknown", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			output := fmt.Sprintf(`{"host":{"cgroupVersion":"v2","security":{"rootless":%t},"rootlessNetworkCmd":%q,"pasta":{"executable":%q},"slirp4netns":{"executable":%q}}}`, tc.rootless, tc.cmd, tc.pasta, tc.slirp)
+			output := fmt.Sprintf(`{"host":{%s,"cgroupVersion":"v2","security":{"rootless":%t},"rootlessNetworkCmd":%q,"pasta":{"executable":%q},"slirp4netns":{"executable":%q}}}`, podmanNetworkFixture, tc.rootless, tc.cmd, tc.pasta, tc.slirp)
 			for _, backend := range []string{"quadlet", "compose"} {
 				issues := podmanInfoIssues(output, backend, backend == "quadlet")
 				if tc.code == "" {
@@ -45,12 +48,43 @@ func TestPodmanEffectiveNetworkPrerequisites(t *testing.T) {
 			t.Fatal(issues)
 		}
 	}
-	output := `{"host":{"cgroupVersion":"v1","security":{"rootless":false}}}`
+	output := fmt.Sprintf(`{"host":{%s,"cgroupVersion":"v1","security":{"rootless":false}}}`, podmanNetworkFixture)
 	if issues := podmanInfoIssues(output, "quadlet", true); len(issues) != 1 || issues[0].Code != "unsupported_cgroups" {
 		t.Fatal(issues)
 	}
 	if issues := podmanInfoIssues(output, "compose", false); len(issues) != 0 {
 		t.Fatal(issues)
+	}
+}
+
+func TestPodmanApplicationNetworkDependencies(t *testing.T) {
+	for _, tc := range []struct{ backend, path, dns, field, code string }{
+		{"netavark", "/fixture/netavark", "/fixture/dns", "", ""},
+		{"netavark", "", "/fixture/dns", "networkBackend", "missing_dependency"},
+		{"netavark", "/fixture/netavark", "", "dns", "missing_dependency"},
+		{"private-unknown-backend", "", "", "networkBackend", "unsupported_network_backend"},
+		{"", "", "", "networkBackend", "network_backend_unknown"},
+	} {
+		for _, rootless := range []bool{true, false} {
+			info := map[string]any{"host": map[string]any{"security": map[string]bool{"rootless": rootless}, "cgroupVersion": "v2", "rootlessNetworkCmd": "pasta", "pasta": map[string]string{"executable": "/fixture/pasta"}, "networkBackendInfo": map[string]any{"backend": tc.backend, "path": tc.path, "dns": map[string]string{"path": tc.dns}}}}
+			raw, err := json.Marshal(info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, backend := range []string{"quadlet", "compose"} {
+				issues := podmanInfoIssues(string(raw), backend, backend == "quadlet")
+				if tc.code == "" {
+					if len(issues) != 0 {
+						t.Fatal(issues)
+					}
+				} else if len(issues) != 1 || issues[0].Code != tc.code || issues[0].Field != tc.field || issues[0].Remedy == "" {
+					t.Fatal(issues)
+				}
+				if strings.Contains(fmt.Sprint(issues), "private-unknown-backend") {
+					t.Fatal("native metadata leaked")
+				}
+			}
+		}
 	}
 }
 
@@ -60,7 +94,7 @@ func (r *podmanInfoRecorder) Run(context.Context, core.Command, io.Writer) error
 func (r *podmanInfoRecorder) Capture(_ context.Context, cmd core.Command) (string, error) {
 	r.commands = append(r.commands, cmd)
 	if cmd.Program == "podman" && cmd.Args[0] == "info" {
-		return `{"host":{"cgroupVersion":"v2","security":{"rootless":true},"rootlessNetworkCmd":"pasta","pasta":{"executable":""}}}`, nil
+		return fmt.Sprintf(`{"host":{%s,"cgroupVersion":"v2","security":{"rootless":true},"rootlessNetworkCmd":"pasta","pasta":{"executable":""}}}`, podmanNetworkFixture), nil
 	}
 	return "", nil
 }

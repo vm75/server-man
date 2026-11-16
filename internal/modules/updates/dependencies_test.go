@@ -47,7 +47,7 @@ func TestDependencyTargetsUseValidatedNativePackages(t *testing.T) {
 func TestPodmanInstallIncludesRootlessNetworkHelper(t *testing.T) {
 	for _, host := range []struct{ manager, distribution string }{{"apt", "ubuntu"}, {"apt", "debian"}, {"pacman", "arch"}} {
 		packages, err := DependencyPackages(host.manager, host.distribution, "podman")
-		if err != nil || !slices.Contains(packages, "passt") {
+		if err != nil || !slices.Contains(packages, "passt") || !slices.Contains(packages, "netavark") || !slices.Contains(packages, "aardvark-dns") {
 			t.Fatal(host, packages, err)
 		}
 	}
