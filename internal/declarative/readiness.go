@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"os"
 	"slices"
 	"sync"
 	"time"
@@ -30,6 +31,15 @@ func (c Coordinator) Preflight(ctx context.Context, cfg Config, refresh bool) He
 	h := c.Store.CheckFiles(cfg)
 	if c.serverRestartRequired(cfg) {
 		h.Issues = append(h.Issues, Issue{"error", "configuration", "server", "restart_required", "Server settings differ from the running process.", "Restart server-man to load the saved server settings before managing resources."})
+	}
+	// A previous partial apply is a configuration-wide startup blocker. Keep
+	// it visible even when native prerequisites were recently cached.
+	if journal, err := c.ReadJournal(); err == nil {
+		if journal.Stage != "complete" && journal.Stage != "aborted" {
+			h.Issues = append(h.Issues, Issue{"error", "configuration", "apply", "apply_incomplete", "An earlier configuration apply has not completed.", "Open Configuration to inspect apply status and explicitly retry or revert it before starting workloads."})
+		}
+	} else if !os.IsNotExist(err) {
+		h.Issues = append(h.Issues, Issue{"unknown", "configuration", "apply", "apply_unavailable", "Previous apply status cannot be verified.", "Inspect the private apply journal before managing workloads."})
 	}
 	data, _ := Encode(cfg)
 	key := digest(append(data, []byte(c.Store.Path)...))
