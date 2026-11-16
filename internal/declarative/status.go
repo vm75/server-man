@@ -18,6 +18,7 @@ type ServiceStatus struct {
 	Registered    bool    `json:"registered"`
 	Configuration string  `json:"configuration"`
 	Issues        []Issue `json:"issues"`
+	Members       []ContainerMemberStatus `json:"members,omitempty"`
 }
 
 type ReadinessStatus struct {
@@ -72,6 +73,7 @@ func (c Coordinator) ServiceStatuses(ctx context.Context) (any, error) {
 			obs, e := a.Inspect(ctx, snapshot.Config, key)
 			if e == nil {
 				item.Issues = append(item.Issues, obs.Issues...)
+				item.Members = obs.Members
 				item.Registered = obs.Registered
 				item.State = "stopped"
 				if obs.Active {

@@ -23,6 +23,7 @@ type Adapter interface {
 }
 type Observation struct {
 	State         string  `json:"state,omitempty"`
+	Members       []ContainerMemberStatus `json:"members,omitempty"`
 	Registered    bool    `json:"registered"`
 	ActiveMatches bool    `json:"activeMatches"`
 	Active        bool    `json:"active"`

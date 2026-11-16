@@ -34,6 +34,15 @@ func TestContainerGroupStateIsSeparateFromDefinitionDrift(t *testing.T) {
 			if obs.State != tc.state || obs.ActiveMatches != tc.matches || !obs.Matches {
 				t.Fatal(obs)
 			}
+			if len(obs.Members) != 2 || obs.Members[0].Name != "web" || obs.Members[1].Name != "worker" {
+				t.Fatal("unexpected configured member listing", obs.Members)
+			}
+			if tc.name == "one running" && (obs.Members[0].State != "running" || obs.Members[1].State != "not_running") {
+				t.Fatal("partial group member state unavailable", obs.Members)
+			}
+			if tc.name == "old member" && (obs.Members[0].State != "not_running" || obs.Members[1].State != "not_running") {
+				t.Fatal("unmanaged member leaked", obs.Members)
+			}
 			if tc.code == "" {
 				if len(obs.Issues) != 0 {
 					t.Fatal(obs.Issues)
@@ -104,7 +113,7 @@ func TestBothContainerAdaptersExposePartialStatusAndRecovery(t *testing.T) {
 					t.Fatal(err)
 				}
 				services := result.(map[string]any)["services"].([]ServiceStatus)
-				if len(services) != 1 || services[0].State != want || services[0].Configuration != "registered" {
+				if len(services) != 1 || services[0].State != want || services[0].Configuration != "registered" || len(services[0].Members) != 2 {
 					t.Fatal(services)
 				}
 				if slices.ContainsFunc(services[0].Issues, func(i Issue) bool { return i.Code == "partial_container_group" }) == complete {

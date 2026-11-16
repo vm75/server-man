@@ -6,7 +6,7 @@
   import { invokeTool, startJob, type Job } from '../lib/api'
   let { allowWrites }: { allowWrites: boolean } = $props()
   type Issue = ConfigurationIssue
-  interface Service { id: string; name: string; kind: string; backend: string; enabled: boolean; state: string; registered: boolean; configuration: string; issues: Issue[] }
+  interface Service { id: string; name: string; kind: string; backend: string; enabled: boolean; state: string; registered: boolean; configuration: string; issues: Issue[]; members?: { name: string; state: string }[] }
   interface Inventory { configured: boolean; valid?: boolean; error?: string; services: Service[]; health?: ConfigurationHealth }
   let inventory = $state<Inventory | null>(null)
   let error = $state('')
@@ -75,6 +75,7 @@
   <section class="panel application">
     <header><div><h2>{service.name || service.id}</h2><p>{service.kind} · {service.backend}</p></div><strong>{service.state.replaceAll('_', ' ')}</strong></header>
     <dl><div><dt>Start at boot</dt><dd>{service.enabled ? 'Enabled' : 'Disabled'}</dd></div><div><dt>Configuration</dt><dd>{service.configuration.replaceAll('_', ' ')}</dd></div></dl>
+    {#if service.members?.length}<details class="application-members"><summary>Containers ({service.members.length})</summary><ul>{#each service.members as member (member.name)}<li><strong>{member.name}</strong> — {member.state.replaceAll('_', ' ')}</li>{/each}</ul></details>{/if}
     {#if service.issues.length}<ul class="issues">{#each service.issues as issue}<li><strong>{issue.message}</strong><p>{issue.remedy}</p></li>{/each}</ul>{/if}
     {#if service.kind === 'container' || service.backend === 'incus'}
       <div class="project-log-controls">

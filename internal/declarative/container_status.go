@@ -5,8 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"strings"
 )
+
+type ContainerMemberStatus struct {
+	Name string `json:"name"`
+	State string `json:"state"`
+}
 
 // Native unit activity remains conservative for apply/removal safety. Inventory
 // separately describes how many desired container members are actually running.
@@ -14,12 +21,22 @@ func observeContainerGroup(obs *Observation, c Config, key string, containers []
 	_, id, _ := strings.Cut(key, "/")
 	expected := c.Services[id].Containers
 	running, seen := map[string]bool{}, map[string]bool{}
+	nativeStates := map[string]string{}
 	fingerprint := runtimeFingerprint(c, key)
 	for _, container := range containers {
 		if seen[container.Name] {
 			return errors.New("duplicate managed container identity")
 		}
 		seen[container.Name] = true
+		if _, managed := expected[container.Name]; managed {
+			state := container.State
+			switch state {
+			case "running", "created", "exited", "stopped", "paused", "restarting", "dead", "configured":
+			default:
+				state = "unknown"
+			}
+			nativeStates[container.Name] = state
+		}
 		if container.State != "running" {
 			continue
 		}
@@ -30,6 +47,15 @@ func observeContainerGroup(obs *Observation, c Config, key string, containers []
 		if _, exists := expected[container.Name]; exists {
 			running[container.Name] = true
 		}
+	}
+	// Return only configured member names, sorted and without native labels,
+	// environment or other potentially sensitive engine data. A missing row
+	// means the member is not reported running, not that its data is absent.
+	obs.Members = make([]ContainerMemberStatus, 0, len(expected))
+	for _, name := range slices.Sorted(maps.Keys(expected)) {
+		state := nativeStates[name]
+		if state == "" { state = "not_running" }
+		obs.Members = append(obs.Members, ContainerMemberStatus{Name: name, State: state})
 	}
 	obs.State = "stopped"
 	if len(running) == len(expected) && len(running) > 0 {
