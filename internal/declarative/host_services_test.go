@@ -124,7 +124,11 @@ func TestReservedGeneratedUserUnitsCannotUseDirectHostWrites(t *testing.T) {
 		{"sm-compose-orphan.service", "system", false},
 		{"sm-orphan-aabbcc.service", "", true},
 	} {
-		raw, _ := json.Marshal(map[string]any{"unit": tc.unit, "scope": tc.scope, "confirm": true})
+		input := map[string]any{"unit": tc.unit, "confirm": true}
+		if tc.scope != "" {
+			input["scope"] = tc.scope
+		}
+		raw, _ := json.Marshal(input)
 		_, err := r.Execute(context.Background(), "services_restart", raw, io.Discard)
 		if (err != nil) != tc.denied {
 			t.Fatalf("%s/%s: denied=%t, err=%v", tc.scope, tc.unit, tc.denied, err)
