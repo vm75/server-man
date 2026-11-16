@@ -173,7 +173,7 @@ func TestManagedRuntimeObservedDespiteStartupBlocker(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("expected one application, got %d", len(rows))
 	}
-	if rows[0].State != "running" || !rows[0].Registered || rows[0].Configuration != "registered" {
+	if rows[0].State != "running" || !rows[0].Registered || rows[0].Configuration != "restart_required" {
 		t.Fatalf("startup blocker hid native observed state: %+v", rows[0])
 	}
 	found := false
