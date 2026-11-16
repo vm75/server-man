@@ -1,7 +1,9 @@
 # server-man host setup record
 
-Date: 2026-10-16. Host: `nuc`, Ubuntu 26.10, account `shasak` (UID 1000).
-Checkout: `/home/shasak/ws/server-man`, real Git directory `.git`, starting commit
+> **Anonymized historical record, not a machine-specific installation requirement.** Hostname, workload account, checkout directory, interface and LAN addresses are placeholders here. `WORKLOAD_USER` is a replaceable account name, `/path/to/server-man` is a replaceable checkout, and `192.0.2.10`/`192.0.2.0/24` are reserved documentation addresses that will not route to a real deployment. Substitute actual values before adapting any command; do not run this historical mutation ledger as an installer. See [guided installation](../installation.md) for current supported instructions.
+
+Date: 2026-10-16. Host: `example-host`, Ubuntu 26.10, account `WORKLOAD_USER` (UID 1000).
+Checkout: `/path/to/server-man`, real Git directory `.git`, starting commit
 `a95fc91`. Existing untracked `HANDOFF.md` is preserved and excluded from commits.
 The task attachment explicitly authorizes server preparation, dependency installation,
 and creation of `~/vms`; this supersedes the development-only prohibitions in
@@ -10,7 +12,7 @@ uses fixtures. No credential values belong in this record.
 
 ## Current access
 
-Open **http://192.168.192.78:8080** from a machine on `192.168.192.0/24`, then
+Open **http://192.0.2.10:8080** from a machine on `192.0.2.0/24`, then
 sign in with the existing private access token. The direct LAN HTTP follow-up
 at the end records the current listener and supersedes the earlier HTTPS setup.
 
@@ -111,8 +113,8 @@ uidmap 1:4.19.3-2ubuntu2
 - Rootless Podman reports `true netavark`, existing subordinate UID/GID ranges
   `100000:65536` were reused unchanged. Containers and images both return `[]`.
   Podman units/socket/timer remain disabled at this point.
-- A Python copy operation created `/home/shasak/vms` only after asserting the
-  destination did not exist, with root mode 0700, owned by `shasak`. Copied
+- A Python copy operation created `/home/WORKLOAD_USER/vms` only after asserting the
+  destination did not exist, with root mode 0700, owned by `WORKLOAD_USER`. Copied
   `packaging/examples/vms` plus its README: three Compose definitions, two static
   pages, four harmless environment files and two disabled markers. Descendant
   directories are 0755 and files 0644 under the private root. No workload was
@@ -238,8 +240,8 @@ libx11-xcb1:amd64 2:1.8.13-1
 ### Deployment preparation
 
 - Created `~/.config/server-man` (0700) and `config.json` (0600), both owned by
-  `shasak`, refusing to replace an existing file. Config selects loopback
-  `127.0.0.1:8080`, `/home/shasak/vms`, a two-second sampler and `allowWrites:false`.
+  `WORKLOAD_USER`, refusing to replace an existing file. Config selects loopback
+  `127.0.0.1:8080`, `/home/WORKLOAD_USER/vms`, a two-second sampler and `allowWrites:false`.
   Default private token/state paths and system service inventory scope are kept.
   The HTTP server generates its own token on first start; it is never printed
   or copied into this record, command arguments or Git.
@@ -285,14 +287,14 @@ sudo make install
 systemctl --user daemon-reload
 systemd-analyze verify /usr/local/lib/systemd/system/server-man.service
 systemd-analyze --user verify /usr/local/lib/systemd/user/server-man.service
-sudo loginctl enable-linger shasak
+sudo loginctl enable-linger WORKLOAD_USER
 systemctl --user enable --now server-man.service
 ```
 
 Installation writes `/usr/local/bin/server-man` (0755),
 `/usr/local/share/server-man/config.example.json` (0644), and system/user unit files
 under `/usr/local/lib/systemd` (0644), owned by root. Only the **user** server-man
-unit is enabled and started, under the existing `shasak` account; no account or
+unit is enabled and started, under the existing `WORKLOAD_USER` account; no account or
 group is created. User lingering changes from no to yes so the manager survives
 logout and starts at boot on this headless host. The system/root unit stays
 inactive/disabled. No TLS proxy, firewall, public listener, host hostname or
@@ -309,10 +311,10 @@ host network changes were applied. Final service and verification results are be
   `e4424dd`, with zero restarts. System `server-man.service` is disabled/inactive.
   Installed and built binary hashes match. User `podman.socket` is enabled/active
   at `/run/user/1000/podman/podman.sock`; no root Podman service was enabled.
-  `loginctl show-user shasak -p Linger` reports `yes`.
+  `loginctl show-user WORKLOAD_USER -p Linger` reports `yes`.
 - First app start created `~/.config/server-man/token` (0600),
   `~/.local/state/server-man` (0700), and its `audit.jsonl` (0600), owned by
-  `shasak`. Config and token directory are 0700. Podman's account storage is
+  `WORKLOAD_USER`. Config and token directory are 0700. Podman's account storage is
   `~/.local/share/containers/storage` (0700). These contain generated private
   runtime state and are excluded from Git and this document's content.
 - `ss -ltn '( sport = :8080 )'` shows only `127.0.0.1:8080`. `/healthz` returns
@@ -368,7 +370,7 @@ journalctl --user -u server-man.service
 systemctl --user restart server-man.service
 ```
 
-From another computer on the LAN, open `https://192.168.192.78` after trusting
+From another computer on the LAN, open `https://192.0.2.10` after trusting
 the exported public CA. Read the token directly from the private
 `~/.config/server-man/token` file in your SSH session; never put it in a URL or
 commit it. No SSH tunnel or desktop session is needed. See the direct LAN
@@ -404,11 +406,11 @@ user's request; the current plain HTTP arrangement is recorded below.
 
 The user explicitly requested access from another machine. This supersedes the
 loopback-only access arrangement above. Inspection found LAN address
-`192.168.192.78/24` on `wlp2s0`, no proxy installed, ports 80/443 unused, and no
+`192.0.2.10/24` on `LAN_INTERFACE`, no proxy installed, ports 80/443 unused, and no
 ufw/nft/iptables utility installed. No firewall, router, DNS or hostname changes
 are planned. The backend stays on `127.0.0.1:8080`, with token auth and writes
-disabled. A Caddy proxy will bind only `192.168.192.78:443` and accept requests
-only from `192.168.192.0/24`. No plaintext listener or HTTP/3 UDP port is enabled.
+disabled. A Caddy proxy will bind only `192.0.2.10:443` and accept requests
+only from `192.0.2.0/24`. No plaintext listener or HTTP/3 UDP port is enabled.
 
 Reviewed simulation: `sudo apt-get install -y --no-install-recommends caddy` adds
 only caddy 2.11.4-1, libnspr4 2:4.39-1ubuntu1, libnss3 2:3.127-1 and
@@ -441,7 +443,7 @@ sudo install -d -m 0755 /etc/caddy
 sudo install -m 0644 packaging/Caddyfile.lan.example /etc/caddy/Caddyfile
 sudo apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends caddy
 systemctl --user restart server-man.service
-sudo install -o shasak -g shasak -m 0644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt /home/shasak/.config/server-man/lan-ca.crt
+sudo install -o WORKLOAD_USER -g WORKLOAD_USER -m 0644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt /home/WORKLOAD_USER/.config/server-man/lan-ca.crt
 sudo -u caddy env HOME=/var/lib/caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
 
@@ -450,7 +452,7 @@ and validation logs are `/tmp/server-man-caddy-*.log`. Before restarting the app
 a read-only authenticated check confirmed no management jobs existed. A Python
 file operation saved its prior config as `~/.config/server-man/config.before-lan.json`
 (0600) using exclusive creation, then atomically added
-`publicOrigin: "https://192.168.192.78"` to `config.json` (0600).
+`publicOrigin: "https://192.0.2.10"` to `config.json` (0600).
 The token and write policy were preserved. Restart expires prior browser sessions.
 
 Newly installed packages (four; zero upgrades/removals; cumulative APT total 111):
@@ -469,23 +471,23 @@ Caddyfile 0644; the unused vendor example is retained as `Caddyfile.dpkg-dist`.
 Its normal private CA/leaf keys and certs are under
 `/var/lib/caddy/.local/share/caddy` (root key 0600, caddy:caddy). Caddy's runtime
 state/autosaved config is under its own home. The public CA was exported 0644,
-shasak:shasak, inside the existing private `~/.config/server-man` directory.
+WORKLOAD_USER:WORKLOAD_USER, inside the existing private `~/.config/server-man` directory.
 No private key was exported; automatic machine trust installation was disabled.
 
 The native Caddy unit is enabled/active with zero restarts. Its `caddy-api` unit
 remains disabled/inactive. Package installation required no other service restart.
 The app was deliberately restarted once to load the origin configuration. Final
-listeners are LAN `192.168.192.78:443`, local backend `127.0.0.1:8080`, and Caddy's
+listeners are LAN `192.0.2.10:443`, local backend `127.0.0.1:8080`, and Caddy's
 local admin `127.0.0.1:2019`. There is no port 80 or UDP 443 listener. The app
 remains write-disabled, and its token permissions remain unchanged.
 
 ### LAN verification
 
 - Native `caddy adapt` and `caddy validate` accept the deployed config.
-- `curl --cacert ~/.config/server-man/lan-ca.crt https://192.168.192.78/healthz`
+- `curl --cacert ~/.config/server-man/lan-ca.crt https://192.0.2.10/healthz`
   verifies the certificate chain and IP identity and returns 200/ok. A connection
   bound to source `127.0.0.1` receives 403 from the proxy's LAN source restriction.
-- `NODE_EXTRA_CA_CERTS=/home/shasak/.config/server-man/lan-ca.crt node
+- `NODE_EXTRA_CA_CERTS=/home/WORKLOAD_USER/.config/server-man/lan-ca.crt node
   .cache/lan-verification.mjs` passes with certificate verification enabled:
   health, unauthenticated API/MCP 401, authenticated foreign-origin 403,
   authenticated API discovery, secure/HttpOnly/SameSite Strict cookie login and
@@ -506,14 +508,14 @@ remains write-disabled, and its token permissions remain unchanged.
 Copy the **public certificate** over your authenticated SSH connection:
 
 ```sh
-scp shasak@192.168.192.78:.config/server-man/lan-ca.crt ./server-man-lan-ca.crt
+scp WORKLOAD_USER@192.0.2.10:.config/server-man/lan-ca.crt ./server-man-lan-ca.crt
 openssl x509 -in server-man-lan-ca.crt -noout -fingerprint -sha256
 ```
 
 Expected SHA-256 fingerprint:
 `5F:96:F8:CE:82:75:80:32:FB:C1:8E:16:0E:B1:20:EF:0B:F0:A5:12:2B:EE:49:36:D1:18:F1:0D:AB:84:93:75`.
 Import that certificate as a trusted certificate authority in your client OS or
-browser, then open **https://192.168.192.78** and sign in with the existing access
+browser, then open **https://192.0.2.10** and sign in with the existing access
 token. [Caddy's local HTTPS documentation](https://caddyserver.com/docs/automatic-https#local-https)
 explains client trust for its internal CA. An HTTP URL is not served.
 
@@ -529,7 +531,7 @@ CA state, exported certificate and config backup have since been removed.
 
 The user requested plain HTTP directly from the application, bound to
 `0.0.0.0`. The live config now sets `listen` to `0.0.0.0:8080` and
-`publicOrigin` to `http://192.168.192.78:8080`; `allowWrites:false` and the
+`publicOrigin` to `http://192.0.2.10:8080`; `allowWrites:false` and the
 existing token file are preserved. Config remains mode 0600 in the private
 server-man config directory. The application validates this explicit remote
 listener against a non-loopback IP origin and matching port, and uses
@@ -563,7 +565,7 @@ The requested project editor was built from commit `d016f2c` and installed at
 existing user service was restarted and remains active. Its configuration was
 left untouched; at deployment it had `allowWrites:true`,
 `listen: "0.0.0.0:8080"`, and
-`publicOrigin: "http://192.168.192.78:8080"`. The token file was read only for an authenticated
+`publicOrigin: "http://192.0.2.10:8080"`. The token file was read only for an authenticated
 MCP discovery check and was not displayed or changed.
 
 The installed executable reports version `d016f2c`; its hash matches the

@@ -144,7 +144,7 @@ The example system unit expects `/usr/local/bin/server-man`. If installing under
 
 For a headless host that should serve HTTP directly, set `server.listen` to
 `0.0.0.0:8080` and `server.public_origin` to the host's non-loopback IP and same port,
-for example `http://192.168.192.78:8080`. This explicit configuration enables
+for example `http://192.0.2.10:8080` (**documentation-only IP; replace with your server's real LAN address**). This explicit configuration enables
 IPv4 remote access and restricts accepted Host and Origin values to that
 address. The service does not configure firewall or router rules; permit port
 8080 only on a trusted network. Browser session cookies are HttpOnly and
