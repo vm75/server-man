@@ -54,7 +54,7 @@ All seven targets now have the selected operation evidence above across the reco
 
 ## Outstanding evidence
 
-An uninterrupted final-build matrix, normal-environment enabled-boot reliability after the unexplained Netavark failure, daemon restart, broader guest OS/application health, Debian/Arch fresh installations and broader supported profiles remain separate gates. Actual guest power cycles and isolated share clients are recorded below; these do not prove reliability across all profiles or separate physical client hosts. Archival/restore acceptance is deferred by user instruction.
+An uninterrupted final-build matrix, daemon restart, broader guest OS/application health, Debian/Arch fresh installations and broader supported profiles remain separate gates. Actual guest power cycles, including a normal-environment enabled/disabled pair after the network-ordering correction, and isolated share clients are recorded below. These do not prove reliability across all profiles or separate physical client hosts. The earlier Netavark failure's cause is not proven; a subsequent passing run is not causal proof. Archival/restore acceptance is deferred by user instruction.
 
 
 ## Initial cold-boot observation
@@ -91,3 +91,13 @@ All definitions, access-policy edits and publication/removal operations used rev
 Both protocols passed readonly, writable, restricted, writable-again and unpublished cases (ten checks). Denials required specific protocol/permission errors; a generic failed command did not count. Configuration status matched publication throughout. Removal preserved observed unmanaged native share definitions and all server/service/storage/binding/private-file references. The original Incus VM remained stopped/disabled. All client-created files were removed, and the sentinel SHA256 remained unchanged.
 
 Cleanup verified no client namespace processes or client mounts, removed the exact veth/namespace, deleted only the newly added Samba credential entry and erased private generated credential/runtime files. No workstation package, share, mount, account or network was changed. Existing Samba-session revocation, other UID mappings, Kerberos and other client kernels were not tested. See the [client test procedure](disposable-acceptance.md#isolated-share-client-follow-up) for the boundary and cases.
+
+## Normal-environment boot with Podman network ordering
+
+The guest was upgraded through the shared installer to eb8c4cb, which adds Quadlet-equivalent user network-online ordering to Podman Compose and shared boot prerequisites for its packaged wait helper. This correction addresses an observed definition gap; it does not establish the cause of the earlier panic. Historical journal retrieval for that earlier boot was unavailable.
+
+Five fixtures were again defined/enabled while stopped through central plans. The temporary Rust backtrace file was absent and the manager had no RUST_BACKTRACE setting. After a graceful cold power cycle changed the boot ID, raw VM observations preceded provider queries and showed both VMs running autonomously. All five application rows were running/matching/enabled without manual retry. Podman Compose's owned unit was active/exited with success/status 0 and no unmanaged overrides. Native monotonic timestamps verified system network-online activation, then helper completion, then Compose command start, in that order.
+
+Disable preserved all five running states and matching definitions. A further normal-environment graceful cold cycle changed boot ID; raw observations before provider queries showed neither VM running. All five application rows were then stopped/matching/disabled. Thus both selected enabled-from-stopped and disabled-after-running cases passed on eb8c4cb with normal environment, not just the earlier diagnostic build/setting. The separate share-client results remain on 18020d4; no uninterrupted all-target final-build run is claimed.
+
+Cleanup removed the four temporary definitions through central plans, stopped the known Quadlet network helper and removed its unused network only after checking for consumers. The original Incus VM remains defined/stopped/disabled with its disks/references retained. The sentinel hash is unchanged. No workstation reboot or workload/share mutation occurred.
