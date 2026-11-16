@@ -58,6 +58,20 @@ func (p *Compose) bootProperties(ctx context.Context, id string) (map[string]str
 	return fields, nil
 }
 
+func (p *Compose) ownsBootFragment(key, fragment string) bool {
+	if !filepath.IsAbs(fragment) {
+		return false
+	}
+	// systemd can report its search-path symlink rather than the linked source.
+	// Resolve both; an identically named foreign file must never pass this check.
+	actual, err := filepath.EvalSymlinks(fragment)
+	if err != nil {
+		return false
+	}
+	expected, err := filepath.EvalSymlinks(p.unitFile(key))
+	return err == nil && actual == expected
+}
+
 func (p *Compose) removeBootUnit(ctx context.Context, key, id string) error {
 	fields, err := p.bootProperties(ctx, id)
 	if err != nil {
@@ -66,7 +80,7 @@ func (p *Compose) removeBootUnit(ctx context.Context, key, id string) error {
 	if fields["LoadState"] == "not-found" && fields["ActiveState"] == "inactive" {
 		return nil
 	}
-	if fields["LoadState"] != "loaded" || fields["FragmentPath"] != p.unitFile(key) || fields["DropInPaths"] != "" || fields["NeedDaemonReload"] != "no" {
+	if fields["LoadState"] != "loaded" || !p.ownsBootFragment(key, fields["FragmentPath"]) || fields["DropInPaths"] != "" || fields["NeedDaemonReload"] != "no" {
 		return errors.New("Compose boot unit identity or unmanaged overrides prevent removal")
 	}
 	if fields["ActiveState"] != "active" && fields["ActiveState"] != "inactive" && fields["ActiveState"] != "failed" {
@@ -218,7 +232,7 @@ func (p *Compose) Inspect(ctx context.Context, c Config, key string) (Observatio
 	if err != nil {
 		return obs, errors.New("cannot inspect Compose boot unit")
 	}
-	if fields["LoadState"] != "loaded" || fields["NeedDaemonReload"] != "no" || fields["FragmentPath"] != p.unitFile(key) || fields["DropInPaths"] != "" {
+	if fields["LoadState"] != "loaded" || fields["NeedDaemonReload"] != "no" || !p.ownsBootFragment(key, fields["FragmentPath"]) || fields["DropInPaths"] != "" {
 		obs.Matches = false
 	}
 	if c.Services[id].Enabled {

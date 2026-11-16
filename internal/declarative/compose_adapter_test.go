@@ -113,6 +113,8 @@ func TestComposeRemovalRetiresOnlyOwnedCompletedBootLauncher(t *testing.T) {
 		failStop, refuse bool
 	}{
 		{"active completed launcher", map[string]string{"ActiveState": "active"}, false, false},
+		{"linked managed fragment", nil, false, false},
+		{"linked foreign fragment", nil, false, true},
 		{"missing launcher", map[string]string{"LoadState": "not-found", "ActiveState": "inactive", "FragmentPath": ""}, false, false},
 		{"foreign fragment", map[string]string{"FragmentPath": "/foreign/unit.service"}, false, true},
 		{"unmanaged override", map[string]string{"DropInPaths": "/foreign/override.conf"}, false, true},
@@ -124,6 +126,24 @@ func TestComposeRemovalRetiresOnlyOwnedCompletedBootLauncher(t *testing.T) {
 			p, cfg, r := composeFixture(t)
 			if err := p.Apply(context.Background(), Config{Version: 1}, cfg, "service/website", "now"); err != nil {
 				t.Fatal(err)
+			}
+			if tc.name == "linked managed fragment" || tc.name == "linked foreign fragment" {
+				target := p.unitFile("service/website")
+				if tc.name == "linked foreign fragment" {
+					data, err := os.ReadFile(target)
+					if err != nil {
+						t.Fatal(err)
+					}
+					target = filepath.Join(t.TempDir(), "foreign.service")
+					if err = os.WriteFile(target, data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				link := filepath.Join(t.TempDir(), "linked.service")
+				if err := os.Symlink(target, link); err != nil {
+					t.Fatal(err)
+				}
+				tc.fields = map[string]string{"FragmentPath": link}
 			}
 			r.commands = nil
 			r.unitFields = tc.fields
