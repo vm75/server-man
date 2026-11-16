@@ -4,6 +4,8 @@ Status: implementation in progress; archival/backup/restore deferred on 2026-11-
 
 Updated 2026-11-16: native Arch testing is deferred by user instruction and excluded from current acceptance/completion gates. Retain Arch implementation/package mappings as an unverified support target; do not start Arch guest provisioning or native tests until requested. Existing shared command fixtures are not native Arch certification. Older evidence/gate wording is superseded by this scope decision.
 
+Native package version policy (updated 2026-11-16): use unpinned current candidates from the target's configured native distribution repositories for all installer-managed system tools, not hardcoded provider releases. APT metadata is refreshed; Arch performs a full synchronized upgrade. No third-party repository is auto-added, and `--skip-packages` intentionally preserves installed versions. If newer provider behavior breaks integration, fix server-man and its capability checks rather than pinning or downgrading installed tools. This does not change the separate lockfiles for application build/test dependencies.
+
 This document is the scope and progress authority for the next server-man phase, linked from [the implementation tracker](implementation.md). All implementation checkboxes start unchecked. Commit each verified implementation step with its tracking update. Record evidence and limits, not intentions, before checking a step complete. This planning change does not authorize running mutations against development-host workloads.
 
 ## Product goal and agreed scope
