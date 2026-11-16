@@ -41,7 +41,7 @@ const fixtures = {
   managed_apply_status: () => ({ stage: 'complete' }),
   managed_shares: () => ({ configured: true, revision: 'a'.repeat(64), shares: [] }),
   managed_resource_plan: args => ({ baseRevision: args.revision, desiredRevision: 'b'.repeat(64), changes: [{resource: `${args.kind}/${args.id}`,backend:'fixture',operation:args.operation}], files: {issues:[]} }),
-  managed_services: () => applicationsScenario === 'empty' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[]} : ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
+  managed_services: () => applicationsScenario === 'partial' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[{id:'website',name:'Website',kind:'container',backend:'podman/compose',enabled:true,state:'partially_running',configuration:'registered',registered:true,issues:[{severity:'warning',resource:'service/website',field:'runtime',code:'partial_container_group',message:'1 of 2 configured containers are running.',remedy:'Use Start to start missing members, or Stop to stop the application.'}]}]} : applicationsScenario === 'empty' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[]} : ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
   services_list: args => ({ scope: args.scope ?? 'system', available: true, journalAvailable: true, services: [{ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled' }], warnings: [] }),
   services_details: () => ({ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled', canStart: false, canStop: true, canReload: true, mainPID: 1234 }),
   shares_list: () => ({ backends: [{ protocol: 'samba', available: true, canManage: true, managedFile: '/tmp/server-man/samba.conf', revision: 'a'.repeat(64), setupRequired: false }, { protocol: 'nfs', available: true, canManage: true, managedFile: '/tmp/server-man/exports', revision: 'b'.repeat(64), setupRequired: false }], shares: [], warnings: [] }),
@@ -70,6 +70,12 @@ async function exerciseManagement(page) {
   await page.getByRole('heading', {name:'No managed applications yet',exact:true}).waitFor()
   assert.equal(await page.getByRole('heading', {name:'No matching applications',exact:true}).count(),0)
   assert.equal(await page.getByRole('button', {name:'Define application',exact:true}).isEnabled(),true)
+  applicationsScenario = 'partial'
+  await page.getByRole('button', {name:'Check configuration',exact:true}).click()
+  await page.getByText('partially running',{exact:true}).waitFor()
+  await page.getByText('1 of 2 configured containers are running.',{exact:true}).waitFor()
+  assert.equal(await page.getByRole('button',{name:'Start',exact:true}).isEnabled(),true)
+  assert.equal(await page.getByRole('button',{name:'Stop',exact:true}).isEnabled(),true)
   applicationsScenario = 'blocked'
   await page.getByRole('navigation').getByRole('button', {name:'Overview',exact:true}).click()
 

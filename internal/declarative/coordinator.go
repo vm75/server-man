@@ -22,6 +22,7 @@ type Adapter interface {
 	Apply(context.Context, Config, Config, string, string) error
 }
 type Observation struct {
+	State         string  `json:"state,omitempty"`
 	Registered    bool    `json:"registered"`
 	ActiveMatches bool    `json:"activeMatches"`
 	Active        bool    `json:"active"`

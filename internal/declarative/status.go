@@ -82,6 +82,9 @@ func (c Coordinator) ServiceStatuses(ctx context.Context) (any, error) {
 				if obs.Active {
 					item.State = "running"
 				}
+				if obs.State != "" {
+					item.State = obs.State
+				}
 				item.Configuration = "pending"
 				if obs.Matches {
 					item.Configuration = "registered"

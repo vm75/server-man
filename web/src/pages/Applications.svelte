@@ -56,7 +56,7 @@
 <div class="applications">
 {#each filtered as service (service.id)}
   <section class="panel application">
-    <header><div><h2>{service.name || service.id}</h2><p>{service.kind} · {service.backend}</p></div><strong>{service.state}</strong></header>
+    <header><div><h2>{service.name || service.id}</h2><p>{service.kind} · {service.backend}</p></div><strong>{service.state.replaceAll('_', ' ')}</strong></header>
     <dl><div><dt>Start at boot</dt><dd>{service.enabled ? 'Enabled' : 'Disabled'}</dd></div><div><dt>Configuration</dt><dd>{service.configuration.replaceAll('_', ' ')}</dd></div></dl>
     {#if service.issues.length}<ul class="issues">{#each service.issues as issue}<li><strong>{issue.message}</strong><p>{issue.remedy}</p></li>{/each}</ul>{/if}
     <div class="actions">

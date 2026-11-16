@@ -85,6 +85,7 @@ func TestArtifactPublicationOwnership(t *testing.T) {
 type quadletRecorder struct {
 	commands    []core.Command
 	fingerprint string
+	containers  []managedContainer
 }
 
 func (r *quadletRecorder) Run(_ context.Context, c core.Command, _ io.Writer) error {
@@ -101,7 +102,15 @@ func (r *quadletRecorder) Capture(_ context.Context, c core.Command) (string, er
 		return out.String(), nil
 	}
 	if c.Program == "podman" {
-		data, _ := json.Marshal([]any{map[string]any{"Labels": map[string]string{"io.server-man.fingerprint": r.fingerprint}}})
+		containers := r.containers
+		if containers == nil {
+			containers = []managedContainer{{"web", "running", r.fingerprint}}
+		}
+		rows := []any{}
+		for _, v := range containers {
+			rows = append(rows, map[string]any{"State": v.State, "Labels": map[string]string{"io.server-man.container": v.Name, "io.server-man.fingerprint": v.Fingerprint}})
+		}
+		data, _ := json.Marshal(rows)
 		return string(data), nil
 	}
 	return "", nil

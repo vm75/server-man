@@ -3,7 +3,6 @@ package declarative
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -122,60 +121,6 @@ func (p *Compose) Validate(ctx context.Context, c Config, key string) error {
 	return nil
 }
 
-type managedContainer struct{ Name, State, Fingerprint string }
-
-func parseManagedContainers(output string) ([]managedContainer, error) {
-	var rows []json.RawMessage
-	if strings.HasPrefix(strings.TrimSpace(output), "[") {
-		if json.Unmarshal([]byte(output), &rows) != nil {
-			return nil, errors.New("invalid engine inventory")
-		}
-	} else {
-		decoder := json.NewDecoder(strings.NewReader(output))
-		for {
-			var row json.RawMessage
-			err := decoder.Decode(&row)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, errors.New("invalid engine inventory")
-			}
-			rows = append(rows, row)
-			if len(rows) > 4096 {
-				return nil, errors.New("engine inventory limit exceeded")
-			}
-		}
-	}
-	if len(rows) > 4096 {
-		return nil, errors.New("engine inventory limit exceeded")
-	}
-	result := []managedContainer{}
-	for _, row := range rows {
-		var item struct {
-			Labels json.RawMessage
-			State  string
-		}
-		if json.Unmarshal(row, &item) != nil {
-			return nil, errors.New("invalid container inventory row")
-		}
-		labels := map[string]string{}
-		if json.Unmarshal(item.Labels, &labels) != nil {
-			var labelString string
-			if json.Unmarshal(item.Labels, &labelString) != nil {
-				return nil, errors.New("unsupported engine labels")
-			}
-			for _, pair := range strings.Split(labelString, ",") {
-				k, v, ok := strings.Cut(pair, "=")
-				if ok {
-					labels[k] = v
-				}
-			}
-		}
-		result = append(result, managedContainer{labels["io.server-man.container"], strings.ToLower(item.State), labels["io.server-man.fingerprint"]})
-	}
-	return result, nil
-}
 func (p *Compose) containers(ctx context.Context, id string) ([]managedContainer, error) {
 	output, err := p.Runner.Capture(ctx, core.Command{Program: p.Program, Args: []string{"ps", "--all", "--filter", "label=io.server-man.service=" + id, "--format", "json"}, Timeout: 5 * time.Second})
 	if err != nil {
@@ -242,18 +187,8 @@ func (p *Compose) Inspect(ctx context.Context, c Config, key string) (Observatio
 	} else if fields["UnitFileState"] == "enabled" {
 		obs.Matches = false
 	}
-	seen := map[string]bool{}
-	for _, container := range containers {
-		if seen[container.Name] {
-			return obs, errors.New("duplicate managed container identity")
-		}
-		seen[container.Name] = true
-		if container.State == "running" {
-			obs.Active = true
-			if container.Fingerprint != runtimeFingerprint(c, key) {
-				obs.ActiveMatches = false
-			}
-		}
+	if err := observeContainerGroup(&obs, c, key, containers); err != nil {
+		return obs, err
 	}
 	// A failed boot attempt is runtime history, not definition drift. Keep
 	// current-run recovery available, including for a partially started project.

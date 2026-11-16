@@ -3,7 +3,6 @@ package declarative
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -173,22 +172,15 @@ func (q *Quadlet) Inspect(ctx context.Context, c Config, key string) (Observatio
 		if err != nil {
 			return obs, errors.New("cannot verify active container revisions")
 		}
-		var containers []struct {
-			Labels map[string]string `json:"Labels"`
-		}
-		if json.Unmarshal([]byte(output), &containers) != nil {
+		containers, err := parseManagedContainers(output)
+		if err != nil {
 			return obs, errors.New("invalid container inventory")
-		}
-		if len(containers) == 0 {
-			obs.ActiveMatches = false
 		}
 		if len(containers) > len(s.Containers) {
 			return obs, errors.New("unexpected containers share managed identity")
 		}
-		for _, v := range containers {
-			if v.Labels["io.server-man.fingerprint"] != runtimeFingerprint(c, key) {
-				obs.ActiveMatches = false
-			}
+		if err := observeContainerGroup(&obs, c, key, containers); err != nil {
+			return obs, err
 		}
 	}
 	return obs, nil

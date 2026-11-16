@@ -10,6 +10,8 @@ The overview provides bounded Linux resource histories and process inventory. Se
 
 File shares derives owned Samba/NFS fragments from central definitions, validates candidates and attempts rollback on native publication failure, preserving unmanaged configuration and shared data. Host daemon/package setup remains explicit. Missing dependencies and file/mount prerequisites appear in a global configuration alert and per-resource issues. Applications also reports failed owned Compose boot launchers while keeping explicit current-run recovery available. Checks run when the UI opens and can be refreshed explicitly; complete post-port validation remains in development.
 
+Applications distinguishes partially running container groups from fully running groups, with a running-member count and recovery guidance. Configuration status remains separate from current execution.
+
 HTTP and MCP share authentication/write policy, validated operations, serialized jobs and bounded output/audit. See [installation](docs/installation.md), [architecture](ARCHITECTURE.md), and [monitoring](docs/design/monitoring.md).
 
 ## Install
