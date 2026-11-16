@@ -104,6 +104,12 @@ async function exercise(client, label, revision = 'missing') {
   assert.equal(readiness.isError,false)
   assert.equal(readiness.structuredContent.configured,configured)
   assert.equal(readiness.structuredContent.valid,configured)
+  if (configured) {
+    const recheck = await client.callTool({name:'managed_config_check',arguments:{}})
+    assert.equal(recheck.isError,false)
+    assert(Array.isArray(recheck.structuredContent.issues),'recheck returns Health directly')
+    assert.equal(typeof recheck.structuredContent.checkedAt,'string')
+  }
   const configHealth = await client.callTool({ name: 'managed_config_health', arguments: {} })
   assert.equal(configHealth.isError, false)
   assert.equal(configHealth.structuredContent.configured, configured)

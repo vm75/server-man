@@ -15,7 +15,7 @@ function fixture(options = {}) {
     calls.push({name,args})
     if (name === 'system_status') return {hostname:options.hostname ?? 'server-man-test',allowWrites:true}
     if (name === 'managed_config_model') return snapshot()
-    if (name === 'managed_config_check') return {configured:true,valid:true,health:{issues:[]}}
+    if (name === 'managed_config_check') return {checkedAt:new Date().toISOString(),issues:[]}
     if (name === 'managed_resource_plan') {assert.equal(args.revision,snapshot().revision);if (args.id===options.planFailure) throw new Error('Fixture native definition validation failed');return {restartRequired:false,changes:[],files:{issues:[]}}}
     if (name === 'managed_services') return {configured:true,valid:true,services:[...states].map(([id,state])=>({id,enabled:config.services[id].enabled,...state,issues:[]}))}
     if (name === 'managed_shares') return {configured:true,shares:Object.entries(config.shares).map(([id,definition])=>({id,definition,configuration:definition.enabled?'published':'unpublished',issues:[]}))}

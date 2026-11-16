@@ -75,8 +75,8 @@ export async function verifyGuest({call,job,selected = targets,image,acknowledge
     nativeShares.set(protocol,nativeDefinitions(inventory))
   }
   const readiness = await call('managed_config_check')
-  assert(readiness.configured && readiness.valid,'Guest configuration is not ready for inspection')
-  assert(!readiness.health.issues.some(issue => issue.severity !== 'warning'),'Resolve fixture file prerequisites before running checks')
+  assert(Array.isArray(readiness.issues),'Guest prerequisite recheck returned no health issues list')
+  assert(!readiness.issues.some(issue => issue.severity !== 'warning'),'Resolve fixture file prerequisites before running checks')
   for (const target of selected) {
     const kind = ['samba','nfs'].includes(target) ? 'share' : 'service'
     const plan = await call('managed_resource_plan',{kind,id:`${prefix}${target}`,operation:'save',revision:baseline.revision,definition:JSON.stringify(definitionFor(target,image))})
@@ -171,6 +171,6 @@ export async function verifyGuest({call,job,selected = targets,image,acknowledge
   const expectedServices = selected.includes('incus') ? [`${prefix}incus`] : []
   assert(same(Object.keys(final.config.services ?? {}).sort(),expectedServices),'Unexpected remaining services')
   const finalHealth = await call('managed_config_check')
-  assert(!finalHealth.health.issues.some(issue => issue.severity !== 'warning'),'Fixture data/backend readiness no longer intact')
+  assert(!finalHealth.issues.some(issue => issue.severity !== 'warning'),'Fixture data/backend readiness no longer intact')
   report('Selected checks passed. Incus remains stopped/boot-disabled when selected; discard the disposable guest after review. Reboot, daemon-restart, guest OS and share-client acceptance are separate checks.')
 }
