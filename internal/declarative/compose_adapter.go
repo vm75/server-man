@@ -22,10 +22,11 @@ type Compose struct {
 }
 
 func NewCompose(store Store, engine string, runner core.Executor) *Compose {
-	config, _ := os.UserConfigDir()
 	program, _ := exec.LookPath(engine)
 	systemctl, _ := exec.LookPath("systemctl")
-	return &Compose{Store: store, Engine: engine, Program: program, Systemctl: systemctl, Directory: store.Path + ".generated/" + engine + "-compose", UnitDirectory: filepath.Join(config, "systemd/user/server-man", engine+"-compose"), Runner: runner}
+	// systemctl link refuses files anywhere under its unit search hierarchy,
+	// including subdirectories which the manager does not itself search.
+	return &Compose{Store: store, Engine: engine, Program: program, Systemctl: systemctl, Directory: store.Path + ".generated/" + engine + "-compose", UnitDirectory: store.Path + ".generated/" + engine + "-compose-units", Runner: runner}
 }
 func (p *Compose) resourceDir(key string) string {
 	_, id, _ := strings.Cut(key, "/")

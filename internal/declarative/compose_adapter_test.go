@@ -220,6 +220,18 @@ func TestComposeBothEnginesUseSamePortableDefinition(t *testing.T) {
 	}
 }
 
+func TestComposeBootSourceOutsideSystemdSearchHierarchy(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	store := Store{Path: filepath.Join(root, "server-man", "server-man.yaml")}
+	for _, engine := range []string{"podman", "docker"} {
+		p := NewCompose(store, engine, &composeRecorder{})
+		if p.UnitDirectory != store.Path+".generated/"+engine+"-compose-units" {
+			t.Fatal("boot source must be in owned generated storage outside the systemd hierarchy", p.UnitDirectory)
+		}
+	}
+}
+
 func TestComposeRemovesOnlyStoppedOwnedMembersWithoutVolumes(t *testing.T) {
 	p, cfg, r := composeFixture(t)
 	s := cfg.Services["website"]
