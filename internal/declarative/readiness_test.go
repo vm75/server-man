@@ -153,3 +153,36 @@ func TestConfigurationReadinessSurvivesRelocationAndRepairWithoutActivation(t *t
 		t.Fatal("repair did not clear blockers or check applied resources", repaired, probe.calls)
 	}
 }
+
+func TestManagedRuntimeObservedDespiteStartupBlocker(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	probe := &probeAdapter{
+		fakeAdapter: fakeAdapter{active: true, matches: map[string]bool{"service/website": true}},
+		issues: []Issue{{"error", "backend/podman/quadlet", "podman", "missing_dependency", "Backend startup prerequisite is missing.", "Repair the dependency."}},
+	}
+	c.Adapters["podman/quadlet"] = probe
+	if _, err := c.Store.Save(cfg, "missing"); err != nil {
+		t.Fatal(err)
+	}
+	result, err := c.ServiceStatuses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventory := result.(map[string]any)
+	rows := inventory["services"].([]ServiceStatus)
+	if len(rows) != 1 {
+		t.Fatalf("expected one application, got %d", len(rows))
+	}
+	if rows[0].State != "running" || !rows[0].Registered || rows[0].Configuration != "registered" {
+		t.Fatalf("startup blocker hid native observed state: %+v", rows[0])
+	}
+	found := false
+	for _, issue := range rows[0].Issues {
+		if issue.Code == "missing_dependency" && issue.Severity == "error" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("observed runtime state dropped startup blocker: %+v", rows[0])
+	}
+}
