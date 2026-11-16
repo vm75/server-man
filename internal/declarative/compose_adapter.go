@@ -255,6 +255,11 @@ func (p *Compose) Inspect(ctx context.Context, c Config, key string) (Observatio
 			}
 		}
 	}
+	// A failed boot attempt is runtime history, not definition drift. Keep
+	// current-run recovery available, including for a partially started project.
+	if fields["LoadState"] == "loaded" && fields["ActiveState"] == "failed" && p.ownsBootFragment(key, fields["FragmentPath"]) {
+		obs.Issues = append(obs.Issues, Issue{"warning", key, "autostart", "boot_start_failed", "The last Compose boot startup failed.", "Check the application's boot unit in the user systemd journal, repair the reported problem, and use Start to retry the workload."})
+	}
 	return obs, nil
 }
 func (p *Compose) Apply(ctx context.Context, previous, desired Config, key, mode string) error {

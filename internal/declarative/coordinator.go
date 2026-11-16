@@ -22,10 +22,11 @@ type Adapter interface {
 	Apply(context.Context, Config, Config, string, string) error
 }
 type Observation struct {
-	Registered    bool `json:"registered"`
-	ActiveMatches bool `json:"activeMatches"`
-	Active        bool `json:"active"`
-	Matches       bool `json:"matches"`
+	Registered    bool    `json:"registered"`
+	ActiveMatches bool    `json:"activeMatches"`
+	Active        bool    `json:"active"`
+	Matches       bool    `json:"matches"`
+	Issues        []Issue `json:"issues,omitempty"`
 }
 type Change struct {
 	Resource    string `json:"resource"`

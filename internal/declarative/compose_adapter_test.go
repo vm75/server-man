@@ -35,10 +35,14 @@ type composeRecorder struct {
 	unitFile     string
 	unitFields   map[string]string
 	failBootStop bool
+	onRun        func(core.Command)
 }
 
 func (r *composeRecorder) Run(_ context.Context, cmd core.Command, _ io.Writer) error {
 	r.commands = append(r.commands, cmd)
+	if r.onRun != nil {
+		r.onRun(cmd)
+	}
 	if len(cmd.Args) > 4 && cmd.Args[3] == "link" {
 		r.unitFile = cmd.Args[4]
 	}
@@ -216,6 +220,90 @@ func TestComposeDefineDoesNotStartAndTogglePreservesExecution(t *testing.T) {
 		t.Fatal(obs, err)
 	}
 }
+
+func TestComposeBootFailureIsFreshWarningWithoutDefinitionDrift(t *testing.T) {
+	p, cfg, r := composeFixture(t)
+	if err := p.Apply(context.Background(), Config{Version: 1}, cfg, "service/website", "now"); err != nil {
+		t.Fatal(err)
+	}
+	r.enabled = cfg.Services["website"].Enabled
+	r.unitFields = map[string]string{"ActiveState": "failed"}
+	for _, running := range []bool{false, true} {
+		r.containers = nil
+		if running {
+			r.containers = []managedContainer{{"web", "running", runtimeFingerprint(cfg, "service/website")}}
+		}
+		r.commands = nil
+		obs, err := p.Inspect(context.Background(), cfg, "service/website")
+		if err != nil || !obs.Matches || !obs.Registered || obs.Active != running || len(obs.Issues) != 1 {
+			t.Fatal(obs, err)
+		}
+		issue := obs.Issues[0]
+		if issue.Severity != "warning" || issue.Resource != "service/website" || issue.Field != "autostart" || issue.Code != "boot_start_failed" || issue.Remedy == "" {
+			t.Fatal(issue)
+		}
+		for _, cmd := range r.commands {
+			if cmd.Args[0] != "ps" && !slices.Contains(cmd.Args, "show") {
+				t.Fatal("inspection changed native state", cmd)
+			}
+		}
+	}
+	// A successful launcher clears the alert on the next observation; neither
+	// readiness caching nor historical failures create permanent blockers.
+	r.unitFields["ActiveState"] = "active"
+	obs, err := p.Inspect(context.Background(), cfg, "service/website")
+	if err != nil || len(obs.Issues) != 0 {
+		t.Fatal(obs, err)
+	}
+	r.unitFields = map[string]string{"ActiveState": "failed", "FragmentPath": "/foreign/unit.service"}
+	obs, err = p.Inspect(context.Background(), cfg, "service/website")
+	if err != nil || len(obs.Issues) != 0 || obs.Matches {
+		t.Fatal("attributed foreign launcher failure to owned application", obs, err)
+	}
+}
+
+type statusComposeFixture struct{ *Compose }
+
+func (statusComposeFixture) Prerequisites(context.Context) []Issue { return nil }
+
+func TestManagedStatusReportsBootFailureAndAllowsCurrentStart(t *testing.T) {
+	p, cfg, r := composeFixture(t)
+	if _, err := p.Store.Save(cfg, "missing"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Apply(context.Background(), Config{Version: 1}, cfg, "service/website", "now"); err != nil {
+		t.Fatal(err)
+	}
+	c := Coordinator{Store: p.Store, HealthCache: &HealthCache{}, Adapters: map[string]Adapter{"podman/compose": statusComposeFixture{p}}}
+	r.enabled = cfg.Services["website"].Enabled
+	r.unitFields = map[string]string{"ActiveState": "failed"}
+	result, err := c.ServiceStatuses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := result.(map[string]any)["services"].([]ServiceStatus)
+	if len(rows) != 1 || rows[0].State != "stopped" || rows[0].Configuration != "registered" || !slices.ContainsFunc(rows[0].Issues, func(i Issue) bool { return i.Code == "boot_start_failed" }) {
+		t.Fatal(rows)
+	}
+	r.onRun = func(cmd core.Command) {
+		if slices.Contains(cmd.Args, "up") {
+			r.containers = []managedContainer{{"web", "running", runtimeFingerprint(cfg, "service/website")}}
+		}
+	}
+	if err := c.ServiceAction(context.Background(), "website", "start"); err != nil {
+		t.Fatal("boot failure blocked explicit current-run recovery", err)
+	}
+	r.unitFields["ActiveState"] = "active"
+	result, err = c.ServiceStatuses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows = result.(map[string]any)["services"].([]ServiceStatus)
+	if slices.ContainsFunc(rows[0].Issues, func(i Issue) bool { return i.Code == "boot_start_failed" }) {
+		t.Fatal("runtime issue was retained by readiness cache", rows)
+	}
+}
+
 func TestEngineInventoryShapes(t *testing.T) {
 	for _, body := range []string{`[{"State":"running","Labels":{"io.server-man.container":"web","io.server-man.fingerprint":"hash"}}]`, `{"State":"running","Labels":"io.server-man.container=web,io.server-man.fingerprint=hash"}`} {
 		rows, err := parseManagedContainers(body)

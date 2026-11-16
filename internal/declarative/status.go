@@ -76,6 +76,7 @@ func (c Coordinator) ServiceStatuses(ctx context.Context) (any, error) {
 		if a := c.Adapters[item.Backend]; a != nil && !blocked && ctx.Err() == nil {
 			obs, e := a.Inspect(ctx, snapshot.Config, key)
 			if e == nil {
+				item.Issues = append(item.Issues, obs.Issues...)
 				item.Registered = obs.Registered
 				item.State = "stopped"
 				if obs.Active {
