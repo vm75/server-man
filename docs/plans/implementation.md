@@ -4,7 +4,7 @@ Status: active. Updated: 2026-10-16. Check off a step only after its acceptance 
 
 ## Current deployment priority (2026-11-15)
 
-Deploy first on this Ubuntu machine, retaining Debian and Arch Linux as support targets. Focus on container/VM configuration and lifecycle, central Samba/NFS shares, and actionable prerequisite alerts. Backup/restore is deferred; preserve partial implementation. Follow the [single-server release plan](single-server-release.md). Full declarative-phase completion is separate from this initial deployment.
+Prioritize a single-server Ubuntu reference deployment, retaining Debian and Arch Linux as support targets. The product must not depend on a specific workstation, account, or filesystem layout. Focus on container/VM configuration and lifecycle, central Samba/NFS shares, and actionable prerequisite alerts. Backup/restore is deferred; preserve partial implementation. Follow the [single-server release plan](single-server-release.md). Full declarative-phase completion is separate from this initial deployment.
 
 Updated 2026-11-16: defer native Arch testing per user instruction. Keep Arch implementation/package mappings, mark native support unverified, and exclude its test-host/install/workload/boot acceptance from current release gates. Continue active Ubuntu/Debian work; do not resume native Arch testing until requested.
 
@@ -36,7 +36,7 @@ Read-only inspection of `~/vms` on 2026-10-15 found:
 - Docker support should use the parallel `config/docker/<project>/` layout, with configurable roots.
 - No KVM or LXC inventory convention was found in that directory. Use libvirt and LXD/classic LXC inventory rather than inventing a filesystem layout.
 
-The migrated checkout is `/home/shasak/ws/server-man` with its own writable `.git` directory. Earlier evidence below describes the previous host; current-host evidence is recorded separately.
+Historical acceptance used a writable Git checkout. No repository checkout location is a server-man runtime requirement. Earlier records describe a separate test environment and do not prescribe the current host layout.
 
 ## Design constraints
 
@@ -255,7 +255,7 @@ the replacement plain HTTP listener is tracked in the follow-up after it.
 
 The user requested access from another machine without an SSH tunnel.
 
-- [x] Configure HTTPS at `https://192.168.192.78` using a LAN-bound Caddy proxy, preserving loopback backend and token/origin policy.
+- [x] Configure HTTPS at `https://192.0.2.10` using a LAN-bound Caddy proxy, preserving loopback backend and token/origin policy.
 - [x] Verify TLS, browser login/session behavior, HTTP/MCP parity and denied writes through the proxy; record client trust requirements and every host change.
 
 Evidence: reviewed/validated Caddy configuration installed before package startup;

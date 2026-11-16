@@ -103,9 +103,7 @@ Use HTTP to share the web server's jobs and history. A local stdio process has i
 
 See [architecture](ARCHITECTURE.md) for shared operation boundaries, resource limits, and authentication, and [project guidance](AGENTS.md) for working commands.
 
-This checkout is rooted at `/home/shasak/ws/server-man` with its own writable `.git` directory. See the [host setup record](docs/operations/host-setup.md) for this server’s deployment and example workloads.
-
-This headless host is available on the LAN at **http://192.168.192.78:8080**, with token authentication and writes disabled. See the [host setup record](docs/operations/host-setup.md#direct-lan-http-follow-up-2026-10-16).
+Install server-man in any suitable Linux account using the [guided installation](docs/installation.md); no particular checkout directory, hostname, username, home layout or LAN address is required. The listener defaults to loopback. Configure an explicit bind address and public origin for trusted-network access, or use a TLS reverse proxy. Historical, anonymized [host setup evidence](docs/operations/host-setup.md) is not an installation template.
 
 Run the application as your workload account with `privilegedOperations: true`
 and the restricted sudo helper to administer packages, system services, and

@@ -1,5 +1,7 @@
 # Verification and completion audit
 
+> Historical host-specific values have been anonymized: `/path/to/server-man` is an example checkout and `192.0.2.10` is a documentation-only IP. These are evidence records, not required runtime settings.
+
 This audit maps the requested features to implementation and evidence. Fixture tests establish command construction, parsing, safety and failure behavior; they do not establish that privileged changes work on a particular live server.
 
 ## User-run privilege boundary (2026-11-14)
@@ -16,7 +18,7 @@ snapshots retain their historical evidence and are superseded for these gates.
 
 ## Headless deployment snapshot (2026-10-16)
 
-Checkout `/home/shasak/ws/server-man` on Ubuntu 26.10. The installed native
+Checkout `/path/to/server-man` on Ubuntu 26.10. The installed native
 binary reports revision `4191209-dirty`; user `server-man.service` is enabled/running,
 with user lingering enabled and management writes disabled. The backend listener
 is `0.0.0.0:8080` with Host and Origin restricted to the configured LAN origin. See the [complete operations ledger](operations/host-setup.md)
@@ -36,7 +38,7 @@ for packages, permissions, configs, services, commands and outcomes.
 ### Direct LAN access follow-up
 
 The preceding HTTPS setup was retired at the user's request. Current access is
-plain HTTP at `http://192.168.192.78:8080`, with the app listening on
+plain HTTP at `http://192.0.2.10:8080`, with the app listening on
 `0.0.0.0:8080`; Caddy and its packages, CA state and exported certificate were
 removed. Validation covers the live health endpoint, authenticated API and MCP,
 session cookies without the Secure attribute, Host/Origin rejection, and the
