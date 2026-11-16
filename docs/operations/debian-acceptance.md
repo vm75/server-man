@@ -21,4 +21,22 @@ The actual packaged release `install.sh --user manager --backends all --yes` ran
 
 The five real shared backend prerequisite functions then ran as manager with its user bus. Podman Quadlet, Podman Compose, libvirt and Incus returned zero issues. Docker correctly reported a missing executable. Actual Debian repository/package status confirmed docker.io and docker-compose installed, docker-cli absent, and both packages only recommending docker-cli. The [native package relationship](https://packages.debian.org/trixie/docker.io) explains why no-recommends installation omitted it.
 
-The shared Debian dependency preset now explicitly requests docker-cli for guided/source/release installation and Software dependency setup. Command fixtures and full race/type checks cover the correction; repaired installer execution and native recheck are recorded separately when performed. No workstation package was installed or refreshed by this Debian acceptance work. Incus pools/networks and managed workloads/shares have not been initialized in this guest.
+The shared Debian dependency preset now explicitly requests docker-cli for guided/source/release installation and Software dependency setup. Command fixtures and full race/type checks cover the correction. No workstation package was installed or refreshed by this Debian acceptance work. Incus pools/networks and managed workloads/shares have not been initialized in this guest.
+
+## Corrected installer and provider access
+
+The packaged 02ec1fe release install.sh was rerun with all backends and actual package installation, using the shared corrected preset rather than an ad hoc CLI repair. It installed docker-cli successfully. Exact YAML/token bytes were preserved, the existing Docker daemon PID was unchanged, installed version matched and HTTP health returned 200.
+
+All five shared prerequisite functions then returned zero issues as manager with the real user bus: Podman Quadlet, Podman Compose, Docker Compose, system libvirt and Incus. Observed versions:
+
+| Component | Version |
+| --- | --- |
+| server-man | 0.1.0-alpha.1+g02ec1fe8f334 |
+| Podman | 5.4.2 |
+| podman-compose | 1.3.0 |
+| Docker CLI/server | 26.1.5+dfsg1 |
+| Docker Compose | 2.26.1-4 |
+| libvirt | 11.3.0 |
+| Incus client/server | 6.0.4 |
+
+This is a fresh-guest installation followed by an explicit corrected installer rerun, not a pristine corrected-build installation or an uninterrupted workload matrix. Global program/account/device prerequisites do not prove per-resource image/storage/network readiness. No VM pool/network, managed workload or share was created. Full Debian lifecycle/boot/share-client and source-build installation checks, plus fresh Arch acceptance, remain open. The installed Ubuntu workstation remains on its preceding verified release; this Debian package correction did not alter it.
