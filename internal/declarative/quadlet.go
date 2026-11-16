@@ -20,6 +20,7 @@ type Quadlet struct {
 	Directory string
 	Generator string
 	Systemctl string
+	Journalctl string
 	Podman    string
 	Runner    core.Executor
 }
@@ -28,6 +29,7 @@ func NewQuadlet(store Store, runner core.Executor) *Quadlet {
 	config, _ := os.UserConfigDir()
 	q := &Quadlet{Store: store, Directory: filepath.Join(config, "containers/systemd/server-man"), Runner: runner}
 	q.Systemctl, _ = exec.LookPath("systemctl")
+	q.Journalctl, _ = exec.LookPath("journalctl")
 	q.Podman, _ = exec.LookPath("podman")
 	for _, path := range []string{"/usr/lib/systemd/system-generators/podman-system-generator", "/usr/libexec/podman/quadlet"} {
 		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {

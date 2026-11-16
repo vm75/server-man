@@ -92,3 +92,45 @@ func TestManagedUnitDetailsEnablementAndBrokenConfiguration(t *testing.T) {
 		t.Fatal("broken configuration bypassed managed lifecycle", direct, err)
 	}
 }
+
+// The reserved prefix cannot be used to bypass the authoritative coordinator
+// after a resource is renamed, removed, or a generated unit is left behind.
+func TestReservedGeneratedUserUnitsCannotUseDirectHostWrites(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	if _, err := c.Store.Save(cfg, "missing"); err != nil {
+		t.Fatal(err)
+	}
+	r := core.NewRegistry(true, nil)
+	direct := 0
+	if err := r.AddModule(core.Module{ID: "services", Available: true}, core.Tool{
+		Name: "services_restart", Destructive: true,
+		Fields: map[string]core.Field{"unit": core.StringField("Unit", true, 255), "scope": core.EnumField("Scope", false, "user", "system")},
+		Run: func(context.Context, core.Input, io.Writer) (any, error) {
+			direct++
+			return map[string]bool{"direct": true}, nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	RouteManagedUnits(r, c, "user")
+	for _, tc := range []struct{
+		unit string
+		scope string
+		denied bool
+	}{
+		{"sm-compose-orphan.service", "user", true},
+		{"sm-orphan-aabbcc.service", "user", true},
+		{"sshd.service", "user", false},
+		{"sm-compose-orphan.service", "system", false},
+		{"sm-orphan-aabbcc.service", "", true},
+	} {
+		raw, _ := json.Marshal(map[string]any{"unit": tc.unit, "scope": tc.scope, "confirm": true})
+		_, err := r.Execute(context.Background(), "services_restart", raw, io.Discard)
+		if (err != nil) != tc.denied {
+			t.Fatalf("%s/%s: denied=%t, err=%v", tc.scope, tc.unit, tc.denied, err)
+		}
+	}
+	if direct != 2 {
+		t.Fatalf("unknown reserved user units bypassed coordinator: %d direct actions", direct)
+	}
+}

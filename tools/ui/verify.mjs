@@ -52,6 +52,7 @@ function fixtureFor(tool, args) {
   const factory = fixtures[tool]
   if (factory) return factory(args)
   if (tool === 'services_logs') return { text: 'fixture journal', truncated: false }
+  if (tool === 'managed_service_logs') return { text: 'fixture managed application log', truncated: false, source: 'podman-compose' }
   if (tool.startsWith('jobs_')) return null
   managementCalls.push({ tool, args })
   return { job: { id: `fixture-${managementCalls.length}`, tool, state: 'running', createdAt: new Date().toISOString(), output: '', truncated: false } }
@@ -76,6 +77,8 @@ async function exerciseManagement(page) {
   await page.getByText('1 of 2 configured containers are running.',{exact:true}).waitFor()
   assert.equal(await page.getByRole('button',{name:'Start',exact:true}).isEnabled(),true)
   assert.equal(await page.getByRole('button',{name:'Stop',exact:true}).isEnabled(),true)
+  await page.getByRole('button',{name:'Read logs',exact:true}).click()
+  await page.getByText('fixture managed application log',{exact:true}).waitFor()
   applicationsScenario = 'blocked'
   await page.getByRole('navigation').getByRole('button', {name:'Overview',exact:true}).click()
 

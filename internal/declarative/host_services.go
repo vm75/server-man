@@ -54,6 +54,12 @@ func RouteManagedUnits(r *core.Registry, c Coordinator, defaultScope string) {
 			}
 			owner := managedUnitOwner(snapshot.Config, in.String("unit"))
 			if owner == "" {
+				// The sm- namespace is reserved for server-man-generated user
+				// services, even when the definition is missing or stale. Never
+				// let direct systemctl writes bypass managed ownership checks.
+				if !tool.ReadOnly && strings.HasPrefix(in.String("unit"), "sm-") {
+					return nil, core.Unavailable("Unknown or stale managed unit; repair the application definition instead of controlling a reserved unit directly")
+				}
 				return original(ctx, in, out)
 			}
 			if tool.ReadOnly {

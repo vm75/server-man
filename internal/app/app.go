@@ -74,6 +74,7 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 				declarative.RegisterCoordinator,
 				declarative.RegisterLifecycle,
 				declarative.RegisterStatus,
+				declarative.RegisterManagedLogs,
 				declarative.RegisterShareStatus,
 				declarative.RegisterEditing,
 				declarative.RegisterHistory,

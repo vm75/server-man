@@ -16,6 +16,12 @@
   let feedback = $state('')
   let activeJob = $state<string | null>(null)
   let pending = $state<{ service: Service; action: string } | null>(null)
+  let logServiceID = $state<string | null>(null)
+  let logTail = $state(200)
+  let logLoading = $state(false)
+  let logError = $state('')
+  let logs = $state<{ text: string; truncated: boolean; source: string } | null>(null)
+  let logController: AbortController | undefined
   let controller: AbortController | undefined
   let stopped = false
   const filtered = $derived(inventory?.services.filter(s => `${s.id} ${s.name} ${s.backend}`.toLowerCase().includes(query.toLowerCase())) ?? [])
@@ -31,6 +37,17 @@
     } catch (e) { if (!signal.aborted) error = e instanceof Error ? e.message : 'Could not read applications' }
     finally { if (!signal.aborted) loading = false }
   }
+  async function readLogs(service: Service) {
+    logController?.abort(); logController = new AbortController()
+    const signal = logController.signal
+    logServiceID = service.id; logs = null; logError = ''; logLoading = true
+    try {
+      const result = await invokeTool<{ text: string; truncated: boolean; source: string }>('managed_service_logs', { service: service.id, tail: logTail }, signal)
+      if (!stopped && !signal.aborted && logServiceID === service.id) logs = result
+    } catch (e) {
+      if (!signal.aborted) logError = e instanceof Error ? e.message : 'Could not read application logs'
+    } finally { if (!signal.aborted) logLoading = false }
+  }
   async function perform(service: Service, action: string) {
     error = ''; pending = null
     try { const job = await startJob(`managed_service_${action}`, { service: service.id, ...(action === 'start' ? {} : { confirm: true }) }); activeJob = job.id; feedback = 'Operation started. Follow its progress in Activity.' }
@@ -39,7 +56,7 @@
   onMount(() => {
     const finished = (event: Event) => { const job = (event as CustomEvent<Job>).detail; if (job.id !== activeJob) return; activeJob = null; feedback = job.state === 'succeeded' ? 'Operation completed.' : job.error || `Operation ${job.state}.`; void load() }
     window.addEventListener('server-man:job-finished', finished); void load()
-    return () => { stopped = true; controller?.abort(); window.removeEventListener('server-man:job-finished', finished) }
+    return () => { stopped = true; controller?.abort(); logController?.abort(); window.removeEventListener('server-man:job-finished', finished) }
   })
 </script>
 
@@ -59,6 +76,19 @@
     <header><div><h2>{service.name || service.id}</h2><p>{service.kind} · {service.backend}</p></div><strong>{service.state.replaceAll('_', ' ')}</strong></header>
     <dl><div><dt>Start at boot</dt><dd>{service.enabled ? 'Enabled' : 'Disabled'}</dd></div><div><dt>Configuration</dt><dd>{service.configuration.replaceAll('_', ' ')}</dd></div></dl>
     {#if service.issues.length}<ul class="issues">{#each service.issues as issue}<li><strong>{issue.message}</strong><p>{issue.remedy}</p></li>{/each}</ul>{/if}
+    {#if service.kind === 'container' || service.backend === 'incus'}
+      <div class="project-log-controls">
+        <h3>{service.backend === 'incus' ? 'VM instance diagnostics' : 'Application logs'}</h3>
+        <div><label class="sr-only" for="application-log-tail-{service.id}">Log entries for {service.name || service.id}</label><select id="application-log-tail-{service.id}" bind:value={logTail}>{#each [100, 200, 500, 1000, 2000] as count}<option value={count}>{count} entries</option>{/each}</select><button disabled={logLoading && logServiceID === service.id} onclick={() => void readLogs(service)}>{logLoading && logServiceID === service.id ? 'Reading…' : logs && logServiceID === service.id ? 'Refresh logs' : 'Read logs'}</button></div>
+      </div>
+      {#if logServiceID === service.id}
+        {#if logError}<p class="form-error" role="alert">{logError}</p>{/if}
+        {#if logs}<pre class="project-log-output">{logs.text || 'No visible log entries. The workload may not have emitted output or the account may lack access.'}</pre>{#if logs.truncated}<p class="resource-hint">Showing only the most recent 128 KiB of output.</p>{/if}{/if}
+        <p class="resource-hint">Logs can contain private application data and are requested only when you click Read logs.{service.backend === 'incus' ? ' Incus reports instance diagnostics, not guest application logs.' : ''}</p>
+      {/if}
+    {:else if service.kind === 'vm'}
+      <p class="resource-hint">Guest application logs are not exposed by the libvirt backend; inspect them inside the guest.</p>
+    {/if}
     <div class="actions">
       <button disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id:service.id} }}>Edit definition</button>
       {#each ['start', 'stop', 'restart', service.enabled ? 'disable' : 'enable'] as action}
