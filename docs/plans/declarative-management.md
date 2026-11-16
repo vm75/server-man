@@ -6,6 +6,17 @@ Updated 2026-11-16: native Arch testing is deferred by user instruction and excl
 
 Native package version policy (updated 2026-11-16): use unpinned current candidates from the target's configured native distribution repositories for all installer-managed system tools, not hardcoded provider releases. APT metadata is refreshed; Arch performs a full synchronized upgrade. No third-party repository is auto-added, and `--skip-packages` intentionally preserves installed versions. If newer provider behavior breaks integration, fix server-man and its capability checks rather than pinning or downgrading installed tools. This does not change the separate lockfiles for application build/test dependencies.
 
+## Non-deferred completion determination (2026-11-16)
+
+**Decision: not yet complete.** Excluding backup/archival/restore and native Arch acceptance does not waive the non-deferred requirements in steps 1–9 and 11. The current implementation has extensive Go/SDK/browser fixtures, a deployed Ubuntu reference and seven-target native evidence accumulated across prior guest builds, but none is equivalent to the full completion matrix below. Do not change this status to completed solely because GitHub CI is green, documentation has been edited, or an individual backend was exercised previously.
+
+Remaining **implementation** work includes complete target-schema/portability diagnostics and explicit recovery paths; exhaustive journal/restart and provider-compatibility behavior; fuller application/VM details and repair actions; and auditing generated artifacts/host-direct controls against all supported backends. Supported v1 limitations must be explicit rather than silently treated as implemented features. Current reviewed scope still excludes destructive Incus VM removal/export for the initial release.
+
+Remaining **verification** work includes an uninterrupted final-build native Debian seven-target run, daemon-restart and recovery fault cases, Incus console verifier execution, representative missing-path/mount/permission/guest failures, and the final end-to-end application/HTTP/MCP/share-client workflow. An Ubuntu record or hosted command fixture cannot certify Debian runtime behavior. The native test requires explicit isolated-guest credentials and permission; do not run it on a workstation or imply it was run here.
+
+**Closure rule:** record the passing evidence with an exact build, platform, provider versions and known limits, close or explicitly redesign each outstanding non-deferred requirement with user-approved scope, update architecture and operational docs to match the delivered product, then check the criteria and replace this plan with its short completion record. Deferred work remains separately tracked; no test requirement is waived by this decision.
+
+
 This document is the scope and progress authority for the next server-man phase, linked from [the implementation tracker](implementation.md). All implementation checkboxes start unchecked. Commit each verified implementation step with its tracking update. Record evidence and limits, not intentions, before checking a step complete. This planning change does not authorize running mutations against development-host workloads.
 
 ## Product goal and agreed scope
