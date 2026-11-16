@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,14 +20,16 @@ import (
 )
 
 type Incus struct {
-	Store              Store
-	Program, Directory string
-	Runner             core.Executor
+	Store                    Store
+	Program, QEMU, Directory string
+	Runner                   core.Executor
 }
 
 func NewIncus(store Store, runner core.Executor) *Incus {
 	program, _ := exec.LookPath("incus")
-	return &Incus{Store: store, Program: program, Directory: store.Path + ".generated/incus", Runner: runner}
+	qemuName := map[string]string{"amd64": "qemu-system-x86_64", "arm64": "qemu-system-aarch64"}[runtime.GOARCH]
+	qemu, _ := exec.LookPath(qemuName)
+	return &Incus{Store: store, Program: program, QEMU: qemu, Directory: store.Path + ".generated/incus", Runner: runner}
 }
 func (i *Incus) queryCommand(project, path string) core.Command {
 	if project != "" {
@@ -367,6 +370,22 @@ func (i *Incus) Prerequisites(ctx context.Context) []Issue {
 	var server map[string]any
 	if err := i.get(ctx, "", "/1.0", &server); err != nil {
 		return []Issue{{"error", "backend/incus", "daemon", "incus_unavailable", "The local Incus daemon is unavailable.", "Check daemon setup, the local socket and account permissions."}}
+	}
+	if i.QEMU == "" {
+		return []Issue{{"error", "backend/incus", "qemu", "missing_dependency", "The native QEMU executable required for Incus VMs is missing.", "Install Incus VM dependencies through Software or rerun the installer with Incus selected, then recheck."}}
+	}
+	// Help only: verifies the modular SPICE option required by Incus without
+	// creating a VM, opening KVM, or assuming recommended packages were installed.
+	output, err := i.Runner.Capture(ctx, core.Command{Program: i.QEMU, Args: []string{"-spice", "help"}, Env: []string{"LC_ALL=C"}, Timeout: 3 * time.Second})
+	available := strings.HasPrefix(output, "spice options:\n") && strings.Contains(output, "\n  unix=<bool") && strings.Contains(output, "\n  disable-ticketing=<bool")
+	if err != nil {
+		// QEMU prints complete option help to stdout and exits 1. Missing
+		// modules instead emit an error without the option declarations.
+		var exit *exec.ExitError
+		available = available && errors.As(err, &exit) && exit.ExitCode() == 1
+	}
+	if !available {
+		return []Issue{{"error", "backend/incus", "qemu", "qemu_spice_unavailable", "QEMU's SPICE support required for Incus VMs is unavailable.", "Install Incus VM dependencies (including qemu-system-modules-spice on Debian/Ubuntu) through Software or rerun the installer, then recheck."}}
 	}
 	return nil
 }

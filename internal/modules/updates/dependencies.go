@@ -41,8 +41,11 @@ func dependencyPackageNames(manager, distribution, target string) (string, error
 			return "docker docker-compose", nil
 		}
 	case "incus":
-		if manager == "apt" || manager == "pacman" {
-			return "incus", nil
+		if manager == "apt" {
+			return "incus qemu-utils ovmf qemu-system-modules-spice dnsmasq-base", nil
+		}
+		if manager == "pacman" {
+			return "incus cdrtools", nil
 		}
 	case "samba":
 		return "samba", nil

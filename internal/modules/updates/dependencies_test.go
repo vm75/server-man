@@ -52,3 +52,21 @@ func TestPodmanInstallIncludesRootlessNetworkHelper(t *testing.T) {
 		}
 	}
 }
+
+func TestIncusInstallIncludesVMDependenciesWithoutRecommendations(t *testing.T) {
+	for _, distribution := range []string{"debian", "ubuntu"} {
+		packages, err := DependencyPackages("apt", distribution, "incus")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"incus", "qemu-utils", "ovmf", "qemu-system-modules-spice", "dnsmasq-base"} {
+			if !slices.Contains(packages, name) {
+				t.Fatal(distribution, "missing VM prerequisite", name, packages)
+			}
+		}
+	}
+	packages, err := DependencyPackages("pacman", "arch", "incus")
+	if err != nil || !slices.Contains(packages, "cdrtools") {
+		t.Fatal(packages, err)
+	}
+}

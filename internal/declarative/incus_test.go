@@ -6,10 +6,12 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"server-man/internal/core"
 )
@@ -33,16 +35,18 @@ func incusFixture(t *testing.T) (*Incus, Config, *incusRecorder) {
 		t.Fatal(err)
 	}
 	r := &incusRecorder{}
-	i := &Incus{Store: Store{Path: filepath.Join(t.TempDir(), "config.yaml")}, Program: "incus", Directory: filepath.Join(t.TempDir(), "generated"), Runner: r}
+	i := &Incus{Store: Store{Path: filepath.Join(t.TempDir(), "config.yaml")}, Program: "incus", QEMU: "qemu-system-x86_64", Directory: filepath.Join(t.TempDir(), "generated"), Runner: r}
 	return i, c, r
 }
 
 type incusRecorder struct {
-	commands []core.Command
-	actual   incusInstanceInfo
-	exists   bool
-	payloads []map[string]any
-	failStop bool
+	commands       []core.Command
+	actual         incusInstanceInfo
+	exists         bool
+	payloads       []map[string]any
+	failStop       bool
+	failSpice      bool
+	spiceHelpError error
 }
 
 func incusRequest(c core.Command) (method, path string) {
@@ -58,6 +62,15 @@ func incusRequest(c core.Command) (method, path string) {
 }
 func (r *incusRecorder) Capture(_ context.Context, c core.Command) (string, error) {
 	r.commands = append(r.commands, c)
+	if c.Program == "qemu-system-x86_64" {
+		if !slices.Equal(c.Args, []string{"-spice", "help"}) || c.Timeout != 3*time.Second {
+			return "", errors.New("unsafe capability probe")
+		}
+		if r.failSpice {
+			return "", errors.New("private-runtime-diagnostic")
+		}
+		return "spice options:\n  unix=<bool (on/off)>\n  disable-ticketing=<bool (on/off)>\n", r.spiceHelpError
+	}
 	_, path := incusRequest(c)
 	u, _ := url.Parse(path)
 	var metadata any = map[string]any{}
@@ -176,6 +189,37 @@ func TestIncusStoppedCreationExplicitBindingsAndNoProfiles(t *testing.T) {
 		if cmd.Args[1] != "query" && (cmd.Args[1] != "--project" || cmd.Args[2] != "managed") {
 			t.Fatal("ambient mutation project allowed", cmd.Args)
 		}
+	}
+}
+
+func TestIncusVMReadinessChecksQEMUSpiceWithoutStarting(t *testing.T) {
+	i, _, r := incusFixture(t)
+	if issues := i.Prerequisites(context.Background()); len(issues) != 0 {
+		t.Fatal(issues)
+	}
+	r.spiceHelpError = exec.Command("false").Run()
+	if r.spiceHelpError == nil {
+		t.Fatal("exit fixture failed")
+	}
+	if issues := i.Prerequisites(context.Background()); len(issues) != 0 {
+		t.Fatal("QEMU help's exit 1 must be accepted with complete expected options", issues)
+	}
+	r.spiceHelpError = errors.New("private-runtime-diagnostic")
+	if issues := i.Prerequisites(context.Background()); len(issues) != 1 || issues[0].Code != "qemu_spice_unavailable" {
+		t.Fatal("unexpected failure accepted", issues)
+	}
+	r.failSpice = true
+	issues := i.Prerequisites(context.Background())
+	if len(issues) != 1 || issues[0].Code != "qemu_spice_unavailable" || strings.Contains(issues[0].Message, "private-runtime") {
+		t.Fatal(issues)
+	}
+	i.QEMU = ""
+	issues = i.Prerequisites(context.Background())
+	if len(issues) != 1 || issues[0].Field != "qemu" || issues[0].Code != "missing_dependency" {
+		t.Fatal(issues)
+	}
+	if len(r.payloads) != 0 {
+		t.Fatal("readiness mutated native state")
 	}
 }
 

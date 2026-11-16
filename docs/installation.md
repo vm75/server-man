@@ -163,3 +163,5 @@ The system connection (`server.libvirt_uri: qemu:///system`) uses the libvirt da
 Podman dependency installation explicitly includes `passt` (which supplies `pasta`); Debian/Ubuntu also include `slirp4netns` and `uidmap`. Configuration checks use Podman's effective networking selection and report a missing selected helper before managed startup, rather than assuming that a successful `podman info` means containers can run.
 
 Managed Podman Compose explicitly uses `podman-compose`, installed by the Podman dependency preset. Docker continues to use `docker compose`. Server-man supplies the same provider environment during readiness, validation, current-run actions and boot startup. No Podman API socket is required by this provider.
+
+The Incus VM preset explicitly includes QEMU utilities, OVMF, the QEMU SPICE module and dnsmasq-base on Debian/Ubuntu; repository recommendations are disabled, so these cannot be left implicit. Arch's preset includes cdrtools for VM configuration media alongside Incus and its native QEMU dependencies. The initial verified release architecture is amd64; other architectures and fresh Debian/Arch installations remain acceptance gates.
