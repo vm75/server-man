@@ -23,7 +23,7 @@ let fixtureMode = false
 let readinessScenario = 'blocked'
 let applicationsScenario = 'blocked'
 let applyScenario = 'complete'
-const artifactConflictMessage = 'Generated definitions need inspection before explicit repair and retry.'
+const artifactConflictMessage = 'Generated files differ from server-man\'s expected output. Configuration remains saved, but publication is blocked. Inspect and preserve this resource\'s owned artifacts before explicit repair and retry.'
 let backupRecoveryPending = false
 let backupPublicationPending = false
 let backupPublicationFinalized = true
@@ -41,6 +41,7 @@ const fixtures = {
   managed_config_model: () => ({ revision: 'a'.repeat(64), config: { version: 1, services: {}, shares: {}, storage: { documents: {path:'data/documents',kind:'directory'}, 'vm-root': {path:'data/vm-root.qcow2',kind:'file',format:'qcow2',source:{path:'assets/base.qcow2',format:'qcow2',sha256:'e'.repeat(64)}} }, bindings: { lan:{kind:'network',name:'default'}, pool:{kind:'pool',name:'default'}, project:{kind:'project',name:'default'} }, secrets: {} } }),
   managed_config_read: () => ({ content: 'version: 1\n', revision: 'a'.repeat(64), valid: true }),
   managed_apply_status: () => applyScenario === 'failed' ? {stage:'failed',resources:{'service/website':{state:'failed',message:artifactConflictMessage},'service/database':{state:'registered'}}} : ({ stage: 'complete' }),
+  managed_artifact_review: args => ({resource:args.resource,revision:'a'.repeat(64),reviewToken:'e'.repeat(64),canReconcile:true,parts:[{label:'Native Quadlet definitions',files:'desired',manifest:'conflicting'}]}),
   managed_shares: () => ({ configured: true, revision: 'a'.repeat(64), shares: [] }),
   managed_resource_plan: args => ({ baseRevision: args.revision, desiredRevision: 'b'.repeat(64), changes: [{resource: `${args.kind}/${args.id}`,backend:'fixture',operation:args.operation}], files: {issues:[]} }),
   managed_services: () => applicationsScenario === 'partial' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[{id:'website',name:'Website',kind:'container',backend:'podman/compose',enabled:true,state:'partially_running',configuration:'registered',registered:true,members:[{name:'web',state:'running'},{name:'worker',state:'not_running'}],issues:[{severity:'warning',resource:'service/website',field:'runtime',code:'partial_container_group',message:'1 of 2 configured containers are running.',remedy:'Use Start to start missing members, or Stop to stop the application.'}]}]} : applicationsScenario === 'empty' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[]} : ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
@@ -177,6 +178,15 @@ async function exerciseManagement(page) {
   await page.getByRole('navigation').getByRole('button',{name:'Configuration',exact:true}).click()
   await applyRecovery.getByText(artifactConflictMessage,{exact:true}).waitFor()
   assert.equal(managementCalls.filter(call=>call.tool==='managed_apply_retry').length,retriesBefore,'viewing durable failures must not retry them')
+  await applyRecovery.getByRole('button',{name:'Review generated artifact recovery for service/website',exact:true}).click()
+  const artifactReview = applyRecovery.getByRole('region',{name:'Generated artifact metadata review',exact:true})
+  await artifactReview.getByText('Native files: desired; publication manifest: conflicting',{exact:true}).waitFor()
+  assert.equal(managementCalls.filter(call=>call.tool==='managed_artifact_reconcile').length,0,'read-only artifact review mutated native metadata')
+  await artifactReview.getByRole('button',{name:'Confirm metadata-only reconciliation',exact:true}).click()
+  assert.deepEqual(managementCalls.at(-1),{tool:'managed_artifact_reconcile',args:{resource:'service/website',revision:'a'.repeat(64),reviewToken:'e'.repeat(64),confirm:true}})
+  await page.getByText('Metadata-only repair started. Inspect the result before explicitly retrying apply.',{exact:true}).waitFor()
+  await page.evaluate(id=>window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool:'managed_artifact_reconcile',state:'succeeded'}})),`fixture-${managementCalls.length}`)
+  await applyRecovery.getByText(artifactConflictMessage,{exact:true}).waitFor()
   await applyRecovery.getByRole('button',{name:'Inspect and retry apply',exact:true}).click()
   await page.getByText('Recovery inspection and retry started.',{exact:true}).waitFor()
   assert.deepEqual(managementCalls.at(-1),{tool:'managed_apply_retry',args:{confirm:true}})

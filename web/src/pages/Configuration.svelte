@@ -23,6 +23,8 @@
   let mode = $state('now')
   let applyStage = $state('none')
   let applyResources = $state<Record<string,{state:string;message?:string}>>({})
+  type ArtifactReview = { resource:string; revision:string; reviewToken:string; canReconcile:boolean; parts:{label:string;files:string;manifest:string}[] }
+  let artifactReview = $state<ArtifactReview | null>(null)
   let controller: AbortController | undefined
   let stopped = false
   function entries(kind:ResourceKind): [string, string][] {
@@ -36,6 +38,7 @@
     try {
       const raw = await invokeTool<{content:string;revision:string;valid:boolean;error?:string}>('managed_config_read',{},signal)
       if (stopped || signal.aborted) return
+      artifactReview = null
       content = raw.content; revision = raw.revision; valid = raw.valid
       if (raw.valid) model = await invokeTool<ModelSnapshot>('managed_config_model',{},signal)
       else { model = null; rawOpen = true; error = raw.error || 'Repair invalid YAML before using definition forms.' }
@@ -52,6 +55,22 @@
   }
   async function rawSave() { busy = true; error = ''; try { const job = await startJob('managed_config_save',{content:rawReviewed,revision,mode,confirm:true}); activeJob = job.id; plan = null; feedback = 'Configuration save started. Follow Activity for publication results.' } catch(e) { error = e instanceof Error ? e.message : 'Could not save configuration' } finally { busy = false } }
   async function retry() { busy = true; error = ''; try { const job = await startJob('managed_apply_retry',{confirm:true}); activeJob = job.id; feedback = 'Recovery inspection and retry started.' } catch(e) { error = e instanceof Error ? e.message : 'Could not retry apply' } finally { busy = false } }
+  async function reviewArtifact(resource:string) {
+    busy = true; error = ''; artifactReview = null
+    try { artifactReview = await invokeTool<ArtifactReview>('managed_artifact_review',{resource}) }
+    catch(e) { error = e instanceof Error ? e.message : 'Could not inspect generated files' }
+    finally { busy = false }
+  }
+  async function reconcileArtifact() {
+    if (!artifactReview?.canReconcile) return
+    busy = true; error = ''
+    try {
+      const job = await startJob('managed_artifact_reconcile',{resource:artifactReview.resource,revision:artifactReview.revision,reviewToken:artifactReview.reviewToken,confirm:true})
+      activeJob = job.id; artifactReview = null
+      feedback = 'Metadata-only repair started. Inspect the result before explicitly retrying apply.'
+    } catch(e) { error = e instanceof Error ? e.message : 'Could not reconcile artifact metadata' }
+    finally { busy = false }
+  }
   onMount(() => { const finished = (e:Event) => { const job = (e as CustomEvent<Job>).detail; if (job.id !== activeJob) return; activeJob = null; feedback = job.state === 'succeeded' ? 'Configuration operation completed.' : job.error || `Operation ${job.state}.`; void load() }; window.addEventListener('server-man:job-finished',finished); void load(); return () => { stopped = true; controller?.abort(); window.removeEventListener('server-man:job-finished',finished) } })
 </script>
 {#if !allowWrites}<section class="panel"><h2>Configuration editing is disabled</h2><p>Enable management writes in server settings to edit private definitions. Applications still shows redacted status and startup issues.</p></section>
@@ -59,7 +78,19 @@
   <div class="actions"><button disabled={busy || activeJob !== null} onclick={load}>Refresh configuration</button><button disabled={busy || activeJob !== null} onclick={() => { rawOpen = !rawOpen }}>YAML / recovery editor</button></div>
   {#if error}<p role="alert" class="form-error">{error}</p>{/if}{#if feedback}<p role="status">{feedback}</p>{/if}
   {#if !['none','complete','aborted'].includes(applyStage)}<section class="panel" aria-label="Configuration apply recovery"><h2>Apply needs attention: {applyStage}</h2><p>The saved configuration may differ from registered or running resources. Retry inspects native state before repeating work; uncertain destructive operations are refused.</p>
-    <ul>{#each Object.entries(applyResources).sort(([a],[b]) => a.localeCompare(b)) as [resource,result]}<li><div><strong>{resource}</strong>: {result.state.replaceAll('_', ' ')}{#if result.message}<p>{result.message}</p>{/if}</div></li>{/each}</ul>
+    <ul>{#each Object.entries(applyResources).sort(([a],[b]) => a.localeCompare(b)) as [resource,result]}<li><div><strong>{resource}</strong>: {result.state.replaceAll('_', ' ')}{#if result.message}<p>{result.message}</p>{/if}</div>
+      {#if resource.startsWith('service/') && result.state === 'failed' && result.message?.startsWith('Generated')}
+        <button disabled={busy || activeJob !== null} onclick={() => reviewArtifact(resource)}>Review generated artifact recovery for {resource}</button>
+      {/if}</li>{/each}</ul>
+    {#if artifactReview}<section class="panel" aria-label="Generated artifact metadata review">
+      <h3>Generated artifact recovery: {artifactReview.resource}</h3>
+      <p>This operation only reconciles private checksum sidecars when every native generated file matches a known definition. It preserves prior sidecar bytes, never replaces native definitions or starts workloads. Native file drift requires manual inspection.</p>
+      <ul>{#each artifactReview.parts as part}<li><strong>{part.label}</strong><span>Native files: {part.files}; publication manifest: {part.manifest}</span></li>{/each}</ul>
+      {#if artifactReview.canReconcile}
+        <button disabled={busy || activeJob !== null} onclick={reconcileArtifact}>Confirm metadata-only reconciliation</button>
+      {:else}<p>These files cannot be reconciled safely. Inspect and preserve the conflicting native files before manual repair.</p>{/if}
+      <button disabled={busy || activeJob !== null} onclick={() => { artifactReview = null }}>Close artifact review</button>
+    </section>{/if}
     <button disabled={busy || activeJob !== null} onclick={retry}>Inspect and retry apply</button></section>{/if}
   {#if provisioning}<StorageProvision storageID={provisioning} {revision} kind={model?.config.storage?.[provisioning]?.kind || 'directory'} sourceConfigured={!!model?.config.storage?.[provisioning]?.source} onClose={() => { provisioning = null }} onStarted={(id) => { activeJob = id; provisioning = null; feedback = 'New data creation started. Follow Activity for results; workloads remain stopped.' }} />{/if}
   {#if editor}{#key `${editor.kind}/${editor.id}`}<DefinitionEditor kind={editor.kind} resourceID={editor.id} onClose={() => { editor = null }} onSaved={(id) => { editor = null; activeJob = id; feedback = 'Definition save started. Follow Activity for apply results.' }} />{/key}{/if}
