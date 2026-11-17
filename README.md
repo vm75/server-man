@@ -75,6 +75,8 @@ The declarative configuration foundation exposes `managed_config_read`, `managed
 
 **Incus v1 hardware edits:** Stop a running Incus VM before changing CPU, memory, root storage, network, architecture/firmware or its native description. Both Apply now and Save for next start reject such changes while the VM runs; no automatic stop or deferred hardware queue is created. Once stopped, review/apply the change and Start explicitly. Start-at-boot Enable/Disable remains independent and does not stop or start the running guest. Other backends retain their supported next-start behavior.
 
+If Configuration reports a generated-artifact conflict, choose **Review generated artifact recovery** to inspect redacted status. The explicit **Confirm metadata-only reconciliation** operation is offered only when every generated native file still matches an expected definition. It preserves the previous private checksum sidecar and repairs metadata only, then requires a separate **Inspect and retry apply**. It cannot replace modified or foreign native definition files, and does not start or stop workloads. Unsafe files need operator inspection and a future reviewed native-file repair path.
+
 Native lifecycle acceptance is separate from normal checks. `make mcp-vm-test` requires an explicitly acknowledged disposable guest and prepared backend fixtures; see [guest acceptance](docs/operations/disposable-acceptance.md). It never runs automatically as part of `make mcp-test`.
 
 ## HTTP API
