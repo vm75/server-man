@@ -19,6 +19,11 @@ import (
 	"server-man/internal/core"
 )
 
+const (
+	incusRuntimeKey       = "user.server-man.runtime"
+	incusActiveRuntimeKey = "user.server-man.active-runtime"
+)
+
 type Incus struct {
 	Store                    Store
 	Program, QEMU, Directory string
@@ -180,20 +185,33 @@ func (i *Incus) Inspect(ctx context.Context, c Config, key string) (Observation,
 		return Observation{ActiveMatches: true}, nil
 	}
 	// Incus exposes persistent config but not a general live hardware definition.
-	// While active, the marker recorded by our Start operation identifies settings
-	// known to have been loaded; live updates are conservatively restart-required.
+	// Stopped publication prepares the marker for native boot; running publication
+	// retains the prior marker, conservatively requiring restart for changed settings.
 	active := actual.StatusCode != 102 // Incus Stopped
-	return Observation{Registered: true, Active: active, Matches: incusMatches(desired, actual), ActiveMatches: !active || actual.Config["user.server-man.active-runtime"] == desired.Config["user.server-man.runtime"]}, nil
+	return Observation{Registered: true, Active: active, Matches: incusMatches(desired, actual), ActiveMatches: !active || actual.Config[incusActiveRuntimeKey] == desired.Config[incusRuntimeKey]}, nil
 }
 func mergeIncusVolatile(desired incusDefinition, actual incusInstanceInfo) incusDefinition {
 	desired.Config = maps.Clone(desired.Config)
 	for key, value := range actual.Config {
-		if strings.HasPrefix(key, "volatile.") || key == "user.server-man.active-runtime" {
+		if strings.HasPrefix(key, "volatile.") || key == incusActiveRuntimeKey {
 			desired.Config[key] = value
 		}
 	}
 	if desired.Architecture == "" {
 		desired.Architecture = actual.Architecture
+	}
+	if actual.Name == "" || actual.StatusCode == 102 {
+		// A stopped definition will load these settings even when Incus itself
+		// starts it at boot, without a server-man Start operation.
+		desired.Config[incusActiveRuntimeKey] = desired.Config[incusRuntimeKey]
+	} else if desired.Config[incusActiveRuntimeKey] == "" {
+		// Never stamp a running guest with a new desired runtime merely because
+		// its prior native start did not leave a tracking marker.
+		loaded := actual.Config[incusRuntimeKey]
+		if !revisionPattern.MatchString(loaded) {
+			loaded = "unverified"
+		}
+		desired.Config[incusActiveRuntimeKey] = loaded
 	}
 	return desired
 }
@@ -248,7 +266,7 @@ func (i *Incus) Apply(ctx context.Context, previous, desired Config, key, mode s
 	if err != nil {
 		return err
 	}
-	if found && actual.StatusCode != 102 && mode == "now" && actual.Config["user.server-man.active-runtime"] != definition.Config["user.server-man.runtime"] {
+	if found && actual.StatusCode != 102 && mode == "now" && actual.Config[incusActiveRuntimeKey] != definition.Config[incusRuntimeKey] {
 		return errors.New("running Incus VM updates require shutdown/start or Save for next start")
 	}
 	before, after := map[string][]byte{}, map[string][]byte{}
@@ -271,8 +289,8 @@ func (i *Incus) Apply(ctx context.Context, previous, desired Config, key, mode s
 	if err = checkArtifactOwnership(i.resourceDir(key), before, after); err != nil {
 		return err
 	}
+	payload := mergeIncusVolatile(definition, actual)
 	if found {
-		payload := mergeIncusVolatile(definition, actual)
 		if err = i.run(ctx, project, &payload, "config", "edit", "local:"+incusInstance(id)); err != nil {
 			return err
 		}
@@ -281,7 +299,7 @@ func (i *Incus) Apply(ctx context.Context, previous, desired Config, key, mode s
 		if image == "" || strings.HasPrefix(image, "-") || strings.ContainsAny(image, ":\x00\r\n") {
 			return errors.New("initial Incus creation requires a locally available image alias or fingerprint")
 		}
-		if err = i.run(ctx, project, &definition, "init", "local:"+image, "local:"+incusInstance(id), "--vm", "--no-profiles"); err != nil {
+		if err = i.run(ctx, project, &payload, "init", "local:"+image, "local:"+incusInstance(id), "--vm", "--no-profiles"); err != nil {
 			return err
 		}
 	}
@@ -327,7 +345,6 @@ func (i *Incus) Action(ctx context.Context, c Config, key, action string) error 
 		}
 		// Store the known start revision without editing volatile native identities.
 		payload := mergeIncusVolatile(definition, actual)
-		payload.Config["user.server-man.active-runtime"] = definition.Config["user.server-man.runtime"]
 		if err = i.run(ctx, project, &payload, "config", "edit", "local:"+incusInstance(id)); err != nil {
 			return err
 		}
@@ -354,6 +371,20 @@ func (i *Incus) Action(ctx context.Context, c Config, key, action string) error 
 		}
 		if !found || stopped.StatusCode != 102 {
 			return errors.New("Incus VM did not reach stopped state")
+		}
+		// Update only tracking metadata, using the native persistent runtime.
+		// Stop must not apply a desired hardware change left by a failed save.
+		loaded := stopped.Config[incusRuntimeKey]
+		if !revisionPattern.MatchString(loaded) {
+			return errors.New("Incus VM stopped, but native runtime tracking is invalid; inspect its definition before restart")
+		}
+		if stopped.Config[incusActiveRuntimeKey] != loaded {
+			trackingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			err = i.run(trackingCtx, project, nil, "config", "set", "local:"+incusInstance(id), incusActiveRuntimeKey+"="+loaded)
+			cancel()
+			if err != nil {
+				return errors.New("Incus VM stopped, but its runtime tracking could not be updated")
+			}
 		}
 		if action == "restart" {
 			return i.Action(ctx, c, key, "start")

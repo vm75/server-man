@@ -86,7 +86,7 @@ func RenderIncus(c Config, key string) (incusDefinition, error) {
 	if size == 0 {
 		size = 20
 	}
-	settings := map[string]string{"limits.cpu": strconv.Itoa(v.CPUs), "limits.memory": fmt.Sprintf("%dMiB", v.MemoryMiB), "boot.autostart": strconv.FormatBool(s.Enabled), "security.secureboot": "true", "user.server-man.id": id, "user.server-man.identity": v.UUID, "user.server-man.fingerprint": resourceFingerprint(c, key), "user.server-man.runtime": runtimeFingerprint(c, key)}
+	settings := map[string]string{"limits.cpu": strconv.Itoa(v.CPUs), "limits.memory": fmt.Sprintf("%dMiB", v.MemoryMiB), "boot.autostart": strconv.FormatBool(s.Enabled), "security.secureboot": "true", "user.server-man.id": id, "user.server-man.identity": v.UUID, "user.server-man.fingerprint": resourceFingerprint(c, key), incusRuntimeKey: runtimeFingerprint(c, key)}
 	nic := map[string]string{"type": "nic", "name": "eth0", "hwaddr": v.MAC}
 	if network.Kind == "network" {
 		nic["network"] = network.Name

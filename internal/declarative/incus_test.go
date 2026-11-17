@@ -45,6 +45,7 @@ type incusRecorder struct {
 	exists         bool
 	payloads       []map[string]any
 	failStop       bool
+	failTracking   bool
 	failSpice      bool
 	spiceHelpError error
 }
@@ -89,12 +90,30 @@ func (r *incusRecorder) Capture(_ context.Context, c core.Command) (string, erro
 	data, _ := json.Marshal(map[string]any{"type": "sync", "error_code": 0, "metadata": metadata})
 	return string(data), nil
 }
-func (r *incusRecorder) Run(_ context.Context, c core.Command, _ io.Writer) error {
+func (r *incusRecorder) Run(ctx context.Context, c core.Command, _ io.Writer) error {
 	r.commands = append(r.commands, c)
 	if len(c.Args) < 5 || c.Args[0] != "--force-local" || c.Args[1] != "--project" || c.Args[2] != "managed" {
 		return errors.New("unscoped fixture mutation")
 	}
 	operation := c.Args[3]
+	if operation == "config" && c.Args[4] == "set" {
+		deadline, bounded := ctx.Deadline()
+		if !bounded || time.Until(deadline) > 10*time.Second || time.Until(deadline) <= 0 {
+			return errors.New("unbounded tracking mutation")
+		}
+		if len(c.Args) != 7 || c.Args[5] != "local:sm-guest" || !strings.HasPrefix(c.Args[6], "user.server-man.active-runtime=") || c.Stdin != nil {
+			return errors.New("unexpected tracking mutation")
+		}
+		if r.failTracking {
+			return errors.New("private tracking diagnostic")
+		}
+		_, value, _ := strings.Cut(c.Args[6], "=")
+		if !revisionPattern.MatchString(value) {
+			return errors.New("unvalidated tracking value")
+		}
+		r.actual.Config["user.server-man.active-runtime"] = value
+		return nil
+	}
 	var data []byte
 	var fields map[string]any
 	if operation == "init" || operation == "config" {
