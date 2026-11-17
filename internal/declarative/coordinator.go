@@ -21,6 +21,26 @@ type Adapter interface {
 	Inspect(context.Context, Config, string) (Observation, error)
 	Apply(context.Context, Config, Config, string, string) error
 }
+
+// A backend with native state-dependent edit constraints can veto a candidate
+// before the authoritative YAML is replaced. It must not mutate the backend.
+type transitionValidator interface {
+	ValidateTransition(context.Context, Config, Config, string) error
+}
+
+func validateNativeTransition(ctx context.Context, a Adapter, previous, desired Config, key string) error {
+	validator, ok := a.(transitionValidator)
+	if !ok {
+		return nil
+	}
+	if err := validator.ValidateTransition(ctx, previous, desired, key); err != nil {
+		if errors.Is(err, errIncusStoppedUpdate) {
+			return fmt.Errorf("%s: %w", key, errIncusStoppedUpdate)
+		}
+		return fmt.Errorf("%s: native transition could not be verified", key)
+	}
+	return nil
+}
 type Observation struct {
 	State         string                  `json:"state,omitempty"`
 	Members       []ContainerMemberStatus `json:"members,omitempty"`
@@ -205,7 +225,7 @@ func (c Coordinator) prepare(candidate Config, expected string) (Config, Config,
 	return previous, desired, plan, nil
 }
 func (c Coordinator) Preview(ctx context.Context, candidate Config, expected string) (Plan, error) {
-	_, desired, plan, err := c.prepare(candidate, expected)
+	previous, desired, plan, err := c.prepare(candidate, expected)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -216,6 +236,9 @@ func (c Coordinator) Preview(ctx context.Context, candidate Config, expected str
 		if a := c.Adapters[change.Backend]; a != nil {
 			if err = a.Validate(ctx, desired, change.Resource); err != nil {
 				return Plan{}, fmt.Errorf("%s: native definition validation failed", change.Resource)
+			}
+			if err = validateNativeTransition(ctx, a, previous, desired, change.Resource); err != nil {
+				return Plan{}, err
 			}
 		}
 	}
@@ -298,6 +321,9 @@ func (c Coordinator) saveApply(ctx context.Context, candidate Config, expected, 
 		if a := c.Adapters[change.Backend]; a != nil {
 			if err = a.Validate(ctx, desired, change.Resource); err != nil {
 				return Journal{}, fmt.Errorf("%s: native validation failed", change.Resource)
+			}
+			if err = validateNativeTransition(ctx, a, previous, desired, change.Resource); err != nil {
+				return Journal{}, err
 			}
 		}
 	}
@@ -398,6 +424,10 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 			// contain secret-derived output and must retain generic diagnostics.
 			if errors.Is(err, errArtifactConflict) {
 				message, jobError = artifactConflictRemedy, artifactConflictRemedy
+			} else if errors.Is(err, errIncusStoppedUpdate) {
+				// Native state may have changed after the pre-save guard. Preserve
+				// the actionable reason in the durable journal, without backend output.
+				message, jobError = errIncusStoppedUpdate.Error(), errIncusStoppedUpdate.Error()
 			}
 			j.Resources[change.Resource] = ResourceResult{change.Fingerprint, "failed", message}
 			if e := c.writeJournal(&j); e != nil {

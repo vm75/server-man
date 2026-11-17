@@ -24,6 +24,10 @@ const (
 	incusActiveRuntimeKey = "user.server-man.active-runtime"
 )
 
+// Incus v1 does not defer live VM hardware edits: packaged providers may
+// reject changes even when asked to persist them for the next native boot.
+var errIncusStoppedUpdate = errors.New("stop the Incus VM before changing its hardware or native description; Save for next start cannot defer running Incus hardware edits in v1")
+
 type Incus struct {
 	Store                    Store
 	Program, QEMU, Directory string
@@ -143,6 +147,42 @@ func incusMatches(want incusDefinition, actual incusInstanceInfo) bool {
 	}
 	return reflect.DeepEqual(want.Devices, actual.Devices)
 }
+// Compare the requested *native* hardware with the running instance. Checking
+// only the previous YAML would miss a saved-but-failed update on retry or
+// externally changed hardware. Boot policy and managed fingerprints are
+// deliberately excluded; they are not guest hardware.
+func incusRunningUpdateNeedsStop(want incusDefinition, actual incusInstanceInfo) bool {
+	if actual.Ephemeral || len(actual.Profiles) != 0 || want.Description != actual.Description ||
+		(want.Architecture != "" && want.Architecture != actual.Architecture) ||
+		!reflect.DeepEqual(want.Devices, actual.Devices) {
+		return true
+	}
+	for _, key := range []string{"limits.cpu", "limits.memory", "security.secureboot", incusRuntimeKey} {
+		if want.Config[key] != actual.Config[key] {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateTransition runs during review and again inside the serialized save
+// job, before writing YAML or an apply journal. Apply repeats the guard against
+// a native VM starting between review and publication.
+func (i *Incus) ValidateTransition(ctx context.Context, _ Config, desired Config, key string) error {
+	want, err := RenderIncus(desired, key)
+	if err != nil {
+		return err
+	}
+	actual, found, err := i.read(ctx, desired, key)
+	if err != nil {
+		return err
+	}
+	if found && actual.StatusCode != 102 && incusRunningUpdateNeedsStop(want, actual) {
+		return errIncusStoppedUpdate
+	}
+	return nil
+}
+
 func (i *Incus) Validate(ctx context.Context, c Config, key string) error {
 	if i.Program == "" {
 		return errors.New("Incus client is required")
@@ -266,8 +306,8 @@ func (i *Incus) Apply(ctx context.Context, previous, desired Config, key, mode s
 	if err != nil {
 		return err
 	}
-	if found && actual.StatusCode != 102 && mode == "now" && actual.Config[incusActiveRuntimeKey] != definition.Config[incusRuntimeKey] {
-		return errors.New("running Incus VM updates require shutdown/start or Save for next start")
+	if found && actual.StatusCode != 102 && incusRunningUpdateNeedsStop(definition, actual) {
+		return errIncusStoppedUpdate
 	}
 	before, after := map[string][]byte{}, map[string][]byte{}
 	if _, ok := previous.Services[id]; ok {
@@ -291,7 +331,22 @@ func (i *Incus) Apply(ctx context.Context, previous, desired Config, key, mode s
 	}
 	payload := mergeIncusVolatile(definition, actual)
 	if found {
-		if err = i.run(ctx, project, &payload, "config", "edit", "local:"+incusInstance(id)); err != nil {
+		if actual.StatusCode != 102 {
+			// Running guests receive only boot policy / tracking metadata, never
+			// a full config edit that could trigger provider-specific live hardware
+			// changes. Each key is retryable if the next operation fails.
+			updateCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			for _, field := range []string{"boot.autostart", "user.server-man.fingerprint"} {
+				value := definition.Config[field]
+				if actual.Config[field] == value {
+					continue
+				}
+				if err = i.run(updateCtx, project, nil, "config", "set", "local:"+incusInstance(id), field+"="+value); err != nil {
+					return err
+				}
+			}
+		} else if err = i.run(ctx, project, &payload, "config", "edit", "local:"+incusInstance(id)); err != nil {
 			return err
 		}
 	} else {

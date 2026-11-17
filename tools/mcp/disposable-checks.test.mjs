@@ -16,7 +16,15 @@ function fixture(options = {}) {
     if (name === 'system_status') return {hostname:options.hostname ?? 'server-man-test',allowWrites:true}
     if (name === 'managed_config_model') return snapshot()
     if (name === 'managed_config_check') return {checkedAt:new Date().toISOString(),issues:[]}
-    if (name === 'managed_resource_plan') {assert.equal(args.revision,snapshot().revision);if (args.id===options.planFailure) throw new Error('Fixture native definition validation failed');return {restartRequired:false,changes:[],files:{issues:[]}}}
+    if (name === 'managed_resource_plan') {
+      assert.equal(args.revision,snapshot().revision)
+      if (args.id===options.planFailure) throw new Error('Fixture native definition validation failed')
+      if (args.id==='server-man-test-incus' && states.get(args.id)?.state==='running' && args.definition) {
+        const proposed = JSON.parse(args.definition)
+        if (proposed.vm?.memoryMiB !== config.services[args.id].vm?.memoryMiB) throw new Error('Stop the Incus VM before editing hardware')
+      }
+      return {restartRequired:false,changes:[],files:{issues:[]}}
+    }
     if (name === 'managed_services') return {configured:true,valid:true,services:[...states].map(([id,state])=>({id,enabled:config.services[id].enabled,...state,issues:[]}))}
     if (name === 'managed_shares') return {configured:true,shares:Object.entries(config.shares).map(([id,definition])=>({id,definition,configuration:definition.enabled?'published':'unpublished',issues:[]}))}
     if (name === 'shares_list') return {backends:[{protocol:args.protocol,available:true,canManage:true,setupRequired:false}],shares:args.protocol==='nfs'?[structuredClone(unmanaged)]:[]}
@@ -93,6 +101,10 @@ test('the complete contract uses central writes and retains only stopped Incus',
   assert.deepEqual(Object.keys(guest.config.services),['server-man-test-incus'])
   assert.equal(guest.config.services['server-man-test-incus'].enabled,false)
   assert.deepEqual(guest.config.shares,{})
+  const rejected = guest.calls.find(call=>call.name==='managed_resource_plan' &&
+    call.args.id==='server-man-test-incus' && call.args.definition &&
+    JSON.parse(call.args.definition).vm?.memoryMiB === 2048)
+  assert(rejected,'native acceptance never checked running Incus hardware rejection')
   assert(guest.jobs.some(job=>job.name==='managed_share_publish'))
   for (const {name,args} of guest.jobs) {
     assert(['managed_resource_save','managed_share_publish','managed_service_start','managed_service_stop','managed_service_restart','managed_service_enable','managed_service_disable'].includes(name),`Unexpected native or package mutation: ${name}`)
