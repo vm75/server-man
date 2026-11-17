@@ -92,7 +92,9 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 			fmt.Fprintf(&b, "Volume=%s\n", value)
 		}
 		if v.MemoryMiB > 0 {
-			fmt.Fprintf(&b, "Memory=%dm\n", v.MemoryMiB)
+			// Forward the typed limit to Podman's stable flag. The packaged
+			// Debian generator does not recognize the newer Memory= key.
+			fmt.Fprintf(&b, "PodmanArgs=--memory=%dm\n", v.MemoryMiB)
 		}
 		if len(v.Command) > 0 {
 			args := make([]string, len(v.Command))

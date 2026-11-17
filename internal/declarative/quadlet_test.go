@@ -204,6 +204,7 @@ func TestNativeQuadletScalarDirectivesDoNotAddLiteralArgumentQuotes(t *testing.T
 	service := cfg.Services["website"]
 	container := service.Containers["web"]
 	container.EnvFiles = []string{"fixture"}
+	container.MemoryMiB = 96
 	container.Mounts[0].ReadOnly = true
 	service.Containers["web"] = container
 	cfg.Services["website"] = service
@@ -226,6 +227,9 @@ func TestNativeQuadletScalarDirectivesDoNotAddLiteralArgumentQuotes(t *testing.T
 		if !strings.Contains(output, value) || strings.Contains(output, `\"`+value) || strings.Contains(output, value+`\"`) {
 			t.Fatal("native generator retained unwanted literal quotes around a scalar directive")
 		}
+	}
+	if !strings.Contains(output, "--memory=96m") {
+		t.Fatal("native generator omitted the configured Podman memory limit")
 	}
 }
 
