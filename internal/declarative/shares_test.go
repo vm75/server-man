@@ -84,6 +84,8 @@ func TestShareStatusesServerAvailability(t *testing.T) {
 	}
 	if s, ok := servers["samba"]; !ok || s["available"] != true {
 		t.Fatalf("expected samba server available=true, got %v", s)
+	} else if _, hasDiscovery := s["discoveryAvailable"].(bool); !hasDiscovery {
+		t.Fatalf("expected discoveryAvailable bool, got %v", s["discoveryAvailable"])
 	}
 	if n, ok := servers["nfs"]; !ok || n["available"] != false {
 		t.Fatalf("expected nfs server available=false without adapter, got %v", n)

@@ -51,6 +51,9 @@ func (b *Backend) List(ctx context.Context, protocol string) (Inventory, error) 
 			} else if b.programs["smbcontrol"] == "" {
 				info.Reason = "smbcontrol is unavailable; inventory can be read but changes cannot be applied"
 			}
+			if info.Available && b.programs["wsdd"] == "" {
+				result.Warnings = append(result.Warnings, "WS-Discovery daemon (wsdd) is not installed; Windows 10/11 network discovery requires wsdd")
+			}
 			effective := []Definition{}
 			if info.Available && mainErr == nil && main.exists {
 				var err error

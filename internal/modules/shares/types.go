@@ -61,7 +61,7 @@ func New(cfg config.Config, runner core.Executor) *Backend {
 	if b.sambaManaged == "" {
 		b.sambaManaged = "/etc/samba/server-man.conf"
 	}
-	for _, name := range []string{"testparm", "smbcontrol", "smbstatus", "exportfs"} {
+	for _, name := range []string{"testparm", "smbcontrol", "smbstatus", "exportfs", "wsdd"} {
 		if path, err := exec.LookPath(name); err == nil {
 			b.programs[name] = path
 		}

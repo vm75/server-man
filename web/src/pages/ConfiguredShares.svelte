@@ -5,7 +5,7 @@
   import { invokeTool, startJob, type Job } from '../lib/api'
   import type { ShareDefinition } from '../lib/managed'
   let { allowWrites }: { allowWrites: boolean } = $props()
-  interface ServerStatus { available: boolean }
+  interface ServerStatus { available: boolean; discoveryAvailable?: boolean }
   interface ShareItem { id: string; definition: ShareDefinition; configuration: string; issues: { message: string; remedy: string; code?: string }[] }
   let shares = $state<ShareItem[]>([])
   let servers = $state<Record<string, ServerStatus>>({})
@@ -23,7 +23,12 @@
   const neededProtocols = $derived(Array.from(new Set(shares.map(s => s.definition.protocol))))
   const unavailableProtocols = $derived(
     neededProtocols.filter(p => {
-      if (servers[p] !== undefined) return !servers[p].available
+      if (servers[p] !== undefined) {
+        if (p === 'samba' && servers[p].available && servers[p].discoveryAvailable === false) {
+          return true
+        }
+        return !servers[p].available
+      }
       return shares.some(s => s.definition.protocol === p && s.issues.some(i => i.code === 'share_setup'))
     })
   )
@@ -91,7 +96,13 @@
 {#if unavailableProtocols.length > 0}
   <section class="panel host-server-card">
     <h2>Host share server</h2>
-    <p>Install and configure the native server as an explicit host operation, separate from share definitions.</p>
+    <p>
+      {#if protocol === 'samba' && servers.samba?.available && servers.samba?.discoveryAvailable === false}
+        Samba is running, but the WS-Discovery daemon (<code>wsdd</code>) is not installed. Windows 10 and 11 require <code>wsdd</code> to automatically detect shares in Network.
+      {:else}
+        Install and configure the native server as an explicit host operation, separate from share definitions.
+      {/if}
+    </p>
     <div class="host-server-controls">
       <label class="protocol-select">
         <span>Server protocol</span>
@@ -101,7 +112,9 @@
           {/each}
         </select>
       </label>
-      <button disabled={!allowWrites || activeJob !== null} onclick={() => { setupPending = true }}>Set up server…</button>
+      <button disabled={!allowWrites || activeJob !== null} onclick={() => { setupPending = true }}>
+        {protocol === 'samba' && servers.samba?.available && servers.samba?.discoveryAvailable === false ? 'Install wsdd…' : 'Set up server…'}
+      </button>
     </div>
   </section>
 {/if}
