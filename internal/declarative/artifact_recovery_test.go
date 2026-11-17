@@ -127,3 +127,96 @@ func TestArtifactRecoveryNeverRepairsShareOrUnrecordedConflict(t *testing.T) {
         }
     }
 }
+
+func TestArtifactRecoveryComposeChecksBothNativePublicationTargets(t *testing.T) {
+    adapter, cfg, _ := composeFixture(t)
+    key := "service/website"
+    if err := adapter.Apply(context.Background(), Config{Version: 1}, cfg, key, "now"); err != nil { t.Fatal(err) }
+    saved, err := adapter.Store.Save(cfg, "missing")
+    if err != nil { t.Fatal(err) }
+    c := Coordinator{Store: adapter.Store, Adapters: map[string]Adapter{"podman/compose": adapter}}
+    j := Journal{Version: 1, BaseRevision: "missing", DesiredRevision: saved.Revision, Mode: "next_start", Stage: "failed",
+        Resources: map[string]ResourceResult{key: {Fingerprint: resourceFingerprint(saved.Config, key), State: "failed", Message: artifactConflictRemedy}}}
+    if err := c.writeJournal(&j); err != nil { t.Fatal(err) }
+    bootDir := filepath.Dir(adapter.unitFile(key))
+    bootSidecar := artifactManifestPath(bootDir)
+    bootOriginal, err := os.ReadFile(bootSidecar)
+    if err != nil { t.Fatal(err) }
+    boot, err := os.ReadFile(adapter.unitFile(key))
+    if err != nil { t.Fatal(err) }
+    if err := os.WriteFile(bootSidecar, []byte("corrupt private boot sidecar"), 0600); err != nil { t.Fatal(err) }
+    review, err := c.ReviewArtifactRecovery(key)
+    if err != nil || !review.CanReconcile || len(review.Parts) != 2 ||
+       review.Parts[0].Files != "desired" || review.Parts[0].Manifest != "current" ||
+       review.Parts[1].Files != "desired" || review.Parts[1].Manifest != "conflicting" {
+        t.Fatal("compose partial-sidecar damage not isolated", review, err)
+    }
+    if _, err := c.ReconcileArtifactMetadata(context.Background(), key, saved.Revision, review.ReviewToken); err != nil { t.Fatal(err) }
+    if got, err := os.ReadFile(bootSidecar); err != nil || !bytes.Equal(got, bootOriginal) {
+        t.Fatal("boot sidecar was not restored", err)
+    }
+    if got, err := os.ReadFile(adapter.unitFile(key)); err != nil || !bytes.Equal(got, boot) {
+        t.Fatal("boot launcher was changed", err)
+    }
+    // An unrelated native edit on the *other* target must block a future
+    // metadata reconciliation even when the boot sidecar alone is damaged.
+    if err := os.WriteFile(filepath.Join(adapter.resourceDir(key), "compose.yaml"), []byte("foreign"), 0600); err != nil { t.Fatal(err) }
+    if err := os.WriteFile(bootSidecar, []byte("another damaged sidecar"), 0600); err != nil { t.Fatal(err) }
+    review, err = c.ReviewArtifactRecovery(key)
+    if err != nil || review.CanReconcile || review.Parts[0].Files != "mismatch_or_unsafe" {
+        t.Fatal("native Compose content drift was ignored", review, err)
+    }
+}
+
+func TestArtifactRecoveryCapsPreservedMetadataWithoutDeletingIt(t *testing.T) {
+    c, adapter, _, revision := incusArtifactRecoveryFixture(t)
+    sidecar := artifactManifestPath(adapter.resourceDir("service/guest"))
+    for i := 0; i < maxPreservedPublicationManifests; i++ {
+        value := []byte{byte(i)}
+        name := filepath.Base(sidecar) + ".preserved-" + digest(value)
+        if err := os.WriteFile(filepath.Join(filepath.Dir(sidecar), name), value, 0600); err != nil { t.Fatal(err) }
+    }
+    raw := []byte("fresh conflicting sidecar")
+    if err := os.WriteFile(sidecar, raw, 0600); err != nil { t.Fatal(err) }
+    review, err := c.ReviewArtifactRecovery("service/guest")
+    if err != nil || review.CanReconcile || review.Parts[0].Manifest != "preservation_limit" {
+        t.Fatal("metadata archive growth was not bounded", review, err)
+    }
+    if _, err := c.ReconcileArtifactMetadata(context.Background(), "service/guest", revision, review.ReviewToken); !errors.Is(err, ErrConflict) {
+        t.Fatal("preservation cap bypassed", err)
+    }
+    old, err := os.ReadFile(sidecar)
+    if err != nil || !bytes.Equal(old, raw) { t.Fatal("rejected repair overwrote sidecar", err) }
+    if err := os.Remove(filepath.Join(filepath.Dir(sidecar), filepath.Base(sidecar)+".preserved-"+digest([]byte{0}))); err != nil { t.Fatal(err) }
+    review, err = c.ReviewArtifactRecovery("service/guest")
+    if err != nil || !review.CanReconcile { t.Fatal("review did not recover after explicit archive cleanup", review, err) }
+}
+
+func TestArtifactTargetsRenderAllSupportedBackendsWithoutPublishing(t *testing.T) {
+    quadC, quadCfg, _ := coordinatorFixture(t)
+    quad := &Quadlet{Store:quadC.Store, Directory:filepath.Join(t.TempDir(), "quadlet")}
+    compose, composeCfg, _ := composeFixture(t)
+    libvirt, libvirtCfg, _ := libvirtFixture(t)
+    incus, incusCfg, _ := incusFixture(t)
+    cases := []struct {
+        adapter Adapter
+        config Config
+        key string
+        count int
+    }{
+        {quad, quadCfg, "service/website", 1},
+        {compose, composeCfg, "service/website", 2},
+        {libvirt, libvirtCfg, "service/guest", 1},
+        {incus, incusCfg, "service/guest", 1},
+    }
+    for _, item := range cases {
+        targets, err := renderedArtifactTargets(item.adapter, Config{Version:1}, item.config, item.key)
+        if err != nil || len(targets) != item.count { t.Fatal("adapter artifact renderer failed", item.key, err) }
+        for _, target := range targets {
+            if len(target.desired) == 0 { t.Fatal("empty generated artifact selection") }
+            if _, err := os.Stat(target.dir); !os.IsNotExist(err) {
+                t.Fatal("read-only renderer created native artifact directory", target.dir, err)
+            }
+        }
+    }
+}

@@ -220,6 +220,13 @@ func (c Coordinator) artifactRecoveryState(resource string) (ArtifactRecoveryRev
                 internal.original, internal.present = old, present
                 if !present { part.Manifest = "missing" } else if bytes.Equal(old, internal.expected) { part.Manifest = "current" } else { part.Manifest = "conflicting" }
                 internal.change = part.Manifest != "current"
+                if internal.change && present {
+                    allowed, checkErr := sidecarPreservationAvailable(target.dir, old)
+                    if checkErr != nil || !allowed {
+                        part.Manifest = "preservation_limit"
+                        allRepairable = false
+                    }
+                }
                 changed = changed || internal.change
             }
         }
@@ -238,6 +245,35 @@ func (c Coordinator) artifactRecoveryState(resource string) (ArtifactRecoveryRev
 func (c Coordinator) ReviewArtifactRecovery(resource string) (ArtifactRecoveryReview, error) {
     review, _, err := c.artifactRecoveryState(resource)
     return review, err
+}
+
+const maxPreservedPublicationManifests = 8
+
+// Preserve existing sidecars for inspection, but do not accumulate unbounded
+// copies after repeated manual edits. Existing exact-byte archives can be
+// reused by an interrupted retry without creating duplicates.
+func sidecarPreservationAvailable(dir string, raw []byte) (bool, error) {
+    path := artifactManifestPath(dir)
+    root, err := os.OpenRoot(filepath.Dir(path))
+    if err != nil { return false, err }
+    defer root.Close()
+    f, err := root.Open(".")
+    if err != nil { return false, err }
+    defer f.Close()
+    entries, err := f.ReadDir(1025)
+    if err != nil { return false, err }
+    if len(entries) > 1024 { return false, errors.New("artifact metadata parent inventory limit reached") }
+    name := filepath.Base(path)
+    prefix := name + ".preserved-"
+    own := prefix + digest(raw)
+    count, existing := 0, false
+    for _, entry := range entries {
+        if strings.HasPrefix(entry.Name(), prefix) {
+            count++
+            if entry.Name() == own { existing = true }
+        }
+    }
+    return existing || count < maxPreservedPublicationManifests, nil
 }
 
 // Atomic metadata-only repair: preserve any conflicting sidecar separately
@@ -264,6 +300,8 @@ func reconcileSidecar(part artifactReconcilePart) error {
         return ErrConflict
     }
     if present {
+        allowed, limitErr := sidecarPreservationAvailable(part.target.dir, part.original)
+        if limitErr != nil || !allowed { return errors.New("preserved publication metadata limit reached; inspect the private archives") }
         backup := name + ".preserved-" + digest(part.original)
         f, err := parent.OpenFile(backup, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
         if err != nil {
