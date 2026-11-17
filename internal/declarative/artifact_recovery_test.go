@@ -237,6 +237,10 @@ func TestRetryCannotClaimSuccessWithDriftedArtifactPublication(t *testing.T) {
     if got, err := os.ReadFile(sidecar); err != nil || string(got) != "changed private metadata" {
         t.Fatal("retry overwrote the conflicting artifact", err)
     }
+    // The failed retry writes a new durable journal timestamp. Its review
+    // token must be refreshed; accepting the earlier token would be unsafe.
+    review, err = c.ReviewArtifactRecovery("service/guest")
+    if err != nil || !review.CanReconcile { t.Fatal("failed retry could not be re-reviewed", review, err) }
     if _, err := c.ReconcileArtifactMetadata(context.Background(), "service/guest", revision, review.ReviewToken); err != nil { t.Fatal(err) }
     j, err = c.Retry(context.Background())
     if err != nil || j.Stage != "complete" { t.Fatal("repaired metadata still blocked explicit retry", err, j.Stage) }
