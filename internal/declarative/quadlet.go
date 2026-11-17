@@ -309,6 +309,7 @@ func (q *Quadlet) Prerequisites(ctx context.Context) []Issue {
 		}
 	}
 	if q.Podman != "" {
+		issues = append(issues, podmanFirewallIssues("quadlet")...)
 		output, err := q.Runner.Capture(ctx, core.Command{Program: q.Podman, Args: []string{"info", "--format", "json"}, Timeout: 4 * time.Second})
 		if err != nil {
 			add("error", "podman", "engine_unavailable", "Podman cannot access its runtime context.", "Check the service account, user namespaces, runtime directory and Podman setup.")

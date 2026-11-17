@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -15,6 +17,62 @@ import (
 )
 
 const podmanNetworkFixture = `"networkBackendInfo":{"backend":"netavark","path":"/fixture/netavark","dns":{"path":"/fixture/aardvark-dns"}}`
+
+func TestPodmanFirewallDependencyBlocksActivationAndBoot(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", dir)
+	for _, installed := range []bool{false, true} {
+		if installed {
+			if err := os.WriteFile(filepath.Join(dir, "nft"), []byte("fixture; must never execute"), 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, backend := range []string{"quadlet", "compose"} {
+			issues := podmanFirewallIssues(backend)
+			if installed {
+				if len(issues) != 0 {
+					t.Fatal(issues)
+				}
+				continue
+			}
+			if len(issues) != 1 || issues[0].Severity != "error" || issues[0].Resource != "backend/podman/"+backend || issues[0].Field != "firewall" || !strings.Contains(issues[0].Remedy, "nftables") {
+				t.Fatal(issues)
+			}
+			c, cfg, _ := coordinatorFixture(t)
+			s := cfg.Services["website"]
+			s.Backend = backend
+			cfg.Services["website"] = s
+			c.Adapters = map[string]Adapter{"podman/" + backend: &probeAdapter{issues: issues}}
+			for _, boot := range []bool{false, true} {
+				if err := c.readinessError(context.Background(), cfg, "website", boot); err == nil {
+					t.Fatal("missing nft allowed activation", backend, boot)
+				}
+			}
+		}
+	}
+	if err := os.Chmod(filepath.Join(dir, "nft"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if len(podmanFirewallIssues("quadlet")) != 1 {
+		t.Fatal("non-executable nft accepted")
+	}
+}
+
+func TestPodmanFirewallRequirementIsSharedAndDockerIndependent(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	r := &podmanInfoRecorder{}
+	for target, probe := range map[string]PrerequisiteAdapter{
+		"quadlet":        &Quadlet{Podman: "podman", Generator: "quadlet", Runner: r},
+		"podman-compose": &Compose{Engine: "podman", Program: "podman", Runner: r},
+		"docker-compose": &Compose{Engine: "docker", Program: "docker", Runner: r},
+	} {
+		issues := probe.Prerequisites(context.Background())
+		found := slices.ContainsFunc(issues, func(i Issue) bool { return i.Field == "firewall" && i.Code == "missing_dependency" })
+		if found != (target != "docker-compose") {
+			t.Fatal(target, issues)
+		}
+	}
+}
 
 type podmanBootRecorder struct {
 	podmanInfoRecorder

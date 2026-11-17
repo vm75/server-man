@@ -3,6 +3,7 @@ package declarative
 import (
 	"context"
 	"encoding/json"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -10,6 +11,16 @@ import (
 )
 
 const podmanNetworkOnlineUnit = "podman-user-wait-network-online.service"
+
+// Managed Netavark networks require the nft userspace tool, even when Podman
+// info succeeds without it. Only check executable discovery: never query or
+// change host firewall rules, enable nftables.service or change native drivers.
+func podmanFirewallIssues(backend string) []Issue {
+	if _, err := exec.LookPath("nft"); err == nil {
+		return nil
+	}
+	return []Issue{{"error", "backend/podman/" + backend, "firewall", "missing_dependency", "The managed Podman networking prerequisite nft is missing or not executable.", "Install the native nftables package through Software or rerun the installer with Podman selected; ensure nft is in the workload account's PATH, then recheck configuration."}}
+}
 
 // Quadlet and Compose user launchers share Podman's packaged bridge to the
 // system network-online target. Its current activity/enabled state is irrelevant:
