@@ -289,7 +289,7 @@ func (c Coordinator) saveApply(ctx context.Context, candidate Config, expected, 
 			matches := false
 			if a != nil {
 				obs, e := a.Inspect(ctx, desired, key)
-				matches = e == nil && obs.Matches && (mode == "next_start" || !obs.Active || obs.ActiveMatches)
+				matches = e == nil && obs.Matches && (mode == "next_start" || !obs.Active || obs.ActiveMatches) && artifactPublicationMatchesDesired(a, desired, key)
 			}
 			if !matches {
 				plan.Changes = append(plan.Changes, Change{key, backend(desired, key), "update", resourceFingerprint(desired, key)})
@@ -510,7 +510,7 @@ func (c Coordinator) Retry(ctx context.Context) (Journal, error) {
 		a := c.Adapters[backend(desired, key)]
 		if a != nil {
 			obs, e := a.Inspect(ctx, desired, key)
-			if e == nil && obs.Matches && (j.Mode == "next_start" || !obs.Active || obs.ActiveMatches) {
+			if e == nil && obs.Matches && (j.Mode == "next_start" || !obs.Active || obs.ActiveMatches) && artifactPublicationMatchesDesired(a, desired, key) {
 				state := "registered"
 				if obs.Active && !obs.ActiveMatches {
 					state = "restart_required"

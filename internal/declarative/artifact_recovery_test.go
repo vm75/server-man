@@ -220,3 +220,38 @@ func TestArtifactTargetsRenderAllSupportedBackendsWithoutPublishing(t *testing.T
         }
     }
 }
+
+func TestRetryCannotClaimSuccessWithDriftedArtifactPublication(t *testing.T) {
+    c, adapter, _, revision := incusArtifactRecoveryFixture(t)
+    sidecar := artifactManifestPath(adapter.resourceDir("service/guest"))
+    if err := os.WriteFile(sidecar, []byte("changed private metadata"), 0600); err != nil { t.Fatal(err) }
+    // Native Incus is already registered and matches the desired VM; old
+    // code would skip Apply and mark the entire failed journal complete.
+    review, err := c.ReviewArtifactRecovery("service/guest")
+    if err != nil || !review.CanReconcile { t.Fatal(review, err) }
+    j, err := c.Retry(context.Background())
+    if err == nil || j.Stage != "failed" {
+        t.Fatal("native observation alone falsely completed publication", err, j.Stage)
+    }
+    if got, err := os.ReadFile(sidecar); err != nil || string(got) != "changed private metadata" {
+        t.Fatal("retry overwrote the conflicting artifact", err)
+    }
+    if _, err := c.ReconcileArtifactMetadata(context.Background(), "service/guest", revision, review.ReviewToken); err != nil { t.Fatal(err) }
+    j, err = c.Retry(context.Background())
+    if err != nil || j.Stage != "complete" { t.Fatal("repaired metadata still blocked explicit retry", err, j.Stage) }
+}
+
+func TestPublicationFastPathDetectsMissingAndStaleSidecar(t *testing.T) {
+    _, adapter, cfg, _ := incusArtifactRecoveryFixture(t)
+    key := "service/guest"
+    if !artifactPublicationMatchesDesired(adapter, cfg, key) { t.Fatal("fresh publication not detected") }
+    path := artifactManifestPath(adapter.resourceDir(key))
+    data, err := os.ReadFile(path)
+    if err != nil { t.Fatal(err) }
+    if err := os.Remove(path); err != nil { t.Fatal(err) }
+    if artifactPublicationMatchesDesired(adapter, cfg, key) { t.Fatal("missing sidecar treated as committed publication") }
+    if err := os.WriteFile(path, data, 0600); err != nil { t.Fatal(err) }
+    native := filepath.Join(adapter.resourceDir(key), "instance.yaml")
+    if err := os.WriteFile(native, []byte(ownedHeader+"outside edit\n"), 0600); err != nil { t.Fatal(err) }
+    if artifactPublicationMatchesDesired(adapter, cfg, key) { t.Fatal("native definition drift treated as valid publication") }
+}

@@ -6,6 +6,7 @@ import (
     "encoding/json"
     "errors"
     "io"
+    "maps"
     "os"
     "path/filepath"
     "strings"
@@ -373,4 +374,27 @@ func (c Coordinator) ReconcileArtifactMetadata(ctx context.Context, resource, re
     // completion. The operator must review the resulting status and retry.
     updated, _, err := c.artifactRecoveryState(resource)
     return updated, err
+}
+
+// An observed native match alone is insufficient to finish an apply: a
+// partially published or externally edited generated file/manifest may still
+// be stale. This read-only check is shared by unchanged-save, apply and retry
+// fast paths; only backends with local generated artifacts participate.
+func artifactPublicationMatchesDesired(adapter Adapter, desired Config, resource string) bool {
+    switch adapter.(type) {
+    case *Quadlet, *Compose, *Libvirt, *Incus:
+    default:
+        return true // share adapters have their own native ownership checks
+    }
+    targets, err := renderedArtifactTargets(adapter, Config{Version: 1}, desired, resource)
+    if err != nil { return false }
+    for _, target := range targets {
+        _, state, err := matchedArtifactBytes(target)
+        if err != nil || state != "desired" { return false }
+        manifest, _, err := readArtifactManifest(target.dir)
+        if err != nil || !maps.Equal(manifest.Files, artifactManifestFor(target.desired).Files) {
+            return false
+        }
+    }
+    return true
 }
