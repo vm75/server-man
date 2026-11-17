@@ -28,6 +28,37 @@
   let mode = $state('now')
   const incusEditNotice = 'Incus v1: Stop the VM before changing CPU, memory, storage, network, firmware or native description. Save for next start does not defer running hardware edits. Start at boot can be changed without stopping the VM.'
   const storageChoices = $derived(Object.entries(snapshot?.config.storage ?? {}))
+  const directoryStorageChoices = $derived(storageChoices.filter(([, s]) => s.kind !== 'file'))
+  let folderSource = $state<'storage' | 'manual'>('storage')
+  let manualPath = $state('')
+  let browsing = $state(false)
+  let browsePath = $state('/')
+  let browseEntries = $state<string[]>([])
+  let browseError = $state('')
+  let browseLoading = $state(false)
+  async function loadBrowse(dir: string) {
+    browseLoading = true; browseError = ''
+    try {
+      const res = await invokeTool<{ path: string; parent: string; directories: string[] }>('managed_directory_browse', { path: dir })
+      browsePath = res.path; browseEntries = res.directories
+    } catch (e) { browseError = e instanceof Error ? e.message : 'Could not read directory' }
+    finally { browseLoading = false }
+  }
+  function openBrowser() {
+    browsing = true
+    const initial = manualPath.trim().startsWith('/') ? manualPath.trim() : '/'
+    void loadBrowse(initial)
+  }
+  function selectCurrentPath() { manualPath = browsePath; browsing = false }
+  function selectDirectory(name: string) {
+    const next = browsePath === '/' ? `/${name}` : `${browsePath}/${name}`
+    void loadBrowse(next)
+  }
+  function browseUp() {
+    const idx = browsePath.lastIndexOf('/')
+    const next = idx <= 0 ? '/' : browsePath.slice(0, idx)
+    void loadBrowse(next)
+  }
   const bindingChoices = $derived(Object.entries(snapshot?.config.bindings ?? {}))
   const container = $derived(service.containers?.[selectedContainer])
   const splitList = (text: string) => text.split(/[\s,]+/).filter(Boolean)
@@ -53,7 +84,26 @@
   function payload() {
     if (kind === 'service') { saveContainerInputs(); service.dependsOn = splitList(dependencyText); if (service.vm) service.vm.disks = splitList(vmDisks); return service }
     if (kind === 'storage') return storage
-    if (kind === 'share') { const result = { ...share }; if (share.protocol === 'samba') { result.users = share.guest ? [] : splitList(users); delete result.clients; delete result.rootSquash; delete result.security } else { result.clients = splitList(clients); result.rootSquash ??= true; result.security ||= 'sys'; delete result.users; delete result.guest; delete result.browseable }; return result }
+    if (kind === 'share') {
+      const result = { ...share }
+      if (folderSource === 'manual' || !result.storage) {
+        result.path = manualPath.trim()
+      }
+      if (share.protocol === 'samba') {
+        result.users = share.guest ? [] : splitList(users)
+        delete result.clients
+        delete result.rootSquash
+        delete result.security
+      } else {
+        result.clients = splitList(clients)
+        result.rootSquash ??= true
+        result.security ||= 'sys'
+        delete result.users
+        delete result.guest
+        delete result.browseable
+      }
+      return result
+    }
     if (kind === 'binding') return binding
     return privatePath
   }
@@ -73,7 +123,11 @@
     const definitions = kind === 'service' ? result.config.services : kind === 'storage' ? result.config.storage : kind === 'share' ? result.config.shares : kind === 'binding' ? result.config.bindings : result.config.secrets
     if (resourceID && !Object.prototype.hasOwnProperty.call(definitions ?? {},resourceID)) throw new Error('The definition no longer exists. Refresh before editing.')
     snapshot = result
-    if (resourceID) { if (kind === 'service') { service = structuredClone(result.config.services?.[resourceID] ?? service); dependencyText = (service.dependsOn ?? []).join(', '); vmDisks = (service.vm?.disks ?? []).join(', '); selectContainer(Object.keys(service.containers ?? {})[0] ?? 'app') } else if (kind === 'storage') storage = structuredClone(result.config.storage?.[resourceID] ?? storage); else if (kind === 'share') { share = structuredClone(result.config.shares?.[resourceID] ?? share); users = (share.users ?? []).join(', '); clients = (share.clients ?? []).join(', ') } else if (kind === 'binding') binding = structuredClone(result.config.bindings?.[resourceID] ?? binding); else privatePath = result.config.secrets?.[resourceID] ?? '' }
+    if (resourceID) { if (kind === 'service') { service = structuredClone(result.config.services?.[resourceID] ?? service); dependencyText = (service.dependsOn ?? []).join(', '); vmDisks = (service.vm?.disks ?? []).join(', '); selectContainer(Object.keys(service.containers ?? {})[0] ?? 'app') } else if (kind === 'storage') storage = structuredClone(result.config.storage?.[resourceID] ?? storage); else if (kind === 'share') { share = structuredClone(result.config.shares?.[resourceID] ?? share); users = (share.users ?? []).join(', '); clients = (share.clients ?? []).join(', '); if (share.storage && result.config.storage?.[share.storage]) manualPath = result.config.storage[share.storage]?.path ?? ''; else if (share.path) manualPath = share.path } else if (kind === 'binding') binding = structuredClone(result.config.bindings?.[resourceID] ?? binding); else privatePath = result.config.secrets?.[resourceID] ?? '' }
+    if (kind === 'share') {
+      const dirChoices = Object.entries(result.config.storage ?? {}).filter(([, s]) => s.kind !== 'file')
+      if (dirChoices.length === 0 || (resourceID && !share.storage && manualPath)) folderSource = 'manual'
+    }
   } catch (e) { if (!stopped) error = e instanceof Error ? e.message : 'Could not load configuration' } })(); return () => { stopped = true; controller.abort() } })
 </script>
 
@@ -126,9 +180,65 @@
         {/if}
         <label>Expected filesystem source (optional) <input bind:value={storage.mount} placeholder="/dev/mapper/data" /></label><p>This adds a reference only. Missing data stays blocked; it is never replaced with an empty folder.</p>
       {:else if kind === 'share'}
-        <label>Share protocol <select aria-label="Share protocol" bind:value={share.protocol} disabled={!!resourceID}><option value="samba">Samba</option><option value="nfs">NFS</option></select></label><label>Shared storage <select aria-label="Shared storage" required bind:value={share.storage}><option value="">Choose directory storage</option>{#each storageChoices.filter(([,s]) => s.kind !== 'file') as [storageID]}<option value={storageID}>{storageID}</option>{/each}</select></label>
+        <label>Share protocol <select aria-label="Share protocol" bind:value={share.protocol} disabled={!!resourceID}><option value="samba">Samba</option><option value="nfs">NFS</option></select></label>
+        {#if directoryStorageChoices.length > 0}
+          <div class="storage-choice-toggle">
+            <label class="toggle-option">
+              <input type="radio" name="folderSource" value="storage" bind:group={folderSource} />
+              <span>Use configured storage reference</span>
+            </label>
+            <label class="toggle-option">
+              <input type="radio" name="folderSource" value="manual" bind:group={folderSource} />
+              <span>Specify directory path manually</span>
+            </label>
+          </div>
+        {/if}
+        {#if folderSource === 'storage' && directoryStorageChoices.length > 0}
+          <label>Shared storage <select aria-label="Shared storage" required bind:value={share.storage}><option value="">Choose directory storage</option>{#each directoryStorageChoices as [storageID]}<option value={storageID}>{storageID}</option>{/each}</select></label>
+        {:else}
+          <div class="manual-path-box">
+            <label>Directory path to share
+              <div class="input-with-button">
+                <input aria-label="Directory path to share" required bind:value={manualPath} placeholder="/srv/shares/documents or data/documents" />
+                <button type="button" class="browse-button" onclick={openBrowser}>Browse…</button>
+              </div>
+            </label>
+            {#if directoryStorageChoices.length === 0}
+              <p class="field-hint">No directory storage references configured yet. Enter an absolute or relative directory path.</p>
+            {/if}
+          </div>
+        {/if}
+        {#if browsing}
+          <div class="directory-browser" role="region" aria-label="Directory browser">
+            <header class="browser-header">
+              <strong class="mono">{browsePath}</strong>
+              <div class="browser-actions">
+                <button type="button" class="small-button" disabled={browsePath === '/'} onclick={browseUp}>Up</button>
+                <button type="button" class="small-button primary" onclick={selectCurrentPath}>Select this folder</button>
+                <button type="button" class="small-button" onclick={() => { browsing = false }}>Close</button>
+              </div>
+            </header>
+            {#if browseLoading}
+              <p class="browser-status">Reading directory…</p>
+            {:else if browseError}
+              <p class="browser-status error">{browseError}</p>
+            {:else if browseEntries.length === 0}
+              <p class="browser-status">No subdirectories.</p>
+            {:else}
+              <ul class="dir-grid">
+                {#each browseEntries as dir}
+                  <li>
+                    <button type="button" class="dir-button mono" onclick={() => selectDirectory(dir)}>
+                      📁 {dir}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        {/if}
         <label><input type="checkbox" bind:checked={share.enabled} /> Publish this share</label><label><input type="checkbox" bind:checked={share.readOnly} /> Read only</label>
-        {#if share.protocol === 'samba'}<label><input type="checkbox" bind:checked={share.guest} /> Guest access (requires host setup)</label><label><input type="checkbox" bind:checked={share.browseable} /> Browseable</label>{#if !share.guest}<label>Local users and @groups <input required bind:value={users} placeholder="alice, @staff" /></label>{/if}
+        {#if share.protocol === 'samba'}<label><input type="checkbox" bind:checked={share.guest} /> Guest access (requires host setup)</label><label><input type="checkbox" bind:checked={share.browseable} /> Browseable (discoverable on network)</label>{#if !share.guest}<label>Local users and @groups <input required bind:value={users} placeholder="alice, @staff" /></label>{/if}
         {:else}<label>Allowed client addresses/CIDRs <textarea required bind:value={clients} placeholder="192.168.1.0/24"></textarea></label><label><input type="checkbox" checked={share.rootSquash ?? true} onchange={(e) => { share.rootSquash = e.currentTarget.checked }} /> Root squashing</label><label>Security <select aria-label="Security" value={share.security || 'sys'} onchange={(e) => { share.security = e.currentTarget.value }}><option value="sys">sys</option><option value="krb5">krb5</option><option value="krb5i">krb5i</option><option value="krb5p">krb5p</option></select></label>{/if}
       {:else if kind === 'binding'}<label>Binding type <select aria-label="Binding type" bind:value={binding.kind}><option value="network">Managed network</option><option value="bridge">Host bridge</option><option value="pool">Incus storage pool</option><option value="project">Incus project</option></select></label><label>Native resource name <input required bind:value={binding.name} /></label>
       {:else}<label>Private file path <input required bind:value={privatePath} placeholder="secrets/application.env" /></label><p>Only the file reference is saved. Secret values are never loaded into this form.</p>{/if}
@@ -137,5 +247,202 @@
   {/if}
 </section>
 <style>
-  .definition-editor { margin-bottom: 1rem; min-width: 0; } header,.actions { display:flex; gap:1rem; flex-wrap:wrap; align-items:center; justify-content:space-between; } form { display:grid; gap:1rem; } label { display:grid; gap:.4rem; } input,select,textarea { max-width:100%; min-width:0; width:100%; } input[type=checkbox] { width:auto; justify-self:start; } textarea { min-height:5rem; } fieldset { min-width:0; display:grid; gap:1rem; border:1px solid var(--border,#39454c); border-radius:.5rem; padding:1rem; } .mount { display:grid; gap:.5rem; } p,li,h2 { overflow-wrap:anywhere; }
+  .definition-editor {
+    margin-bottom: 24px;
+    padding: 24px;
+    min-width: 0;
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-md);
+  }
+  header, .actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  header h2 {
+    font-size: 18px;
+    font-weight: 650;
+  }
+  form {
+    display: grid;
+    gap: 16px;
+  }
+  label {
+    display: grid;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  input, select, textarea {
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+  input[type="checkbox"] {
+    width: auto;
+    justify-self: start;
+    margin-right: 6px;
+  }
+  textarea {
+    min-height: 5.5rem;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  fieldset {
+    min-width: 0;
+    display: grid;
+    gap: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px 20px;
+    background: var(--panel-subtle);
+    margin: 8px 0;
+  }
+  legend {
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--accent);
+    padding: 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .mount {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+  }
+  p, li, h2 {
+    overflow-wrap: anywhere;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  li {
+    padding: 8px 12px;
+    background: var(--panel-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+  }
+  .actions {
+    margin-top: 16px;
+  }
+  .storage-choice-toggle {
+    display: flex;
+    gap: 16px;
+    margin: 4px 0 8px;
+    flex-wrap: wrap;
+  }
+  .toggle-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .toggle-option input[type="radio"] {
+    width: auto;
+    margin: 0;
+  }
+  .manual-path-box {
+    display: grid;
+    gap: 6px;
+  }
+  .input-with-button {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .input-with-button input {
+    flex: 1;
+    min-width: 0;
+  }
+  .browse-button {
+    white-space: nowrap;
+    padding: 0 16px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .field-hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 2px 0 0;
+  }
+  .directory-browser {
+    margin: 8px 0 12px;
+    padding: 12px;
+    background: var(--panel-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+  }
+  .browser-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .browser-header strong {
+    font-size: 12px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  .browser-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .browser-status {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 6px 0;
+  }
+  .browser-status.error {
+    color: var(--red);
+  }
+  .dir-grid {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .dir-button {
+    width: 100%;
+    text-align: left;
+    padding: 6px 8px;
+    font-size: 11.5px;
+    background: var(--panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dir-button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 </style>

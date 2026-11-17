@@ -1,4 +1,4 @@
-.PHONY: setup dev api check test mcp-test mcp-vm-test ui-test build install release clean
+.PHONY: setup dev api dev-admin check test mcp-test mcp-vm-test ui-test build install release clean
 
 export GOCACHE ?= $(CURDIR)/.cache/go-build
 export GOMODCACHE ?= $(CURDIR)/.cache/go-mod
@@ -15,6 +15,9 @@ api:
 
 dev:
 	npm --prefix web run dev
+
+dev-admin:
+	./tools/setup-dev-admin.sh
 
 check:
 	go vet ./...

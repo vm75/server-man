@@ -61,5 +61,71 @@
   {/if}
 </section>
 <style>
-  .history { margin-top:1rem; min-width:0; overflow-wrap:anywhere; } header,.actions,li { display:flex; flex-wrap:wrap; gap:.75rem; justify-content:space-between; align-items:center; } ul { list-style:none; padding:0; } li { padding:.5rem 0; } label { display:grid; gap:.5rem; } textarea { max-width:100%; width:100%; font-family:monospace; } .actions { margin:.75rem 0; }
+  .history {
+    margin-top: 24px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  header h2 {
+    font-size: 17px;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--panel-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-size: 12.5px;
+  }
+  li code {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  h3 {
+    margin: 20px 0 10px;
+    font-size: 15px;
+  }
+  label {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  textarea {
+    max-width: 100%;
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 14px;
+    background: var(--panel-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 16px 0;
+  }
 </style>

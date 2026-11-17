@@ -52,31 +52,109 @@
 
 {#if !readiness || error || readiness.error || issues.length}
 <section class="panel configuration-health" aria-label="Configuration readiness" aria-busy={checking}>
-  <div role="status">
-    <strong>{!readiness ? 'Readiness not checked' : readiness.error ? 'Workload configuration needs repair' : error ? 'Configuration readiness is uncertain' : blockers.length ? 'Workload configuration alert' : unknown.length ? 'Configuration readiness is uncertain' : 'Configuration warnings'}</strong>
-    {#if checking}<p>Checking configuration requirements…</p>{/if}
+  <div role="status" class="health-status">
+    <strong class="health-title">{!readiness ? 'Readiness not checked' : readiness.error ? 'Workload configuration needs repair' : error ? 'Configuration readiness is uncertain' : blockers.length ? 'Workload configuration alert' : unknown.length ? 'Configuration readiness is uncertain' : 'Configuration warnings'}</strong>
+    {#if checking}<p class="health-msg">Checking configuration requirements…</p>{/if}
     {#if error}<p class="form-error">{error} Previous issues remain visible until checks succeed.</p>{/if}
-    {#if readiness?.error}<p>{readiness.error}</p>{/if}
-    {#if blockers.length}<p>{blockers.length} startup {blockers.length === 1 ? 'blocker' : 'blockers'} found. Repair affected requirements before starting those workloads.</p>{/if}
-    {#if unknown.length}<p>{unknown.length} {unknown.length === 1 ? 'readiness check is' : 'readiness checks are'} inconclusive. Recheck when the provider is available.</p>{/if}
-    {#if !blockers.length && !unknown.length && warnings.length}<p>{warnings.length} configuration {warnings.length === 1 ? 'warning' : 'warnings'} to review. Warnings alone do not prevent workloads from starting.</p>{/if}
+    {#if readiness?.error}<p class="health-msg">{readiness.error}</p>{/if}
+    {#if blockers.length}<p class="health-msg">{blockers.length} startup {blockers.length === 1 ? 'blocker' : 'blockers'} found. Repair affected requirements before starting those workloads.</p>{/if}
+    {#if unknown.length}<p class="health-msg">{unknown.length} {unknown.length === 1 ? 'readiness check is' : 'readiness checks are'} inconclusive. Recheck when the provider is available.</p>{/if}
+    {#if !blockers.length && !unknown.length && warnings.length}<p class="health-msg">{warnings.length} configuration {warnings.length === 1 ? 'warning' : 'warnings'} to review. Warnings alone do not prevent workloads from starting.</p>{/if}
     {#if readiness?.health}<p class="resource-hint">Files checked {new Date(readiness.health.checkedAt).toLocaleString()}. {#if readiness.health.runtimeCheckedAt}Native requirements checked {new Date(readiness.health.runtimeCheckedAt).toLocaleString()}.{/if}</p>{/if}
   </div>
+
   <div class="health-actions">
     <button disabled={checking} onclick={() => load(true)}>Recheck requirements</button>
     <button onclick={() => navigate('configuration')}>Open Configuration</button>
-    {#if issues.length}<button onclick={() => navigate('applications')}>View affected applications</button><button onclick={() => navigate('updates')}>Manage host dependencies</button>{/if}
+    {#if issues.length}
+      <button onclick={() => navigate('applications')}>View affected applications</button>
+      <button onclick={() => navigate('updates')}>Manage host dependencies</button>
+    {/if}
   </div>
-  {#if issues.length}<details><summary>View all configuration issues ({issues.length})</summary><ul>{#each issues as issue}<li><strong>{issue.resource} · {issue.severity}</strong><p>{issue.message}</p><p>{issue.remedy}</p><small>Field: {issue.field}</small></li>{/each}</ul></details>{/if}
+
+  {#if issues.length}
+    <details class="health-details">
+      <summary>View all configuration issues ({issues.length})</summary>
+      <ul class="health-issues-list">
+        {#each issues as issue}
+          <li class="health-issue-card">
+            <strong>{issue.resource} · {issue.severity}</strong>
+            <p>{issue.message}</p>
+            <p>{issue.remedy}</p>
+            <small>Field: {issue.field}</small>
+          </li>
+        {/each}
+      </ul>
+    </details>
+  {/if}
 </section>
 {/if}
 
 <style>
-  .configuration-health { border-left: 3px solid #e0a25b; margin-bottom: 1rem; min-width: 0; overflow-wrap: anywhere; }
-  .health-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
-  details { margin-top: .75rem; }
-  summary { cursor: pointer; }
-  ul { padding-left: 1.25rem; }
-  li { margin-top: .75rem; }
-  p { margin: .4rem 0; }
+  .configuration-health {
+    border-left: 4px solid var(--amber);
+    background: var(--amber-dim);
+    border-color: var(--amber-border);
+    margin-bottom: 24px;
+    padding: 20px 24px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .health-title {
+    font-size: 15px;
+    color: #fde68a;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .health-msg {
+    color: #fef3c7;
+    margin: 4px 0;
+    font-size: 13px;
+  }
+  .health-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .health-details {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(251, 191, 36, 0.2);
+  }
+  .health-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    color: #fde68a;
+    outline: none;
+  }
+  .health-issues-list {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .health-issue-card {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(251, 191, 36, 0.15);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+  }
+  .health-issue-card strong {
+    color: #fde68a;
+    font-size: 12px;
+  }
+  .health-issue-card p {
+    color: #fef3c7;
+    font-size: 11.5px;
+    margin: 3px 0;
+  }
+  .health-issue-card small {
+    color: var(--dim);
+    font-size: 10px;
+    font-family: var(--mono);
+  }
 </style>

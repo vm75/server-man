@@ -42,7 +42,17 @@ const fixtures = {
   managed_config_read: () => ({ content: 'version: 1\n', revision: 'a'.repeat(64), valid: true }),
   managed_apply_status: () => applyScenario === 'failed' ? {stage:'failed',resources:{'service/website':{state:'failed',message:artifactConflictMessage},'service/database':{state:'registered'}}} : ({ stage: 'complete' }),
   managed_artifact_review: args => ({resource:args.resource,revision:'a'.repeat(64),reviewToken:'e'.repeat(64),canReconcile:true,parts:[{label:'Native Quadlet definitions',files:'desired',manifest:'conflicting'}]}),
-  managed_shares: () => ({ configured: true, revision: 'a'.repeat(64), shares: [] }),
+  managed_directory_browse: args => ({ path: args?.path || '/', parent: '/', directories: ['documents', 'media', 'data'] }),
+  managed_shares: () => {
+    const shareCalls = managementCalls.filter(call => call.tool === 'managed_resource_save' && call.args?.kind === 'share')
+    const shares = shareCalls.map(call => ({
+      id: call.args.id,
+      definition: JSON.parse(call.args.definition),
+      configuration: 'pending',
+      issues: [{ severity: 'error', resource: `share/${call.args.id}`, field: 'share', code: 'share_setup', message: 'Native share server setup is required', remedy: 'Set up the share server.' }]
+    }))
+    return { configured: true, revision: 'a'.repeat(64), shares, servers: { samba: { available: false }, nfs: { available: false } } }
+  },
   managed_resource_plan: args => ({ baseRevision: args.revision, desiredRevision: 'b'.repeat(64), changes: [{resource: `${args.kind}/${args.id}`,backend:'fixture',operation:args.operation}], files: {issues:[]} }),
   managed_services: () => applicationsScenario === 'partial' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[{id:'website',name:'Website',kind:'container',backend:'podman/compose',enabled:true,state:'partially_running',configuration:'registered',registered:true,members:[{name:'web',state:'running'},{name:'worker',state:'not_running'}],issues:[{severity:'warning',resource:'service/website',field:'runtime',code:'partial_container_group',message:'1 of 2 configured containers are running.',remedy:'Use Start to start missing members, or Stop to stop the application.'}]}]} : applicationsScenario === 'empty' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[]} : ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
   services_list: args => ({ scope: args.scope ?? 'system', available: true, journalAvailable: true, services: [{ name: 'sshd.service', description: 'OpenSSH server', load: 'loaded', active: 'active', sub: 'running', enabled: 'enabled' }], warnings: [] }),
@@ -73,7 +83,7 @@ async function exerciseManagement(page) {
   await page.getByRole('navigation').getByRole('button', {name:'Applications',exact:true}).click()
   await page.getByRole('heading', {name:'No managed applications yet',exact:true}).waitFor()
   assert.equal(await page.getByRole('heading', {name:'No matching applications',exact:true}).count(),0)
-  assert.equal(await page.getByRole('button', {name:'Define application',exact:true}).isEnabled(),true)
+  assert.equal(await page.getByRole('button', {name:'Define application',exact:true}).first().isEnabled(),true)
   applicationsScenario = 'partial'
   await page.getByRole('button', {name:'Check configuration',exact:true}).click()
   await page.getByText('partially running',{exact:true}).waitFor()
@@ -102,7 +112,7 @@ async function exerciseManagement(page) {
   assert.equal(await page.getByRole('heading', {name:'No managed applications yet',exact:true}).count(),0)
   await page.getByRole('searchbox', {name:'Find an application',exact:true}).fill('')
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, 'application diagnostics overflow')
-  await page.getByRole('button',{name:'Define application',exact:true}).click()
+  await page.getByRole('button',{name:'Define application',exact:true}).first().click()
   const applicationEditor = page.getByRole('region',{name:'Definition editor'})
   await applicationEditor.getByLabel('Resource ID',{exact:true}).fill('fixture-app')
   await applicationEditor.getByLabel('Display name',{exact:true}).fill('Fixture application')
@@ -370,7 +380,7 @@ async function exerciseBackupInventory(page) {
 async function exerciseShareCreation(page, name) {
   const callCount = managementCalls.length
   const denialCount = deniedByServer.length
-  await page.getByRole('button', {name:'Define file share',exact:true}).click()
+  await page.getByRole('button', {name:'Define file share',exact:true}).first().click()
   const editor = page.getByRole('region', {name:'Definition editor'})
   await editor.getByLabel('Resource ID',{exact:true}).fill(name)
   await editor.getByLabel('Shared storage',{exact:true}).selectOption('documents')

@@ -38,6 +38,12 @@ func RegisterSetup(r *core.Registry, cfg config.Config, runner core.Executor) er
 			if _, err = service.Action(ctx, unit, "start", out); err != nil {
 				return nil, err
 			}
+			if protocol == "samba" {
+				for _, discoveryUnit := range []string{"wsdd.service", "nmbd.service", "nmb.service"} {
+					_, _ = service.Action(ctx, discoveryUnit, "enable", out)
+					_, _ = service.Action(ctx, discoveryUnit, "start", out)
+				}
+			}
 			return map[string]string{"protocol": protocol, "unit": unit, "action": "server configured and started"}, nil
 		},
 	})
@@ -83,7 +89,7 @@ func (b *Backend) prepare(ctx context.Context, protocol string) error {
 	}
 	candidate := append(bytes.Clone(original.data), []byte("\ninclude = "+b.sambaManaged+"\n")...)
 	if !original.exists {
-		candidate = []byte("[global]\n\tserver role = standalone server\ninclude = " + b.sambaManaged + "\n")
+		candidate = []byte("[global]\n\tworkgroup = WORKGROUP\n\tserver string = %h server (Samba)\n\tserver role = standalone server\n\tmulticast dns register = yes\ninclude = " + b.sambaManaged + "\n")
 	}
 	file, err := temporary(filepath.Dir(b.sambaConfig), candidate, 0644)
 	if err != nil {

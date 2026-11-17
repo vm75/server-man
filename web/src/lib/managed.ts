@@ -4,7 +4,7 @@ export interface VMDefinition { uuid?: string; mac?: string; image?: string; cpu
 export interface ServiceDefinition { name?: string; description?: string; kind: 'container' | 'vm'; engine?: string; backend?: string; enabled: boolean; dependsOn?: string[]; containers?: Record<string, ContainerDefinition>; vm?: VMDefinition }
 export interface DiskSource { path: string; format: string; sha256: string }
 export interface StorageDefinition { source?: DiskSource; path: string; kind?: string; external?: boolean; format?: string; mount?: string }
-export interface ShareDefinition { protocol: string; storage: string; enabled: boolean; readOnly: boolean; guest?: boolean; browseable?: boolean; users?: string[]; clients?: string[]; rootSquash?: boolean; security?: string }
+export interface ShareDefinition { protocol: string; storage: string; path?: string; enabled: boolean; readOnly: boolean; guest?: boolean; browseable?: boolean; users?: string[]; clients?: string[]; rootSquash?: boolean; security?: string }
 export interface BindingDefinition { kind: string; name: string }
 export interface ManagedConfig { server?: Record<string, string | number | boolean>; version: number; services: Record<string, ServiceDefinition> | null; storage: Record<string, StorageDefinition> | null; shares: Record<string, ShareDefinition> | null; bindings: Record<string, BindingDefinition> | null; secrets: Record<string, string> | null }
 export interface ModelSnapshot { revision: string; config: ManagedConfig }

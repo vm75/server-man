@@ -91,6 +91,7 @@ type Share struct {
 	Security   string   `yaml:"security,omitempty" json:"security,omitempty"`
 	Protocol   string   `yaml:"protocol" json:"protocol"`
 	Storage    string   `yaml:"storage" json:"storage"`
+	Path       string   `yaml:"path,omitempty" json:"path,omitempty"`
 	Enabled    bool     `yaml:"enabled" json:"enabled"`
 	ReadOnly   bool     `yaml:"read_only" json:"readOnly"`
 	Users      []string `yaml:"users,omitempty" json:"users,omitempty"`

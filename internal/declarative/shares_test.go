@@ -62,3 +62,78 @@ func TestCentralShareNormalizationRejectsNativeInjection(t *testing.T) {
 		t.Fatal("invalid native definition reached privileged helper")
 	}
 }
+
+func TestShareStatusesServerAvailability(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	sambaHelper := &shareHelperFixture{revision: "samba-rev"}
+	c.Adapters["samba"] = &ShareAdapter{Store: c.Store, Protocol: "samba", Helper: sambaHelper}
+	if _, err := c.Store.Save(cfg, "missing"); err != nil {
+		t.Fatal(err)
+	}
+	statuses, err := c.ShareStatuses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, ok := statuses.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", statuses)
+	}
+	servers, ok := st["servers"].(map[string]map[string]any)
+	if !ok {
+		t.Fatalf("expected servers map, got %T", st["servers"])
+	}
+	if s, ok := servers["samba"]; !ok || s["available"] != true {
+		t.Fatalf("expected samba server available=true, got %v", s)
+	}
+	if n, ok := servers["nfs"]; !ok || n["available"] != false {
+		t.Fatalf("expected nfs server available=false without adapter, got %v", n)
+	}
+}
+
+func TestShareEditWithManualPathDerivesStorage(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	snap, err := c.Store.Save(cfg, "missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shareJSON := `{"protocol":"samba","path":"/srv/shared_media","enabled":true,"readOnly":false,"users":["alice"]}`
+	updated, err := c.EditResource("share", "media", "save", shareJSON, snap.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sh, ok := updated.Shares["media"]
+	if !ok {
+		t.Fatal("media share not found in updated config")
+	}
+	if sh.Storage != "media" {
+		t.Fatalf("expected storage 'media', got %q", sh.Storage)
+	}
+	st, ok := updated.Storage["media"]
+	if !ok {
+		t.Fatal("derived storage 'media' not found in config")
+	}
+	if st.Path != "/srv/shared_media" || !st.External || st.Kind != "directory" {
+		t.Fatalf("unexpected storage properties: %+v", st)
+	}
+}
+
+func TestDirectoryBrowseSafeListing(t *testing.T) {
+	c, _, _ := coordinatorFixture(t)
+	r := core.NewRegistry(false, nil)
+	if err := RegisterShareStatus(r, c); err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.Invoke(context.Background(), "managed_directory_browse", json.RawMessage(`{"path":"/"}`), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok := res.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map, got %T", res)
+	}
+	dirs, ok := m["directories"].([]string)
+	if !ok || len(dirs) == 0 {
+		t.Fatalf("expected directories list from /, got %v", m["directories"])
+	}
+}
+

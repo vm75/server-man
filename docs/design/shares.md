@@ -71,9 +71,9 @@ The official MCP SDK checks tool/schema parity, share inventory, invalid protoco
 ## Explicit server setup
 
 `shares_setup` accepts `protocol: "samba" | "nfs"` and `confirm: true`. It installs
-the native server packages, refuses to activate an unowned managed filename, adds the literal Samba include when absent (validating
-before atomic publication) or prepares `/etc/exports.d`, then enables and starts
-the corresponding system service. Existing config, unmanaged shares and shared
+the native server packages (including `wsdd` where available for Windows WS-Discovery), refuses to activate an unowned managed filename, adds the literal Samba include when absent (validating
+before atomic publication and configuring workgroup/multicast DNS defaults when initializing a new `smb.conf`) or prepares `/etc/exports.d`, then enables and starts
+the corresponding system services (including `wsdd` and NetBIOS discovery daemons alongside `smbd`). Existing config, unmanaged shares and shared
 data are preserved. Setup is a separate job from share mutations; completed
 package/service changes are not rolled back if a later setup step fails. Network
 firewall access, Samba passwords and directory permissions require deliberate

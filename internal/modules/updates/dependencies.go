@@ -72,7 +72,7 @@ func dependencyPackageNames(manager, distribution, target string) (string, error
 			return "incus cdrtools", nil
 		}
 	case "samba":
-		return "samba", nil
+		return "samba wsdd", nil
 	case "nfs":
 		if manager == "apt" || manager == "zypper" {
 			return "nfs-kernel-server", nil

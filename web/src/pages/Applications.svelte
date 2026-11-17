@@ -60,27 +60,98 @@
   })
 </script>
 
-<div class="toolbar"><button disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id: ''} }}>Define application</button><label>Find an application <input type="search" bind:value={query} placeholder="Name or backend" /></label><button disabled={loading} onclick={() => load(true)}>{loading ? 'Checking…' : 'Check configuration'}</button></div>
+<div class="toolbar">
+  <button class="primary" disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id: ''} }}>Define application</button>
+  <div class="search-wrap">
+    <label class="sr-only" for="app-search">Find an application</label>
+    <input id="app-search" type="search" bind:value={query} placeholder="Find an application by name or backend…" />
+  </div>
+  <button disabled={loading} onclick={() => load(true)}>{loading ? 'Checking…' : 'Check configuration'}</button>
+</div>
+
 {#if editor}{#key editor.id}<DefinitionEditor kind="service" resourceID={editor.id} onClose={() => { editor = null }} onSaved={(id) => { activeJob = id; editor = null; feedback = 'Definition save started. Follow its validation and apply progress in Activity.' }} />{/key}{/if}
-{#if error}<p class="form-error" role="alert">{error}</p>{/if}
-{#if feedback}<p role="status">{feedback}</p>{/if}
-{#if inventory?.error}<section class="panel" role="alert"><h2>Configuration needs attention</h2><p>{inventory.error}</p></section>{/if}
+{#if error}<div class="notice error" role="alert"><p>{error}</p><button onclick={() => load(true)}>Retry</button></div>{/if}
+{#if feedback}<div class="job-feedback" role="status">{feedback}</div>{/if}
+{#if inventory?.error}<section class="panel health-alert" role="alert"><h2>Configuration needs attention</h2><p>{inventory.error}</p></section>{/if}
 {#if blocked.length}<section class="panel health-alert" role="alert"><h2>Configuration needs attention</h2><p>Some applications have startup requirements to resolve. Restore missing data and repair host dependencies before starting them.</p></section>{/if}
 {#if inventory?.health}<p class="resource-hint">Files checked {new Date(inventory.health.checkedAt).toLocaleString()}. {#if inventory.health.runtimeCheckedAt}Native requirements checked {new Date(inventory.health.runtimeCheckedAt).toLocaleString()}.{/if}</p>{/if}
 {#if !allowWrites}<p class="resource-hint">Management writes are disabled. Status and configuration checks remain available.</p>{/if}
-{#if inventory && !inventory.error && !inventory.services.length}<section class="panel empty-state"><h2>No managed applications yet</h2><p>No applications have been defined yet. Use Define application to create a stopped container application or virtual machine. Configure storage and host bindings in Configuration first.</p></section>
-{:else if inventory && !inventory.error && inventory.services.length && !filtered.length}<section class="panel empty-state"><h2>No matching applications</h2><p>Try a different search.</p></section>{/if}
+
+{#if inventory && !inventory.error && !inventory.services.length}
+  <section class="panel empty-state">
+    <h2>No managed applications yet</h2>
+    <p>No applications have been defined yet. Use Define application to create a stopped container application or virtual machine. Configure storage and host bindings in Configuration first.</p>
+    <button class="primary" disabled={!allowWrites} onclick={() => { editor = {id: ''} }}>Define application</button>
+  </section>
+{:else if inventory && !inventory.error && inventory.services.length && !filtered.length}
+  <section class="panel empty-state">
+    <h2>No matching applications</h2>
+    <p>Try a different search term or clear the filter.</p>
+    <button onclick={() => { query = '' }}>Clear search</button>
+  </section>
+{/if}
+
 <div class="applications">
 {#each filtered as service (service.id)}
   <section class="panel application">
-    <header><div><h2>{service.name || service.id}</h2><p>{service.kind} · {service.backend}</p></div><strong>{service.state.replaceAll('_', ' ')}</strong></header>
-    <dl><div><dt>Start at boot</dt><dd>{service.enabled ? 'Enabled' : 'Disabled'}</dd></div><div><dt>Configuration</dt><dd>{service.configuration.replaceAll('_', ' ')}</dd></div></dl>
-    {#if service.members?.length}<details class="application-members"><summary>Containers ({service.members.length})</summary><ul>{#each service.members as member (member.name)}<li><strong>{member.name}</strong> — {member.state.replaceAll('_', ' ')}</li>{/each}</ul></details>{/if}
-    {#if service.issues.length}<ul class="issues">{#each service.issues as issue}<li><strong>{issue.message}</strong><p>{issue.remedy}</p></li>{/each}</ul>{/if}
+    <header class="app-header">
+      <div class="app-title-group">
+        <h2>{service.name || service.id}</h2>
+        <span class="app-subtitle">{service.kind} · {service.backend}</span>
+      </div>
+      <span class="project-state" class:running={service.state === 'running'} class:attention={service.state.includes('partially') || service.state === 'failed'}>{service.state.replaceAll('_', ' ')}</span>
+    </header>
+    <dl class="app-meta">
+      <div>
+        <dt>Start at boot</dt>
+        <dd>{service.enabled ? 'Enabled' : 'Disabled'}</dd>
+      </div>
+      <div>
+        <dt>Configuration</dt>
+        <dd>{service.configuration.replaceAll('_', ' ')}</dd>
+      </div>
+      <div>
+        <dt>Registration</dt>
+        <dd>{service.registered ? 'Registered' : 'Not registered'}</dd>
+      </div>
+    </dl>
+    {#if service.members?.length}
+      <details class="application-members">
+        <summary>Containers ({service.members.length})</summary>
+        <ul class="member-list">
+          {#each service.members as member (member.name)}
+            <li>
+              <strong>{member.name}</strong>
+              <span class="project-state" class:running={member.state === 'running'}>{member.state.replaceAll('_', ' ')}</span>
+            </li>
+          {/each}
+        </ul>
+      </details>
+    {/if}
+    {#if service.issues.length}
+      <ul class="issues">
+        {#each service.issues as issue}
+          <li class="issue-item">
+            <strong>{issue.message}</strong>
+            <p>{issue.remedy}</p>
+          </li>
+        {/each}
+      </ul>
+    {/if}
     {#if service.kind === 'container' || service.backend === 'incus'}
       <div class="project-log-controls">
         <h3>{service.backend === 'incus' ? 'VM instance diagnostics' : 'Application logs'}</h3>
-        <div><label class="sr-only" for="application-log-tail-{service.id}">Log entries for {service.name || service.id}</label><select id="application-log-tail-{service.id}" bind:value={logTail}>{#each [100, 200, 500, 1000, 2000] as count}<option value={count}>{count} entries</option>{/each}</select><button disabled={logLoading && logServiceID === service.id} onclick={() => void readLogs(service)}>{logLoading && logServiceID === service.id ? 'Reading…' : logs && logServiceID === service.id ? 'Refresh logs' : 'Read logs'}</button></div>
+        <div>
+          <label class="sr-only" for="application-log-tail-{service.id}">Log entries for {service.name || service.id}</label>
+          <select id="application-log-tail-{service.id}" bind:value={logTail}>
+            {#each [100, 200, 500, 1000, 2000] as count}
+              <option value={count}>{count} entries</option>
+            {/each}
+          </select>
+          <button disabled={logLoading && logServiceID === service.id} onclick={() => void readLogs(service)}>
+            {logLoading && logServiceID === service.id ? 'Reading…' : logs && logServiceID === service.id ? 'Refresh logs' : 'Read logs'}
+          </button>
+        </div>
       </div>
       {#if logServiceID === service.id}
         {#if logError}<p class="form-error" role="alert">{logError}</p>{/if}
@@ -93,28 +164,166 @@
     <div class="actions">
       <button disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id:service.id} }}>Edit definition</button>
       {#each ['start', 'stop', 'restart', service.enabled ? 'disable' : 'enable'] as action}
-        <button disabled={!allowWrites || activeJob !== null || loading || ((action === 'start' || action === 'restart' || action === 'enable') && service.issues.some(i => i.severity !== 'warning' && (action === 'enable' || i.field !== 'autostart')))} onclick={() => { if (action === 'start') void perform(service, action); else pending = { service, action } }}>{action === 'enable' ? 'Enable boot startup' : action === 'disable' ? 'Disable boot startup' : action.charAt(0).toUpperCase() + action.slice(1)}</button>
+        <button class:primary={action === 'start'} disabled={!allowWrites || activeJob !== null || loading || ((action === 'start' || action === 'restart' || action === 'enable') && service.issues.some(i => i.severity !== 'warning' && (action === 'enable' || i.field !== 'autostart')))} onclick={() => { if (action === 'start') void perform(service, action); else pending = { service, action } }}>{action === 'enable' ? 'Enable boot startup' : action === 'disable' ? 'Disable boot startup' : action.charAt(0).toUpperCase() + action.slice(1)}</button>
       {/each}
     </div>
   </section>
 {/each}
 </div>
-{#if issues.length}<details class="panel"><summary>All configuration issues ({issues.length})</summary><ul class="issues">{#each issues as issue}<li><strong>{issue.resource}: {issue.message}</strong><p>{issue.remedy}</p></li>{/each}</ul></details>{/if}
+
+{#if issues.length}
+  <details class="panel all-issues">
+    <summary>All configuration issues ({issues.length})</summary>
+    <ul class="issues">
+      {#each issues as issue}
+        <li class="issue-item">
+          <strong>{issue.resource}: {issue.message}</strong>
+          <p>{issue.remedy}</p>
+        </li>
+      {/each}
+    </ul>
+  </details>
+{/if}
+
 <ConfirmDialog open={pending !== null} title={pending ? `${pending.action}: ${pending.service.name || pending.service.id}` : ''} description={pending?.action === 'enable' || pending?.action === 'disable' ? 'Change automatic startup at boot. The current running state stays unchanged.' : 'This interrupts the selected application.'} label="Confirm" busy={activeJob !== null} onConfirm={() => { if (pending) void perform(pending.service, pending.action) }} onClose={() => { pending = null }} />
 
 <style>
-  .toolbar, header, .actions { display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap; align-items: center; }
-  .toolbar { margin-bottom: 1rem; }
-  label { display: grid; gap: .5rem; }
-  input { max-width: 100%; }
-  .applications { display: grid; gap: 1rem; }
-  .application { min-width: 0; }
-  h2, p, dd, strong { overflow-wrap: anywhere; }
-  header p { margin-top: .4rem; }
-  dl { display: flex; flex-wrap: wrap; gap: 2rem; }
-  dd { margin: .4rem 0; }
-  .issues { padding-left: 1.3rem; }
-  .issues p { margin-top: .3rem; }
-  .health-alert { border-left: 3px solid #e0a25b; margin-bottom: 1rem; }
-  details { margin-top: 1rem; }
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .search-wrap {
+    flex: 1;
+    min-width: 240px;
+  }
+  .applications {
+    display: grid;
+    gap: 20px;
+  }
+  .application {
+    min-width: 0;
+    padding: 24px;
+  }
+  .app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .app-title-group h2 {
+    font-size: 18px;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+  }
+  .app-subtitle {
+    font-size: 12px;
+    color: var(--muted);
+    display: block;
+    margin-top: 4px;
+  }
+  .app-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin: 16px 0;
+    padding: 14px 18px;
+    background: var(--panel-subtle);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+  }
+  .app-meta dt {
+    font-size: 11px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+  }
+  .app-meta dd {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .application-members {
+    margin: 16px 0;
+    background: var(--panel-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+  }
+  .application-members summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .member-list {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .member-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: var(--panel);
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .issues {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .issue-item {
+    background: var(--amber-dim);
+    border: 1px solid var(--amber-border);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+  }
+  .issue-item strong {
+    color: #fde68a;
+    font-size: 12.5px;
+  }
+  .issue-item p {
+    color: #fef3c7;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .health-alert {
+    border-left: 4px solid var(--amber);
+    background: var(--amber-dim);
+    border-color: var(--amber-border);
+    margin-bottom: 20px;
+  }
+  .health-alert h2 {
+    color: #fde68a;
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  .health-alert p {
+    color: #fef3c7;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .all-issues {
+    margin-top: 24px;
+  }
 </style>

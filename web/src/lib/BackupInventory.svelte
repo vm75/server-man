@@ -155,9 +155,92 @@
   {/if}
 </section>
 <style>
- .backup-inventory{margin-top:1rem;min-width:0;overflow-wrap:anywhere}header{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:center}details{margin-top:1rem}summary{cursor:pointer}ul{padding-left:1.25rem}li{padding:.5rem 0}p{margin:.4rem 0}
- .prepare-section{margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border-color,#333)}.prepare-form{display:flex;flex-direction:column;gap:.75rem;margin-top:.75rem}
- .prepare-form input[type="text"]{width:100%;box-sizing:border-box;padding:.4rem .6rem}
- .checkbox-label{display:flex;align-items:center;gap:.5rem;cursor:pointer}
- .summary-box{padding:.75rem;margin-top:.75rem;border-radius:4px;background:rgba(46,160,67,0.15);border:1px solid rgba(46,160,67,0.4)}
+  .backup-inventory {
+    margin-top: 24px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  header h2 {
+    font-size: 17px;
+  }
+  details {
+    margin-top: 14px;
+    background: var(--panel-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-secondary);
+    outline: none;
+  }
+  details[open] > summary {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  li {
+    padding: 8px 12px;
+    background: var(--panel);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+  }
+  p {
+    margin: 6px 0;
+    font-size: 13px;
+  }
+  .prepare-section {
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .prepare-section h3 {
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+  .prepare-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 14px;
+    max-width: 580px;
+  }
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .summary-box {
+    padding: 16px;
+    margin-top: 14px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-border);
+    color: var(--text);
+  }
+  .summary-box strong {
+    color: var(--accent);
+  }
 </style>

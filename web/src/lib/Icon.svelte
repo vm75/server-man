@@ -7,6 +7,8 @@
     drive: 'M5 4h14l3 12H2z M2 16v5h20v-5 M6 18.5h.01 M17 18.5h2',
     server: 'M4 3h16v7H4z M4 14h16v7H4z M8 6.5h.01 M8 17.5h.01 M12 6.5h5 M12 17.5h5',
     overview: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
+    applications: 'M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5',
+    configuration: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',
     containers: 'M12 3 3 8v9l9 5 9-5V8z M3 8l9 5 9-5 M12 13v9 M7 5.8l9 5',
     machines: 'M3 4h18v13H3z M8 21h8 M12 17v4 M7 8h4 M7 12h8',
     services: 'M4 4h16v16H4z M8 8l3 4-3 4 M14 16h3',

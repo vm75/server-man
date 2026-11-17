@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"server-man/internal/core"
@@ -94,6 +95,31 @@ func (c Coordinator) EditResource(kind, id, operation, value, revision string) (
 			var v Share
 			if err = decode(&v); err != nil {
 				return Config{}, err
+			}
+			if v.Path != "" {
+				cleanPath := filepath.Clean(v.Path)
+				if v.Storage == "" {
+					for sID, st := range cfg.Storage {
+						if st.Kind != "file" && st.Path == cleanPath {
+							v.Storage = sID
+							break
+						}
+					}
+					if v.Storage == "" {
+						storageID := id
+						if existing, ok := cfg.Storage[storageID]; ok && existing.Path != cleanPath {
+							storageID = id + "-storage"
+						}
+						v.Storage = storageID
+					}
+				}
+				if _, ok := cfg.Storage[v.Storage]; !ok {
+					cfg.Storage[v.Storage] = Storage{
+						Path:     cleanPath,
+						External: filepath.IsAbs(cleanPath),
+						Kind:     "directory",
+					}
+				}
 			}
 			cfg.Shares[id] = v
 		}

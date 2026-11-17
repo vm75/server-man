@@ -12,11 +12,18 @@ func (b *Backend) InstallShareServer(ctx context.Context, protocol string, out i
 	var packages, unit string
 	switch protocol {
 	case "samba":
-		packages = "samba"
 		unit = "smb.service"
 		if b.manager.ID == "apt" {
 			unit = "smbd.service"
 		}
+		// Install Samba and WS-Discovery daemon so Windows clients detect shares on the network.
+		if _, err := b.InstallPackages(ctx, "samba wsdd", out); err != nil {
+			if _, retryErr := b.InstallPackages(ctx, "samba", out); retryErr == nil {
+				return unit, nil
+			}
+			return "", err
+		}
+		return unit, nil
 	case "nfs":
 		packages = "nfs-utils"
 		unit = "nfs-server.service"

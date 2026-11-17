@@ -83,7 +83,7 @@
       <div class="topbar-actions">{#if status}<Jobs allowWrites={status.allowWrites} /><button class="small-button sign-out" onclick={signOut}>Sign out</button>{/if}<div class="host-pill"><span class="connection-dot" class:connected={status && !error}></span><span>{status?.hostname ?? 'Connecting'}</span></div></div>
     </header>
     <main id="main">
-      <div class="page-heading"><div><div class="eyebrow">SERVER WORKSPACE</div><h1>{page.name}</h1><p>{page.subtitle}</p></div><span class="badge">{status?.allowWrites ? 'Management enabled' : 'Read only'}</span></div>
+      <div class="page-heading"><div><div class="eyebrow">SERVER WORKSPACE</div><h1>{page.name}</h1><p>{page.subtitle}</p></div><span class="badge" class:read-only={!status?.allowWrites}>{status?.allowWrites ? 'Management enabled' : 'Read only'}</span></div>
       {#if status && !loading && !error}<ConfigurationHealth navigate={(target) => { selected = target; menuOpen = false }} />{/if}
       {#if error}
         <div class="notice error" role="alert"><div><strong>Could not connect</strong><p>{error}</p></div><button onclick={connect} disabled={loading}>Try again</button></div>
