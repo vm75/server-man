@@ -77,7 +77,12 @@ func publishArtifacts(dir string, previous, desired map[string][]byte) error {
 		return err
 	}
 	defer d.Close()
-	return d.Sync()
+	if err := d.Sync(); err != nil {
+		return err
+	}
+	// A private checksum inventory is the last publication stage. If its
+	// atomic/synced update fails, the apply journal must retain a failure.
+	return writeArtifactManifest(dir, desired)
 }
 func readArtifact(root *os.Root, name string) ([]byte, error) {
 	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
@@ -97,6 +102,12 @@ func readArtifact(root *os.Root, name string) ([]byte, error) {
 
 // Check ownership before destructive backend calls as well as before publication.
 func checkArtifactOwnership(dir string, previous, desired map[string][]byte) error {
+	// An existing sidecar must be our private, structurally valid manifest.
+	// Absence is permitted for an initial publication; it does not confer
+	// ownership of unknown artifacts inside the resource directory.
+	if _, _, err := readArtifactManifest(dir); err != nil && !os.IsNotExist(err) {
+		return errArtifactConflict
+	}
 	info, err := os.Lstat(dir)
 	if os.IsNotExist(err) {
 		return nil
