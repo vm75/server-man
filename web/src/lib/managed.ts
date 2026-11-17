@@ -1,4 +1,4 @@
-export interface Mount { storage: string; path?: string; kind?: 'directory' | 'file'; source?: 'custom' | 'storage'; target: string; readOnly: boolean }
+export interface Mount { storage: string; path?: string; kind?: 'directory' | 'file'; source?: 'selector' | 'manual' | 'custom' | 'storage'; target: string; readOnly: boolean }
 export interface ContainerDefinition { image: string; command?: string[]; ports?: string[]; environment?: Record<string, string>; envFiles?: string[]; mounts?: Mount[]; memoryMiB?: number; cpus?: number }
 export interface VMDefinition { uuid?: string; mac?: string; image?: string; cpus: number; memoryMiB: number; disks?: string[]; network: string; pool?: string; project?: string; rootSizeGiB?: number; architecture?: string; machine?: string; firmware?: string }
 export interface ServiceDefinition { name?: string; description?: string; kind: 'container' | 'vm'; engine?: string; backend?: string; enabled: boolean; dependsOn?: string[]; containers?: Record<string, ContainerDefinition>; vm?: VMDefinition }

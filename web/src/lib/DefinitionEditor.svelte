@@ -82,6 +82,31 @@
     const m = container?.mounts?.[index]
     openBrowser({ mountIndex: index }, m?.path)
   }
+  function getSelectorValue(m: any): string {
+    if (m.storage && !m.path) return `storage:${m.storage}`
+    if (m.path) return m.path
+    return ''
+  }
+  function handleSelectorChange(m: any, index: number, value: string) {
+    if (value === '__browse__') {
+      openMountBrowser(index)
+      return
+    }
+    if (value.startsWith('storage:')) {
+      m.storage = value.slice(8)
+      m.path = ''
+      m.kind = 'directory'
+      return
+    }
+    if (value) {
+      m.path = value
+      m.storage = ''
+      m.kind = 'directory'
+      return
+    }
+    m.path = ''
+    m.storage = ''
+  }
   function selectCurrentFolder() {
     if (browseTarget === 'share') {
       manualPath = browsePath
@@ -89,6 +114,7 @@
       const m = container?.mounts?.[browseTarget.mountIndex]
       if (m) {
         m.path = browsePath
+        m.storage = ''
         m.kind = 'directory'
       }
     }
@@ -100,7 +126,9 @@
       const m = container?.mounts?.[browseTarget.mountIndex]
       if (m) {
         m.path = fullPath
+        m.storage = ''
         m.kind = 'file'
+        m.source = 'manual'
       }
     } else if (browseTarget === 'share') {
       manualPath = fullPath
@@ -148,7 +176,7 @@
         for (const c of Object.values(service.containers)) {
           if (c.mounts) {
             for (const m of c.mounts) {
-              if (m.source === 'storage') {
+              if (m.source === 'selector' && m.storage && !m.path) {
                 m.path = ''
                 delete m.kind
               } else {
@@ -213,15 +241,15 @@
           for (const c of Object.values(service.containers)) {
             for (const m of c.mounts ?? []) {
               if (m.path) {
-                m.source = 'custom'
+                m.source = 'manual'
                 m.kind = m.kind || (result.config.storage[m.storage]?.kind === 'file' ? 'file' : 'directory')
               } else if (m.storage && result.config.storage[m.storage]) {
-                m.source = 'storage'
+                m.source = 'selector'
                 const st = result.config.storage[m.storage]
                 m.path = st.path
                 m.kind = st.kind === 'file' ? 'file' : 'directory'
               } else {
-                m.source = 'custom'
+                m.source = 'selector'
                 m.kind = 'directory'
               }
             }
@@ -335,27 +363,52 @@
               <fieldset><legend>Data mounts</legend>
                 {#each container.mounts ?? [] as mount, index}
                   <div class="mount">
-                    <div class="mount-row">
-                      <label>Host source
-                        <select aria-label="Mount source" bind:value={mount.source} onchange={(e) => {
-                          if (e.currentTarget.value === 'storage' && !mount.storage && storageChoices.length > 0) {
-                            mount.storage = storageChoices[0][0]
-                          }
-                        }}>
-                          <option value="custom">Custom host path (browse/manual)</option>
-                          <option value="storage" disabled={storageChoices.length === 0}>Configured storage reference</option>
-                        </select>
+                    <div class="storage-choice-toggle">
+                      <label class="toggle-option">
+                        <input type="radio" name={`mount-source-${index}`} value="selector" bind:group={mount.source} />
+                        <span>Select folder using a selector</span>
                       </label>
-                      {#if mount.source === 'storage'}
-                        <label class="mount-field-grow">Storage reference
-                          <select aria-label="Mount storage" required bind:value={mount.storage}>
-                            <option value="">Choose storage</option>
-                            {#each storageChoices as [storageID, st]}
-                              <option value={storageID}>{storageID} ({st.kind}: {st.path})</option>
-                            {/each}
-                          </select>
+                      <label class="toggle-option">
+                        <input type="radio" name={`mount-source-${index}`} value="manual" bind:group={mount.source} />
+                        <span>Specify path in UI</span>
+                      </label>
+                    </div>
+
+                    {#if mount.source === 'selector'}
+                      <div class="mount-row">
+                        <label class="mount-field-grow">Folder selector
+                          <div class="input-with-button">
+                            <select aria-label="Select folder" value={getSelectorValue(mount)} onchange={(e) => handleSelectorChange(mount, index, e.currentTarget.value)}>
+                              <option value="">Choose a folder…</option>
+                              {#if storageChoices.length > 0}
+                                <optgroup label="Configured storage">
+                                  {#each storageChoices as [sID, st]}
+                                    <option value={`storage:${sID}`}>{sID} ({st.kind}: {st.path})</option>
+                                  {/each}
+                                </optgroup>
+                              {/if}
+                              <optgroup label="Common host folders">
+                                <option value="/srv">/srv</option>
+                                <option value="/var">/var</option>
+                                <option value="/var/log">/var/log</option>
+                                <option value="/opt">/opt</option>
+                                <option value="/etc">/etc</option>
+                                <option value="/home">/home</option>
+                                <option value="/tmp">/tmp</option>
+                              </optgroup>
+                              {#if mount.path && !['/srv', '/var', '/var/log', '/opt', '/etc', '/home', '/tmp'].includes(mount.path) && !mount.storage}
+                                <optgroup label="Selected folder">
+                                  <option value={mount.path}>📁 {mount.path}</option>
+                                </optgroup>
+                              {/if}
+                              <option value="__browse__">📁 Browse to select any folder…</option>
+                            </select>
+                            <button type="button" class="browse-button" onclick={() => openMountBrowser(index)}>Browse any folder…</button>
+                          </div>
                         </label>
-                      {:else}
+                      </div>
+                    {:else}
+                      <div class="mount-row">
                         <label>Host type
                           <select aria-label="Host type" bind:value={mount.kind}>
                             <option value="directory">Directory</option>
@@ -368,11 +421,13 @@
                             <button type="button" class="browse-button" onclick={() => openMountBrowser(index)}>Browse…</button>
                           </div>
                         </label>
-                      {/if}
-                    </div>
+                      </div>
+                    {/if}
+
                     {#if browseTarget && typeof browseTarget === 'object' && browseTarget.mountIndex === index}
                       {@render directoryBrowser(true)}
                     {/if}
+
                     <div class="mount-row">
                       <label class="mount-field-grow">Container target path
                         <input required aria-label="Container path" bind:value={mount.target} placeholder={mount.kind === 'file' ? '/etc/config.json' : '/data'} />
@@ -390,7 +445,7 @@
                     storage: '',
                     path: '',
                     kind: 'directory',
-                    source: 'custom',
+                    source: 'selector',
                     target: '/data',
                     readOnly: false
                   })
