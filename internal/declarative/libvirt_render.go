@@ -55,7 +55,12 @@ type domainXML struct {
 	Devices    struct {
 		Disks     []domainDisk    `xml:"disk"`
 		Interface domainInterface `xml:"interface"`
-		Console   struct {
+		Video     struct {
+			Model struct {
+				Type string `xml:"type,attr"`
+			} `xml:"model"`
+		} `xml:"video"`
+		Console struct {
 			Type   string `xml:"type,attr"`
 			Target struct {
 				Type string `xml:"type,attr"`
@@ -153,6 +158,9 @@ func RenderLibvirt(store Store, c Config, key string) ([]byte, error) {
 	d.Features.ACPI = &struct{}{}
 	d.Features.APIC = &struct{}{}
 	d.CPU.Mode = "host-model"
+	// A headless VM still needs a VGA device for the BIOS/GRUB boot path of
+	// supported cloud images. This adds no graphics listener or remote display.
+	d.Devices.Video.Model.Type = "vga"
 	for i, ref := range v.Disks {
 		st := c.Storage[ref]
 		if st.Format != "qcow2" && st.Format != "raw" {

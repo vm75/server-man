@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -83,6 +84,61 @@ func TestLibvirtLiveNetworkBridgeIsResolvedState(t *testing.T) {
 	actual.Devices.Interface.Source.Bridge = "br1"
 	if domainMatches(want, actual) {
 		t.Fatal("explicit bridge drift hidden")
+	}
+}
+
+func TestLibvirtBIOSVideoIsManagedWithoutGraphicsListener(t *testing.T) {
+	l, cfg, r := libvirtFixture(t)
+	if err := l.Apply(context.Background(), Config{Version: 1}, cfg, "service/guest", "now"); err != nil {
+		t.Fatal(err)
+	}
+	var want domainXML
+	if err := xml.Unmarshal([]byte(r.xml), &want); err != nil {
+		t.Fatal(err)
+	}
+	if want.Devices.Video.Model.Type != "vga" || strings.Contains(r.xml, "<graphics") || strings.Contains(r.xml, "<listen") {
+		t.Fatal("BIOS VGA device missing or remote graphics exposed")
+	}
+	expectedXML := r.xml
+	for _, model := range []string{"", "virtio"} {
+		live := want
+		live.Devices.Video.Model.Type = model
+		data, err := xml.Marshal(live)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.activeXML, r.state = string(data), "running"
+		obs, err := l.Inspect(context.Background(), cfg, "service/guest")
+		if err != nil || !obs.Matches || obs.ActiveMatches {
+			t.Fatal("live video drift hidden", model, obs, err)
+		}
+		r.xml = string(data)
+		obs, err = l.Inspect(context.Background(), cfg, "service/guest")
+		if err != nil || obs.Matches {
+			t.Fatal("persistent video drift hidden", model, obs, err)
+		}
+		r.xml = expectedXML
+	}
+	// Libvirt-owned addresses, memory and aliases are outside the managed model.
+	native := strings.Replace(r.xml, `<model type="vga"></model>`, `<model type="vga" vram="16384" heads="1" primary="yes"/><alias name="video0"/><address type="pci" bus="0x00" slot="0x01" function="0x0"/>`, 1)
+	if native == r.xml {
+		t.Fatal("native video defaults fixture was not inserted")
+	}
+	var observed domainXML
+	if err := xml.Unmarshal([]byte(native), &observed); err != nil || !domainMatches(want, observed) {
+		t.Fatal("native video defaults treated as drift", err)
+	}
+}
+
+func TestLibvirtBIOSVideoNativeSchema(t *testing.T) {
+	validator, err := exec.LookPath("virt-xml-validate")
+	if err != nil {
+		t.Skip("native libvirt XML validator is not installed")
+	}
+	l, cfg, _ := libvirtFixture(t)
+	l.Validator, l.Runner = validator, core.Runner{}
+	if err := l.Validate(context.Background(), cfg, "service/guest"); err != nil {
+		t.Fatal(err)
 	}
 }
 

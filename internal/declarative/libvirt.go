@@ -135,7 +135,7 @@ func domainMatches(want, actual domainXML) bool {
 	}
 	// Compare managed hardware fields, allowing libvirt to retain its generated
 	// addresses, controllers, aliases and other native defaults outside this model.
-	return want.UUID == actual.UUID && want.Name == actual.Name && want.Type == actual.Type && want.VCPU == actual.VCPU && reflect.DeepEqual(want.Memory, actual.Memory) && reflect.DeepEqual(want.OS, actual.OS) && reflect.DeepEqual(want.Devices.Disks, actual.Devices.Disks) && reflect.DeepEqual(want.Devices.Interface, actual.Devices.Interface)
+	return want.UUID == actual.UUID && want.Name == actual.Name && want.Type == actual.Type && want.VCPU == actual.VCPU && reflect.DeepEqual(want.Memory, actual.Memory) && reflect.DeepEqual(want.OS, actual.OS) && reflect.DeepEqual(want.Devices.Disks, actual.Devices.Disks) && reflect.DeepEqual(want.Devices.Interface, actual.Devices.Interface) && reflect.DeepEqual(want.Devices.Video, actual.Devices.Video)
 }
 func libvirtMachineMatches(want, actual string) bool {
 	return want == actual || (want == "q35" && strings.HasPrefix(actual, "pc-q35-") && len(actual) > len("pc-q35-") && machineTypePattern.MatchString(actual))
