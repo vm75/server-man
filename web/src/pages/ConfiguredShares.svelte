@@ -98,7 +98,7 @@
     <h2>Host share server</h2>
     <p>
       {#if protocol === 'samba' && servers.samba?.available && servers.samba?.discoveryAvailable === false}
-        Samba is running, but the WS-Discovery daemon (<code>wsdd</code>) is not installed. Windows 10 and 11 require <code>wsdd</code> to automatically detect shares in Network.
+        Samba is available, but the WS-Discovery server service could not be found. Install or repair the <code>wsdd</code> server so Windows can discover shares in Network.
       {:else}
         Install and configure the native server as an explicit host operation, separate from share definitions.
       {/if}

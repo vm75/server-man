@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"server-man/internal/core"
+	"server-man/internal/modules/services"
 )
 
 func (b *Backend) List(ctx context.Context, protocol string) (Inventory, error) {
@@ -35,6 +36,7 @@ func (b *Backend) List(ctx context.Context, protocol string) (Inventory, error) 
 			info.Reason = loadErr.Error()
 		}
 		if p == "samba" {
+			info.DiscoveryAvailable = discoveryAvailable(ctx, services.New("system", b.runner))
 			info.Available = b.programs["testparm"] != ""
 			info.CanManage = info.Available && b.programs["smbcontrol"] != "" && info.Reason == ""
 			main, mainErr := readFile(b.sambaConfig, false)
@@ -51,8 +53,8 @@ func (b *Backend) List(ctx context.Context, protocol string) (Inventory, error) 
 			} else if b.programs["smbcontrol"] == "" {
 				info.Reason = "smbcontrol is unavailable; inventory can be read but changes cannot be applied"
 			}
-			if info.Available && b.programs["wsdd"] == "" {
-				result.Warnings = append(result.Warnings, "WS-Discovery daemon (wsdd) is not installed; Windows 10/11 network discovery requires wsdd")
+			if info.Available && !info.DiscoveryAvailable {
+				result.Warnings = append(result.Warnings, "WS-Discovery server service is unavailable; install or repair the wsdd server for Windows network discovery")
 			}
 			effective := []Definition{}
 			if info.Available && mainErr == nil && main.exists {

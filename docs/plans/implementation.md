@@ -8,6 +8,14 @@ Prioritize a single-server Ubuntu reference deployment, retaining Debian and Arc
 
 Updated 2026-11-16: defer native Arch testing per user instruction. Keep Arch implementation/package mappings, mark native support unverified, and exclude its test-host/install/workload/boot acceptance from current release gates. Continue active Ubuntu/Debian work; do not resume native Arch testing until requested.
 
+## WS-Discovery setup repair (complete, 2026-11-17)
+
+- [x] Share Samba dependency presets between guided installation and share setup; request `wsdd-server` on APT systems and enable/start `wsdd-server.service`, retaining `wsdd`/`wsdd.service` for other supported managers.
+- [x] Report discovery package and enable/start failures instead of silently succeeding with Samba alone. Keep NetBIOS service setup optional.
+- [x] Carry discovery server-unit availability through native/helper share inspection into the UI, so installing only the `wsdd` executable cannot hide the missing server component. Bound service discovery to three seconds and describe unavailable discovery service state accurately.
+
+Verification: package/service fixtures cover native package mappings, missing discovery package errors without fallback installation, enable/start failures, both discovery unit names, and helper-to-UI status propagation. `make check`, `make build`, and `make test` (Go race tests) pass. A read-only APT simulation confirmed that `wsdd-server` selects both `wsdd` and `wsdd-server` without package removals. An initial test run overlapped frontend asset regeneration and failed the embedded-asset compilation; the full race suite was rerun after the build completed. No host packages, services, shares or firewall settings changed; native daemon startup and Windows discovery remain unverified.
+
 ## VS Code development launcher (complete, 2026-11-17)
 
 - [x] Add a compound launcher for Vite and the Go API in integrated terminals, with shared stop behavior and no additional editor extension requirement.

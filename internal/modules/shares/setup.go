@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"server-man/internal/modules/services"
 	"server-man/internal/modules/updates"
 	"strings"
+	"time"
 )
 
 // RegisterSetup adds explicit native server installation/configuration. It is
@@ -23,7 +25,7 @@ func RegisterSetup(r *core.Registry, cfg config.Config, runner core.Executor) er
 		Fields:      map[string]core.Field{"protocol": core.EnumField("Server protocol", true, "samba", "nfs")},
 		Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
 			protocol := in.String("protocol")
-			unit, err := updates.New(cfg, runner).InstallShareServer(ctx, protocol, out)
+			units, err := updates.New(cfg, runner).InstallShareServer(ctx, protocol, out)
 			if err != nil {
 				return nil, err
 			}
@@ -32,21 +34,46 @@ func RegisterSetup(r *core.Registry, cfg config.Config, runner core.Executor) er
 				return nil, err
 			}
 			service := services.New("system", runner)
-			if _, err = service.Action(ctx, unit, "enable", out); err != nil {
+			if _, err = service.Action(ctx, units.Unit, "enable", out); err != nil {
 				return nil, err
 			}
-			if _, err = service.Action(ctx, unit, "start", out); err != nil {
+			if _, err = service.Action(ctx, units.Unit, "start", out); err != nil {
 				return nil, err
 			}
 			if protocol == "samba" {
-				for _, discoveryUnit := range []string{"wsdd.service", "nmbd.service", "nmb.service"} {
+				if err := startDiscovery(ctx, service, units.DiscoveryUnit, out); err != nil {
+					return nil, err
+				}
+				for _, discoveryUnit := range []string{"nmbd.service", "nmb.service"} {
 					_, _ = service.Action(ctx, discoveryUnit, "enable", out)
 					_, _ = service.Action(ctx, discoveryUnit, "start", out)
 				}
 			}
-			return map[string]string{"protocol": protocol, "unit": unit, "action": "server configured and started"}, nil
+			return map[string]string{"protocol": protocol, "unit": units.Unit, "action": "server configured and started"}, nil
 		},
 	})
+}
+
+func startDiscovery(ctx context.Context, service *services.Backend, unit string, out io.Writer) error {
+	for _, action := range []string{"enable", "start"} {
+		if _, err := service.Action(ctx, unit, action, out); err != nil {
+			return fmt.Errorf("WS-Discovery setup (%s): %w", unit, err)
+		}
+	}
+	return nil
+}
+
+// The wsdd executable alone does not provide the server unit on Debian/Ubuntu.
+func discoveryAvailable(ctx context.Context, service *services.Backend) bool {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	for _, unit := range []string{"wsdd-server.service", "wsdd.service"} {
+		state, err := service.Details(ctx, unit)
+		if err == nil && state.Load == "loaded" {
+			return true
+		}
+	}
+	return false
 }
 
 // prepare only adds the required Samba include, or creates the native NFS

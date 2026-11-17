@@ -33,14 +33,15 @@ type Share struct {
 	Connections *int   `json:"connections,omitempty"`
 }
 type BackendInfo struct {
-	Protocol      string `json:"protocol"`
-	Available     bool   `json:"available"`
-	CanManage     bool   `json:"canManage"`
-	Reason        string `json:"reason,omitempty"`
-	ManagedFile   string `json:"managedFile"`
-	Revision      string `json:"revision"`
-	SetupRequired bool   `json:"setupRequired"`
-	Notice        string `json:"notice,omitempty"`
+	Protocol           string `json:"protocol"`
+	Available          bool   `json:"available"`
+	DiscoveryAvailable bool   `json:"discoveryAvailable"`
+	CanManage          bool   `json:"canManage"`
+	Reason             string `json:"reason,omitempty"`
+	ManagedFile        string `json:"managedFile"`
+	Revision           string `json:"revision"`
+	SetupRequired      bool   `json:"setupRequired"`
+	Notice             string `json:"notice,omitempty"`
 }
 type Inventory struct {
 	Backends []BackendInfo `json:"backends"`
@@ -61,7 +62,7 @@ func New(cfg config.Config, runner core.Executor) *Backend {
 	if b.sambaManaged == "" {
 		b.sambaManaged = "/etc/samba/server-man.conf"
 	}
-	for _, name := range []string{"testparm", "smbcontrol", "smbstatus", "exportfs", "wsdd"} {
+	for _, name := range []string{"testparm", "smbcontrol", "smbstatus", "exportfs"} {
 		if path, err := exec.LookPath(name); err == nil {
 			b.programs[name] = path
 		}

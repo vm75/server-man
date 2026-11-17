@@ -6,33 +6,26 @@ import (
 	"server-man/internal/core"
 )
 
+type ShareServerServices struct {
+	Unit          string
+	DiscoveryUnit string
+}
+
 // InstallShareServer uses native distribution package names and returns the
-// corresponding fixed system service. Package installation remains explicit.
-func (b *Backend) InstallShareServer(ctx context.Context, protocol string, out io.Writer) (string, error) {
-	var packages, unit string
+// corresponding fixed system services. Package installation remains explicit.
+func (b *Backend) InstallShareServer(ctx context.Context, protocol string, out io.Writer) (ShareServerServices, error) {
+	var units ShareServerServices
 	switch protocol {
 	case "samba":
-		unit = "smb.service"
+		units = ShareServerServices{Unit: "smb.service", DiscoveryUnit: "wsdd.service"}
 		if b.manager.ID == "apt" {
-			unit = "smbd.service"
+			units = ShareServerServices{Unit: "smbd.service", DiscoveryUnit: "wsdd-server.service"}
 		}
-		// Install Samba and WS-Discovery daemon so Windows clients detect shares on the network.
-		if _, err := b.InstallPackages(ctx, "samba wsdd", out); err != nil {
-			if _, retryErr := b.InstallPackages(ctx, "samba", out); retryErr == nil {
-				return unit, nil
-			}
-			return "", err
-		}
-		return unit, nil
 	case "nfs":
-		packages = "nfs-utils"
-		unit = "nfs-server.service"
-		if b.manager.ID == "apt" || b.manager.ID == "zypper" {
-			packages = "nfs-kernel-server"
-		}
+		units.Unit = "nfs-server.service"
 	default:
-		return "", core.Invalid("unsupported share protocol")
+		return units, core.Invalid("unsupported share protocol")
 	}
-	_, err := b.InstallPackages(ctx, packages, out)
-	return unit, err
+	_, err := b.InstallDependencies(ctx, protocol, out)
+	return units, err
 }

@@ -5,7 +5,6 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,15 +25,13 @@ func (c Coordinator) ShareStatuses(ctx context.Context) (any, error) {
 	servers := map[string]map[string]any{}
 	for _, p := range []string{"samba", "nfs"} {
 		available := false
-		discoveryAvailable := true
+		discoveryAvailable := p != "samba"
 		if adapter, ok := c.Adapters[p].(*ShareAdapter); ok && adapter != nil {
-			if state, err := adapter.inspect(ctx, []shares.Definition{}); err == nil && state.Available {
-				available = true
-			}
-		}
-		if p == "samba" {
-			if _, err := exec.LookPath("wsdd"); err != nil {
-				discoveryAvailable = false
+			if state, err := adapter.inspect(ctx, []shares.Definition{}); err == nil {
+				available = state.Available
+				if p == "samba" {
+					discoveryAvailable = state.DiscoveryAvailable
+				}
 			}
 		}
 		servers[p] = map[string]any{"available": available, "discoveryAvailable": discoveryAvailable}

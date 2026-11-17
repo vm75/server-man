@@ -80,11 +80,12 @@ func (b *Backend) ValidateDefinitions(ctx context.Context, protocol string, defi
 }
 
 type DefinitionState struct {
-	Revision       string `json:"revision"`
-	Matches        bool   `json:"matches"`
-	RuntimeMatches bool   `json:"runtimeMatches"`
-	Available      bool   `json:"available"`
-	Reason         string `json:"reason,omitempty"`
+	Revision           string `json:"revision"`
+	Matches            bool   `json:"matches"`
+	RuntimeMatches     bool   `json:"runtimeMatches"`
+	Available          bool   `json:"available"`
+	DiscoveryAvailable bool   `json:"discoveryAvailable"`
+	Reason             string `json:"reason,omitempty"`
 }
 
 func (b *Backend) InspectDefinitions(ctx context.Context, protocol string, definitions []Definition) (DefinitionState, error) {
@@ -110,6 +111,7 @@ func (b *Backend) InspectDefinitions(ctx context.Context, protocol string, defin
 	}
 	for _, backend := range inventory.Backends {
 		result.Available = backend.CanManage
+		result.DiscoveryAvailable = backend.DiscoveryAvailable
 		result.Reason = backend.Reason
 		if backend.SetupRequired {
 			result.Reason = "Native share server setup is required"

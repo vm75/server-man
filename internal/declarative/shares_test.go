@@ -12,9 +12,10 @@ import (
 )
 
 type shareHelperFixture struct {
-	calls       []string
-	definitions []shares.Definition
-	revision    string
+	calls              []string
+	definitions        []shares.Definition
+	revision           string
+	discoveryAvailable bool
 }
 
 func (h *shareHelperFixture) Call(_ context.Context, operation string, in core.Input, _ io.Writer) (any, error) {
@@ -30,7 +31,7 @@ func (h *shareHelperFixture) Call(_ context.Context, operation string, in core.I
 		h.definitions = defs
 		return map[string]any{"revision": "new"}, nil
 	}
-	return shares.DefinitionState{Revision: h.revision, Available: true, Matches: false, RuntimeMatches: true}, nil
+	return shares.DefinitionState{Revision: h.revision, Available: true, DiscoveryAvailable: h.discoveryAvailable, Matches: false, RuntimeMatches: true}, nil
 }
 func TestCentralShareAdapterUsesOnlyDesiredPublishedDefinitions(t *testing.T) {
 	c, cfg, _ := coordinatorFixture(t)
@@ -84,11 +85,20 @@ func TestShareStatusesServerAvailability(t *testing.T) {
 	}
 	if s, ok := servers["samba"]; !ok || s["available"] != true {
 		t.Fatalf("expected samba server available=true, got %v", s)
-	} else if _, hasDiscovery := s["discoveryAvailable"].(bool); !hasDiscovery {
-		t.Fatalf("expected discoveryAvailable bool, got %v", s["discoveryAvailable"])
+	} else if s["discoveryAvailable"] != false {
+		t.Fatalf("expected missing discovery server from helper, got %v", s["discoveryAvailable"])
 	}
 	if n, ok := servers["nfs"]; !ok || n["available"] != false {
 		t.Fatalf("expected nfs server available=false without adapter, got %v", n)
+	}
+	sambaHelper.discoveryAvailable = true
+	statuses, err = c.ShareStatuses(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	servers = statuses.(map[string]any)["servers"].(map[string]map[string]any)
+	if servers["samba"]["discoveryAvailable"] != true {
+		t.Fatal("discovery server availability was not propagated from helper", servers)
 	}
 }
 
@@ -138,4 +148,3 @@ func TestDirectoryBrowseSafeListing(t *testing.T) {
 		t.Fatalf("expected directories list from /, got %v", m["directories"])
 	}
 }
-
