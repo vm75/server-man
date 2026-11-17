@@ -12,7 +12,13 @@
   let error = $state('')
   let loading = $state(false)
   let query = $state('')
-  let editor = $state<{id:string} | null>(null)
+  type EditorState = {
+    id: string
+    initialKind?: 'container' | 'vm'
+    initialEngine?: 'podman' | 'docker'
+    initialBackend?: 'quadlet' | 'compose' | 'libvirt' | 'incus'
+  }
+  let editor = $state<EditorState | null>(null)
   let feedback = $state('')
   let activeJob = $state<string | null>(null)
   let pending = $state<{ service: Service; action: string } | null>(null)
@@ -27,6 +33,20 @@
   const filtered = $derived(inventory?.services.filter(s => `${s.id} ${s.name} ${s.backend}`.toLowerCase().includes(query.toLowerCase())) ?? [])
   const issues = $derived(inventory?.health?.issues ?? [])
   const blocked = $derived(issues.filter(i => i.severity !== 'warning'))
+
+  function openEditor(
+    kind: 'container' | 'vm',
+    engine?: 'podman' | 'docker',
+    backend?: 'quadlet' | 'compose' | 'libvirt' | 'incus'
+  ) {
+    editor = {
+      id: '',
+      initialKind: kind,
+      initialEngine: engine,
+      initialBackend: backend
+    }
+  }
+
   async function load(recheck = false) {
     controller?.abort(); controller = new AbortController(); const signal = controller.signal
     loading = true; error = ''
@@ -55,13 +75,26 @@
   }
   onMount(() => {
     const finished = (event: Event) => { const job = (event as CustomEvent<Job>).detail; if (job.id !== activeJob) return; activeJob = null; feedback = job.state === 'succeeded' ? 'Operation completed.' : job.error || `Operation ${job.state}.`; void load() }
-    window.addEventListener('server-man:job-finished', finished); void load()
-    return () => { stopped = true; controller?.abort(); logController?.abort(); window.removeEventListener('server-man:job-finished', finished) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && editor !== null) {
+        editor = null
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('server-man:job-finished', finished)
+    void load()
+    return () => { stopped = true; controller?.abort(); logController?.abort(); window.removeEventListener('keydown', onKey); window.removeEventListener('server-man:job-finished', finished) }
   })
 </script>
 
 <div class="toolbar">
-  <button class="primary" disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id: ''} }}>Define application</button>
+  <div class="define-actions" role="group" aria-label="Define applications">
+    <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('container', 'podman', 'compose')}>Podman Compose</button>
+    <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('container', 'podman', 'quadlet')}>Podman Quadlet</button>
+    <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('container', 'docker', 'compose')}>Docker Compose</button>
+    <button class="small-button" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
+    <button class="small-button" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
+  </div>
   <div class="search-wrap">
     <label class="sr-only" for="app-search">Find an application</label>
     <input id="app-search" type="search" bind:value={query} placeholder="Find an application by name or backend…" />
@@ -69,7 +102,23 @@
   <button disabled={loading} onclick={() => load(true)}>{loading ? 'Checking…' : 'Check configuration'}</button>
 </div>
 
-{#if editor}{#key editor.id}<DefinitionEditor kind="service" resourceID={editor.id} onClose={() => { editor = null }} onSaved={(id) => { activeJob = id; editor = null; feedback = 'Definition save started. Follow its validation and apply progress in Activity.' }} />{/key}{/if}
+{#if editor}
+  <div class="modal-backdrop" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) editor = null }}>
+    <div class="modal-card">
+      {#key `${editor.id}-${editor.initialKind}-${editor.initialEngine}-${editor.initialBackend}`}
+        <DefinitionEditor
+          kind="service"
+          resourceID={editor.id}
+          initialKind={editor.initialKind}
+          initialEngine={editor.initialEngine}
+          initialBackend={editor.initialBackend}
+          onClose={() => { editor = null }}
+          onSaved={(id) => { activeJob = id; editor = null; feedback = 'Definition save started. Follow its validation and apply progress in Activity.' }}
+        />
+      {/key}
+    </div>
+  </div>
+{/if}
 {#if error}<div class="notice error" role="alert"><p>{error}</p><button onclick={() => load(true)}>Retry</button></div>{/if}
 {#if feedback}<div class="job-feedback" role="status">{feedback}</div>{/if}
 {#if inventory?.error}<section class="panel health-alert" role="alert"><h2>Configuration needs attention</h2><p>{inventory.error}</p></section>{/if}
@@ -80,8 +129,14 @@
 {#if inventory && !inventory.error && !inventory.services.length}
   <section class="panel empty-state">
     <h2>No managed applications yet</h2>
-    <p>No applications have been defined yet. Use Define application to create a stopped container application or virtual machine. Configure storage and host bindings in Configuration first.</p>
-    <button class="primary" disabled={!allowWrites} onclick={() => { editor = {id: ''} }}>Define application</button>
+    <p>No applications have been defined yet. Choose an application or virtual machine type to configure and create workloads. Configure storage and host bindings in Configuration first.</p>
+    <div class="empty-define-actions">
+      <button class="primary" disabled={!allowWrites} onclick={() => openEditor('container', 'podman', 'compose')}>Podman Compose</button>
+      <button class="primary" disabled={!allowWrites} onclick={() => openEditor('container', 'podman', 'quadlet')}>Podman Quadlet</button>
+      <button class="primary" disabled={!allowWrites} onclick={() => openEditor('container', 'docker', 'compose')}>Docker Compose</button>
+      <button disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
+      <button disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
+    </div>
   </section>
 {:else if inventory && !inventory.error && inventory.services.length && !filtered.length}
   <section class="panel empty-state">
@@ -195,9 +250,38 @@
     margin-bottom: 24px;
     flex-wrap: wrap;
   }
+  .define-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .empty-define-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
   .search-wrap {
     flex: 1;
-    min-width: 240px;
+    min-width: 180px;
+  }
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 9, 15, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .modal-card {
+    width: min(860px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
   }
   .applications {
     display: grid;

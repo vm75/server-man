@@ -83,7 +83,9 @@ async function exerciseManagement(page) {
   await page.getByRole('navigation').getByRole('button', {name:'Applications',exact:true}).click()
   await page.getByRole('heading', {name:'No managed applications yet',exact:true}).waitFor()
   assert.equal(await page.getByRole('heading', {name:'No matching applications',exact:true}).count(),0)
-  assert.equal(await page.getByRole('button', {name:'Define application',exact:true}).first().isEnabled(),true)
+  for (const btn of ['Podman Compose', 'Podman Quadlet', 'Docker Compose', 'Incus VM', 'KVM/Libvirt VM']) {
+    assert.equal(await page.getByRole('button', {name:btn,exact:true}).first().isEnabled(),true)
+  }
   applicationsScenario = 'partial'
   await page.getByRole('button', {name:'Check configuration',exact:true}).click()
   await page.getByText('partially running',{exact:true}).waitFor()
@@ -112,7 +114,7 @@ async function exerciseManagement(page) {
   assert.equal(await page.getByRole('heading', {name:'No managed applications yet',exact:true}).count(),0)
   await page.getByRole('searchbox', {name:'Find an application',exact:true}).fill('')
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true, 'application diagnostics overflow')
-  await page.getByRole('button',{name:'Define application',exact:true}).first().click()
+  await page.getByRole('button',{name:'Podman Quadlet',exact:true}).first().click()
   const applicationEditor = page.getByRole('region',{name:'Definition editor'})
   await applicationEditor.getByLabel('Resource ID',{exact:true}).fill('fixture-app')
   await applicationEditor.getByLabel('Display name',{exact:true}).fill('Fixture application')

@@ -2,12 +2,39 @@
   import { onMount } from 'svelte'
   import { invokeTool, startJob } from './api'
   import type { ResourceKind, ModelSnapshot, ServiceDefinition, ContainerDefinition, ShareDefinition, StorageDefinition, BindingDefinition, ImpactPlan } from './managed'
-  let { kind, resourceID = '', onClose, onSaved }: { kind: ResourceKind; resourceID?: string; onClose: () => void; onSaved: (job: string) => void } = $props()
+  let {
+    kind,
+    resourceID = '',
+    initialKind,
+    initialEngine,
+    initialBackend,
+    onClose,
+    onSaved
+  }: {
+    kind: ResourceKind
+    resourceID?: string
+    initialKind?: 'container' | 'vm'
+    initialEngine?: 'podman' | 'docker'
+    initialBackend?: 'quadlet' | 'compose' | 'libvirt' | 'incus'
+    onClose: () => void
+    onSaved: (job: string) => void
+  } = $props()
   let snapshot = $state<ModelSnapshot | null>(null)
   let error = $state('')
   let busy = $state(false)
   let id = $state('')
-  let service = $state<ServiceDefinition>({ kind: 'container', name: '', description: '', engine: 'podman', backend: 'quadlet', enabled: false, containers: { app: { image: '', mounts: [] } } })
+
+  function createInitialService(): ServiceDefinition {
+    const k = initialKind ?? 'container'
+    const b = initialBackend ?? (k === 'vm' ? 'libvirt' : 'quadlet')
+    const e = initialEngine ?? (k === 'container' ? 'podman' : undefined)
+    if (k === 'vm') {
+      return { kind: 'vm', backend: b, enabled: false, name: '', description: '', vm: { cpus: 2, memoryMiB: 2048, network: '', disks: [] } }
+    }
+    return { kind: 'container', engine: e, backend: b, enabled: false, name: '', description: '', containers: { app: { image: '', mounts: [] } } }
+  }
+
+  let service = $state<ServiceDefinition>(createInitialService())
   let storage = $state<StorageDefinition>({ path: '', kind: 'directory', external: false })
   let share = $state<ShareDefinition>({ protocol: 'samba', storage: '', enabled: false, readOnly: true, users: [], browseable: true })
   let binding = $state<BindingDefinition>({ kind: 'network', name: '' })
@@ -129,10 +156,19 @@
       if (dirChoices.length === 0 || (resourceID && !share.storage && manualPath)) folderSource = 'manual'
     }
   } catch (e) { if (!stopped) error = e instanceof Error ? e.message : 'Could not load configuration' } })(); return () => { stopped = true; controller.abort() } })
+  const serviceTypeTitle = $derived.by(() => {
+    if (kind !== 'service') return kind === 'secret' ? 'private file reference' : kind
+    if (service.kind === 'vm') {
+      return service.backend === 'incus' ? 'Incus virtual machine' : 'KVM/libvirt virtual machine'
+    }
+    if (service.engine === 'docker') return 'Docker Compose application'
+    if (service.backend === 'compose') return 'Podman Compose application'
+    return 'Podman Quadlet application'
+  })
 </script>
 
 <section class="panel definition-editor" aria-label="Definition editor">
-  <header><h2>{resourceID ? 'Edit' : 'Define'} {kind === 'service' ? 'application' : kind === 'secret' ? 'private file reference' : kind}</h2><button onclick={onClose} disabled={busy}>Close editor</button></header>
+  <header><h2>{resourceID ? `Edit ${kind === 'service' ? 'application' : kind}: ${resourceID}` : `Define ${serviceTypeTitle}`}</h2><button onclick={onClose} disabled={busy}>Close editor</button></header>
   {#if error}<p class="form-error" role="alert">{error}</p>{/if}
   {#if !snapshot}{#if !error}<p role="status">Loading private definition…</p>{/if}
   {:else if plan}
