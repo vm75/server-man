@@ -4,7 +4,7 @@ env_files = []
 
 [build]
 cmd = "go build -o ./.cache/air/server-man ./cmd/server-man"
-entrypoint = ["./.cache/air/server-man"]
+entrypoint = ["./.cache/air/server-man", "-dev-ui"]
 include_dir = ["cmd/server-man", "internal"]
 include_ext = ["go"]
 include_file = ["go.mod", "go.sum"]

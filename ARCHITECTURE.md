@@ -2,6 +2,8 @@
 
 server-man runs as one Linux process for the web UI, authenticated JSON APIs and MCP HTTP. An agent can also launch a standalone stdio process. Both transports call the same management registry.
 
+During development, `-dev-ui` replaces embedded UI delivery with a fixed loopback proxy to Vite at `127.0.0.1:5173`, including its HMR WebSocket. `make api` and `make api-watch` enable this mode. The Go process still loads the normal unified YAML and owns the public listener, Host/Origin validation, authentication and API/MCP routes. Remote browsers use the configured public origin for UI, API and HMR; Vite does not need a public listener. Production delivery uses embedded assets unless this flag is explicitly supplied.
+
 The canonical identifier is `server-man`: Go module/imports, executables, service/configuration paths, browser event namespace, session cookie and owned share markers use that spelling. Environment variables use the shell-compatible `SERVER_MAN_` prefix. No legacy-name aliases or migration layer are provided.
 
 The current delivery priority is a single-host deployment of the existing container/VM and share management paths, first on Ubuntu, with Debian and Arch Linux as support targets. Backup/restore development is deferred; its partial implementation and recovery safeguards remain present. This scope decision does not establish native backend or cross-distribution acceptance. See the [release checklist](docs/plans/single-server-release.md).

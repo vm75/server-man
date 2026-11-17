@@ -48,13 +48,23 @@ Management writes are disabled by default. When enabled, jobs run one at a time 
 
 ## Development
 
-Run `make api` in one terminal and `make dev` in another. Open the Vite address (`http://127.0.0.1:5173`); Vite proxies API requests to Go. Rebuild with `make build` to embed updated frontend assets in the executable. A Go-only build without generated UI assets serves APIs and an explanatory 503 response for the UI.
+Run `make api` in one terminal and `make dev` in another. Open the Go server's configured address (default `http://127.0.0.1:8080`); its development UI proxy serves Vite assets and the hot-reload WebSocket through the same listener as the APIs. Vite stays on `127.0.0.1:5173`. Rebuild with `make build` to embed updated frontend assets in the executable. Without `-dev-ui`, a Go-only build without generated UI assets serves APIs and an explanatory 503 response for the UI.
 
-In VS Code, open this repository folder, choose **Server-man: development** in **Run and Debug**, and press **F5** (or **Ctrl+F5**). This launches both servers in integrated terminals; stopping either launch stops both. Run `make setup` first if dependencies are missing, and stop any existing development servers to free ports 8080 and 5173. No additional VS Code extension is required.
+In VS Code, open this repository folder, choose **Server-man: development** in **Run and Debug**, and press **F5** (or **Ctrl+F5**). On a headless machine, open the checkout with VS Code Remote SSH so both processes run there. This launches both servers in integrated terminals; stopping either launch stops both. Run `make setup` first if dependencies are missing, and stop any existing server using the configured API port or Vite port 5173. No additional launcher extension is required.
 
 Vite hot-reloads frontend edits. The API launcher runs `make api-watch`, which uses [Air](https://github.com/air-verse/air) to rebuild and restart Go on application source or `go.mod`/`go.sum` changes. Its first run downloads the pinned development tool into `.cache/tools`; it requires network access and leaves the application's Go dependencies unchanged. Build errors appear in the API terminal; fixing and saving the source retries the build. Go restarts reset in-memory state and active connections. This launcher runs the servers without Go breakpoint debugging. You can also use `make api-watch` directly alongside `make dev`.
 
 server-man uses one private YAML configuration: `~/.config/server-man/server-man.yaml` (under `XDG_CONFIG_HOME` when set). Select another absolute path with `./bin/server-man -config /absolute/path/server-man.yaml`.
+
+Both development API commands read this same configuration under the account running VS Code's remote terminals. `.air.toml` configures only the Go reload tool. For testing from another machine, merge the following settings into the existing YAML's `server` section, replacing the documentation IP with the headless server's address, then restart the launcher:
+
+```yaml
+server:
+  listen: 0.0.0.0:8080
+  public_origin: http://192.0.2.10:8080
+```
+
+Open `http://192.0.2.10:8080` from the other machine, using your replacement address. The wildcard listener binds all IPv4 interfaces; `public_origin` pins the accepted browser address. Only the configured API port needs to be reachable; frontend HMR also uses it. Server-setting edits require a launcher restart. Preserve the rest of the existing YAML, including resource definitions and write policy.
 
 ```yaml
 version: 1
@@ -73,7 +83,7 @@ The `server` section contains application settings; the other sections define ma
 
 Resource changes follow the reviewed native apply workflow. Server-setting changes require a process restart and must be saved separately from resource changes. The UI review and global alert identify a pending restart; managed operations are blocked until the running settings match the file. Restart an installed deployment with `sudo systemctl restart server-man`.
 
-`server.sample_interval_seconds` ranges from 1 to 10. Monitoring history retains at most 60 samples. For trusted LAN access, set `server.listen: 0.0.0.0:8080` and `server.public_origin: http://192.168.1.50:8080`, replacing the IP with the server's address. For other networks use an HTTPS reverse proxy; see [installation and remote access](docs/installation.md).
+`server.sample_interval_seconds` ranges from 1 to 10. Monitoring history retains at most 60 samples. For trusted LAN access, set `server.listen: 0.0.0.0:8080` and `server.public_origin: http://192.0.2.10:8080`, replacing the IP with the server's address. For other networks use an HTTPS reverse proxy; see [installation and remote access](docs/installation.md).
 
 The declarative configuration foundation exposes `managed_config_read`, `managed_config_validate`, and `managed_config_health` through the shared API/MCP registry. The CLI `-config` option selects the same unified YAML used at startup. Private editor reads require `server.allow_writes`. Preview/save/apply-status/retry operations also use the shared registry and serialized jobs. Desired saves are journaled; initial Podman Quadlet, Docker/Podman Compose, existing-disk libvirt and local Incus adapters and `managed_service_start/stop/restart/enable/disable` tools are connected. The Applications page shows status, startup policy, configuration issues and lifecycle controls. `managed_config_check` refreshes prerequisites and mount/file checks. Compose currently uses boot-only user units with no container crash restart policy. Applications and File shares provide typed definition/edit/review forms; Configuration manages storage, bindings, private-file references, YAML recovery and private history inspection/reviewed revert. Storage references offer a separate reviewed new-directory/disk operation, including checksum-pinned local image cloning; existing/restored data is never replaced. Complete VM provisioning and full runtime verification remain in development. `managed_shares` and `managed_share_publish` inspect and change central share publication through shared native validation/rollback. Legacy Compose discovery/editing, LXD/classic LXC tools and direct native share-edit APIs have been removed. See [current behavior and limits](docs/design/declarative.md).
 

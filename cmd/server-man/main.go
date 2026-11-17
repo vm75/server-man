@@ -32,6 +32,7 @@ func main() {
 func run() error {
 	version := flag.Bool("version", false, "print version and exit")
 	configPath := flag.String("config", "", "path to the unified server-man YAML configuration")
+	devUI := flag.Bool("dev-ui", false, "proxy UI and hot reload to the local Vite development server")
 	transport := flag.String("transport", "http", "transport: http (UI, APIs and MCP) or stdio (MCP only)")
 	flag.Parse()
 	if *version {
@@ -65,8 +66,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	var handler http.Handler
+	if *devUI {
+		handler = httpapi.DevelopmentHandler(authentication, registry)
+	} else {
+		handler = httpapi.Handler(authentication, registry)
+	}
 	server := &http.Server{
-		Addr: cfg.Listen, Handler: httpapi.Handler(authentication, registry),
+		Addr: cfg.Listen, Handler: handler,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
 		WriteTimeout: 30 * time.Second, IdleTimeout: time.Minute, MaxHeaderBytes: 32 << 10,
 	}

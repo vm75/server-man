@@ -13,7 +13,7 @@ setup:
 	npm --prefix tools/ui ci --ignore-scripts
 
 api:
-	go run ./cmd/server-man
+	go run ./cmd/server-man -dev-ui
 
 api-watch: $(AIR)
 	"$(AIR)" -c .air.toml

@@ -44,6 +44,53 @@ func TestHealthAndUnknownAPI(t *testing.T) {
 	}
 }
 
+func TestDevelopmentHandlerRetainsAPIBoundaries(t *testing.T) {
+	const origin = "http://192.0.2.10:8181"
+	path := filepath.Join(t.TempDir(), "token")
+	authentication, err := auth.Load(path, origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := DevelopmentHandler(authentication, core.NewRegistry(false, nil))
+	for _, tc := range []struct {
+		name, path, host, origin string
+		status                   int
+	}{
+		{"native health", "/healthz", "192.0.2.10:8181", "", http.StatusOK},
+		{"API requires authentication", "/api/status", "192.0.2.10:8181", origin, http.StatusUnauthorized},
+		{"MCP requires authentication", "/mcp", "192.0.2.10:8181", origin, http.StatusUnauthorized},
+		{"UI rejects foreign host", "/", "foreign.example:8181", "", http.StatusForbidden},
+		{"UI rejects foreign origin", "/@vite/client", "192.0.2.10:8181", "http://foreign.example", http.StatusForbidden},
+		{"WebSocket rejects foreign origin", "/?token=fixture", "192.0.2.10:8181", "http://foreign.example", http.StatusForbidden},
+		{"API rejects authenticated foreign origin", "/api/status", "192.0.2.10:8181", "http://foreign.example", http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, origin+tc.path, nil)
+			r.Host = tc.host
+			r.Header.Set("Origin", tc.origin)
+			if strings.HasPrefix(tc.path, "/?token=") {
+				r.Header.Set("Connection", "Upgrade")
+				r.Header.Set("Upgrade", "websocket")
+			}
+			if tc.name == "API rejects authenticated foreign origin" {
+				r.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tc.status {
+				t.Fatalf("status=%d, want=%d", w.Code, tc.status)
+			}
+			if w.Header().Get("X-Content-Type-Options") != "nosniff" {
+				t.Fatal("missing security headers")
+			}
+		})
+	}
+}
+
 func testHandler(t *testing.T, allowWrites bool) (http.Handler, string) {
 	return testHandlerWithMonitor(t, allowWrites, false)
 }

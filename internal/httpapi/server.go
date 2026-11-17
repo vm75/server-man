@@ -7,6 +7,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 
 	"server-man/internal/auth"
 	"server-man/internal/core"
@@ -15,6 +17,31 @@ import (
 )
 
 func Handler(authentication *auth.Auth, registry *core.Registry) http.Handler {
+	return handler(authentication, registry, webui.Handler())
+}
+
+// DevelopmentHandler serves the UI and HMR WebSocket through the configured
+// application listener, so remote browsers use the same origin as the APIs.
+func DevelopmentHandler(authentication *auth.Auth, registry *core.Registry) http.Handler {
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(&url.URL{Scheme: "http", Host: "127.0.0.1:5173"})
+		},
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			http.Error(w, "Development UI is unavailable; start make dev", http.StatusServiceUnavailable)
+		},
+	}
+	ui := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !authentication.ValidOrigin(r) {
+			respondError(w, &core.Error{Code: "forbidden_origin", Message: "Request origin or host is not allowed.", Status: 403})
+			return
+		}
+		proxy.ServeHTTP(w, r)
+	})
+	return handler(authentication, registry, ui)
+}
+
+func handler(authentication *auth.Auth, registry *core.Registry, ui http.Handler) http.Handler {
 	private := http.NewServeMux()
 	private.HandleFunc("GET /api/status", func(w http.ResponseWriter, r *http.Request) { invoke(w, r, registry, "system_status", nil) })
 	private.HandleFunc("GET /api/tools", func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +85,7 @@ func Handler(authentication *auth.Auth, registry *core.Registry) http.Handler {
 	})
 	mux.Handle("/api/", RequireAuth(authentication, private))
 	mux.Handle("/mcp", RequireAuth(authentication, mcp.New(registry).HTTP()))
-	mux.Handle("/", webui.Handler())
+	mux.Handle("/", ui)
 	return SecurityHeaders(mux)
 }
 
