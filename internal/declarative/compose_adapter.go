@@ -113,9 +113,11 @@ func (p *Compose) Validate(ctx context.Context, c Config, key string) error {
 		return err
 	}
 	_, id, _ := strings.Cut(key, "/")
-	cmd := p.command(path, id, "config", "--quiet")
+	cmd := p.command(path, id, "config")
 	cmd.Timeout = 15 * time.Second
-	if _, err = p.Runner.Capture(ctx, cmd); err != nil {
+	// Providers differ on --quiet support. Discard directly rather than capture
+	// resolved configuration, which may include values from private env files.
+	if err = p.Runner.Run(ctx, cmd, io.Discard); err != nil {
 		return errors.New("installed Compose provider rejected the generated definition")
 	}
 	return nil

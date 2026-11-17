@@ -29,17 +29,21 @@ func composeFixture(t *testing.T) (*Compose, Config, *composeRecorder) {
 }
 
 type composeRecorder struct {
-	commands     []core.Command
-	containers   []managedContainer
-	enabled      bool
-	unitFile     string
-	unitFields   map[string]string
-	failBootStop bool
-	onRun        func(core.Command)
+	commands            []core.Command
+	containers          []managedContainer
+	enabled             bool
+	unitFile            string
+	unitFields          map[string]string
+	failBootStop        bool
+	onRun               func(core.Command)
+	validationDiscarded bool
 }
 
-func (r *composeRecorder) Run(_ context.Context, cmd core.Command, _ io.Writer) error {
+func (r *composeRecorder) Run(_ context.Context, cmd core.Command, out io.Writer) error {
 	r.commands = append(r.commands, cmd)
+	if slices.Contains(cmd.Args, "config") {
+		r.validationDiscarded = out == io.Discard
+	}
 	if r.onRun != nil {
 		r.onRun(cmd)
 	}
@@ -331,6 +335,9 @@ func TestComposeValidationUsesPrivateTempAndFixedProviderArgs(t *testing.T) {
 	}
 	if len(r.commands) != 1 {
 		t.Fatal(r.commands)
+	}
+	if !r.validationDiscarded {
+		t.Fatal("resolved provider configuration was captured instead of discarded")
 	}
 	cmd := r.commands[0]
 	if cmd.Args[0] != "compose" || !strings.Contains(strings.Join(cmd.Args, " "), "--env-file /dev/null") {
