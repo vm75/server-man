@@ -78,6 +78,7 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 				declarative.RegisterShareStatus,
 				declarative.RegisterEditing,
 				declarative.RegisterHistory,
+				declarative.RegisterArtifactRecovery,
 				declarative.RegisterBackup,
 			} {
 				if err = register(registry, coordinator); err != nil {
