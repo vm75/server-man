@@ -114,6 +114,16 @@ func writeArtifactManifest(dir string, files map[string][]byte) error {
 	defer parent.Close()
 	name := filepath.Base(path)
 	if len(files) == 0 {
+		// A foreign process must not be able to replace the sidecar between
+		// the initial ownership check and its deletion.
+		_, latest, latestErr := readArtifactManifest(dir)
+		if hadPrior {
+			if latestErr != nil || !bytes.Equal(latest, prior) {
+				return errArtifactConflict
+			}
+		} else if !os.IsNotExist(latestErr) {
+			return errArtifactConflict
+		}
 		if err := parent.Remove(name); err != nil && !os.IsNotExist(err) {
 			return err
 		}
