@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -102,10 +103,18 @@ func readArtifact(root *os.Root, name string) ([]byte, error) {
 
 // Check ownership before destructive backend calls as well as before publication.
 func checkArtifactOwnership(dir string, previous, desired map[string][]byte) error {
-	// An existing sidecar must be our private, structurally valid manifest.
-	// Absence is permitted for an initial publication; it does not confer
-	// ownership of unknown artifacts inside the resource directory.
-	if _, _, err := readArtifactManifest(dir); err != nil && !os.IsNotExist(err) {
+	// The prior sidecar must describe either the previous complete output or
+	// the desired complete output (a previous interrupted publication). A
+	// well-formed but unrelated checksum inventory does not prove ownership.
+	// Absence is allowed for initial adoption, but never authorizes unknown
+	// artifact bytes in the resource directory.
+	manifest, _, err := readArtifactManifest(dir)
+	if err == nil {
+		if !maps.Equal(manifest.Files, artifactManifestFor(previous).Files) &&
+			!maps.Equal(manifest.Files, artifactManifestFor(desired).Files) {
+			return errArtifactConflict
+		}
+	} else if !os.IsNotExist(err) {
 		return errArtifactConflict
 	}
 	info, err := os.Lstat(dir)

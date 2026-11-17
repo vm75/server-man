@@ -1,6 +1,7 @@
 package declarative
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -97,5 +98,49 @@ func TestPublicationManifestConflictsPreserveUnmanagedData(t *testing.T) {
 	}
 	if err := publishArtifacts(dir, files, files); !errors.Is(err, errArtifactConflict) {
 		t.Fatalf("public publication inventory accepted: %v", err)
+	}
+}
+
+func TestPublicationRejectsForeignWellFormedManifest(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "resource")
+	old := map[string][]byte{"service.container": []byte(ownedHeader + "old\n")}
+	next := map[string][]byte{"service.container": []byte(ownedHeader + "next\n")}
+	if err := publishArtifacts(dir, nil, old); err != nil {
+		t.Fatal(err)
+	}
+	path := artifactManifestPath(dir)
+	prior, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, altered := range []map[string][]byte{
+		{"service.container": []byte(ownedHeader + "foreign\n")},
+		{"service.container": old["service.container"], "extra.container": []byte(ownedHeader + "extra\n")},
+	} {
+		fake, err := json.Marshal(artifactManifestFor(altered))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, fake, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := publishArtifacts(dir, old, next); !errors.Is(err, errArtifactConflict) {
+			t.Fatalf("well-formed foreign manifest accepted: %v", err)
+		}
+		if actual, err := os.ReadFile(filepath.Join(dir, "service.container")); err != nil || string(actual) != string(old["service.container"]) {
+			t.Fatal("manifest conflict overwrote existing generated content", err)
+		}
+		if actual, err := os.ReadFile(path); err != nil || string(actual) != string(fake) {
+			t.Fatal("manifest conflict overwrote outside-session inventory", err)
+		}
+	}
+	if err := os.WriteFile(path, prior, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := publishArtifacts(dir, old, next); err != nil {
+		t.Fatal("valid previous manifest blocked normal publication", err)
+	}
+	if err := publishArtifacts(dir, old, next); err != nil {
+		t.Fatal("desired manifest blocked interrupted retry", err)
 	}
 }
