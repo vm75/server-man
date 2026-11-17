@@ -121,7 +121,7 @@ func matchedArtifactBytes(t artifactTarget) (map[string][]byte, string, error) {
     directory, err := root.Open(".")
     if err != nil { return nil, "", err }
     defer directory.Close()
-    entries, err := directory.ReadDir(-1)
+    entries, err := directory.ReadDir(257)
     if err != nil { return nil, "", err }
     if len(entries) > 256 { return nil, "", errors.New("too many native artifacts") }
     actual := make(map[string][]byte, len(entries))

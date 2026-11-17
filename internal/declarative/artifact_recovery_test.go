@@ -5,6 +5,7 @@ import (
     "context"
     "encoding/json"
     "errors"
+    "fmt"
     "os"
     "path/filepath"
     "strings"
@@ -254,4 +255,17 @@ func TestPublicationFastPathDetectsMissingAndStaleSidecar(t *testing.T) {
     native := filepath.Join(adapter.resourceDir(key), "instance.yaml")
     if err := os.WriteFile(native, []byte(ownedHeader+"outside edit\n"), 0600); err != nil { t.Fatal(err) }
     if artifactPublicationMatchesDesired(adapter, cfg, key) { t.Fatal("native definition drift treated as valid publication") }
+}
+
+func TestArtifactReviewBoundsNativeFileInventory(t *testing.T) {
+    c, adapter, _, _ := incusArtifactRecoveryFixture(t)
+    dir := adapter.resourceDir("service/guest")
+    for i := 0; i < 257; i++ {
+        name := filepath.Join(dir, fmt.Sprintf("unknown-%03d", i))
+        if err := os.WriteFile(name, []byte("foreign"), 0600); err != nil { t.Fatal(err) }
+    }
+    review, err := c.ReviewArtifactRecovery("service/guest")
+    if err != nil || review.CanReconcile || review.Parts[0].Files != "mismatch_or_unsafe" {
+        t.Fatal("unbounded or foreign generated directory treated as safe", review, err)
+    }
 }

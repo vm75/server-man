@@ -375,7 +375,7 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 		}
 		if change.Operation != "remove" {
 			observed, e := a.Inspect(ctx, desired, change.Resource)
-			if e == nil && observed.Matches && (j.Mode == "next_start" || !observed.Active || observed.ActiveMatches) {
+			if e == nil && observed.Matches && (j.Mode == "next_start" || !observed.Active || observed.ActiveMatches) && artifactPublicationMatchesDesired(a, desired, change.Resource) {
 				state := "registered"
 				if observed.Active && !observed.ActiveMatches {
 					state = "restart_required"
