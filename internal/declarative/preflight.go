@@ -202,6 +202,7 @@ func (s Store) CheckFiles(c Config) Health {
 			}
 		}
 	}
+	h.Issues = append(h.Issues, publishedPortIssues(c)...)
 	slices.SortFunc(h.Issues, func(a, b Issue) int {
 		if a.Resource != b.Resource {
 			if a.Resource < b.Resource {
