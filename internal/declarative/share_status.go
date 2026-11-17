@@ -117,8 +117,9 @@ func RegisterShareStatus(r *core.Registry, c Coordinator) error {
 				return nil, core.Unavailable("Directory cannot be read: " + err.Error())
 			}
 			dirs := []string{}
+			files := []string{}
 			for _, entry := range entries {
-				if len(dirs) >= 128 {
+				if len(dirs)+len(files) >= 256 {
 					break
 				}
 				name := entry.Name()
@@ -127,9 +128,12 @@ func RegisterShareStatus(r *core.Registry, c Coordinator) error {
 				}
 				if entry.IsDir() {
 					dirs = append(dirs, name)
+				} else {
+					files = append(files, name)
 				}
 			}
 			slices.Sort(dirs)
+			slices.Sort(files)
 			parent := filepath.Dir(clean)
 			if clean == "/" {
 				parent = "/"
@@ -138,6 +142,7 @@ func RegisterShareStatus(r *core.Registry, c Coordinator) error {
 				"path":        clean,
 				"parent":      parent,
 				"directories": dirs,
+				"files":       files,
 			}, nil
 		}},
 		core.Tool{Name: "managed_share_publish", Title: "Publish or unpublish share", Description: "Persist the share's publication toggle and apply the authoritative protocol set. Does not change shared data, accounts or host daemon enablement.", Destructive: true, Fields: map[string]core.Field{"share": core.StringField("Share ID", true, 63), "published": {Type: "boolean", Required: true}}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {

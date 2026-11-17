@@ -58,25 +58,58 @@
   const directoryStorageChoices = $derived(storageChoices.filter(([, s]) => s.kind !== 'file'))
   let folderSource = $state<'storage' | 'manual'>('storage')
   let manualPath = $state('')
-  let browsing = $state(false)
+  type BrowseTarget = 'share' | { mountIndex: number } | null
+  let browseTarget = $state<BrowseTarget>(null)
   let browsePath = $state('/')
   let browseEntries = $state<string[]>([])
+  let browseFiles = $state<string[]>([])
   let browseError = $state('')
   let browseLoading = $state(false)
   async function loadBrowse(dir: string) {
     browseLoading = true; browseError = ''
     try {
-      const res = await invokeTool<{ path: string; parent: string; directories: string[] }>('managed_directory_browse', { path: dir })
-      browsePath = res.path; browseEntries = res.directories
+      const res = await invokeTool<{ path: string; parent: string; directories: string[]; files?: string[] }>('managed_directory_browse', { path: dir })
+      browsePath = res.path; browseEntries = res.directories; browseFiles = res.files ?? []
     } catch (e) { browseError = e instanceof Error ? e.message : 'Could not read directory' }
     finally { browseLoading = false }
   }
-  function openBrowser() {
-    browsing = true
-    const initial = manualPath.trim().startsWith('/') ? manualPath.trim() : '/'
+  function openBrowser(target: BrowseTarget = 'share', initialPath?: string) {
+    browseTarget = target
+    const initial = initialPath?.trim().startsWith('/') ? initialPath.trim() : target === 'share' && manualPath.trim().startsWith('/') ? manualPath.trim() : '/'
     void loadBrowse(initial)
   }
-  function selectCurrentPath() { manualPath = browsePath; browsing = false }
+  function openMountBrowser(index: number) {
+    const m = container?.mounts?.[index]
+    openBrowser({ mountIndex: index }, m?.path)
+  }
+  function selectCurrentFolder() {
+    if (browseTarget === 'share') {
+      manualPath = browsePath
+    } else if (browseTarget && typeof browseTarget === 'object' && 'mountIndex' in browseTarget) {
+      const m = container?.mounts?.[browseTarget.mountIndex]
+      if (m) {
+        m.path = browsePath
+        m.kind = 'directory'
+      }
+    }
+    browseTarget = null
+  }
+  function selectFile(filename: string) {
+    const fullPath = browsePath === '/' ? `/${filename}` : `${browsePath}/${filename}`
+    if (browseTarget && typeof browseTarget === 'object' && 'mountIndex' in browseTarget) {
+      const m = container?.mounts?.[browseTarget.mountIndex]
+      if (m) {
+        m.path = fullPath
+        m.kind = 'file'
+      }
+    } else if (browseTarget === 'share') {
+      manualPath = fullPath
+    }
+    browseTarget = null
+  }
+  function closeBrowser() {
+    browseTarget = null
+  }
   function selectDirectory(name: string) {
     const next = browsePath === '/' ? `/${name}` : `${browsePath}/${name}`
     void loadBrowse(next)
@@ -109,7 +142,30 @@
     selectContainer('app')
   }
   function payload() {
-    if (kind === 'service') { saveContainerInputs(); service.dependsOn = splitList(dependencyText); if (service.vm) service.vm.disks = splitList(vmDisks); return service }
+    if (kind === 'service') {
+      saveContainerInputs()
+      if (service.containers) {
+        for (const c of Object.values(service.containers)) {
+          if (c.mounts) {
+            for (const m of c.mounts) {
+              if (m.source === 'storage') {
+                m.path = ''
+                delete m.kind
+              } else {
+                m.path = (m.path ?? '').trim()
+                if (!m.kind) {
+                  m.kind = 'directory'
+                }
+              }
+              delete m.source
+            }
+          }
+        }
+      }
+      service.dependsOn = splitList(dependencyText)
+      if (service.vm) service.vm.disks = splitList(vmDisks)
+      return service
+    }
     if (kind === 'storage') return storage
     if (kind === 'share') {
       const result = { ...share }
@@ -150,7 +206,35 @@
     const definitions = kind === 'service' ? result.config.services : kind === 'storage' ? result.config.storage : kind === 'share' ? result.config.shares : kind === 'binding' ? result.config.bindings : result.config.secrets
     if (resourceID && !Object.prototype.hasOwnProperty.call(definitions ?? {},resourceID)) throw new Error('The definition no longer exists. Refresh before editing.')
     snapshot = result
-    if (resourceID) { if (kind === 'service') { service = structuredClone(result.config.services?.[resourceID] ?? service); dependencyText = (service.dependsOn ?? []).join(', '); vmDisks = (service.vm?.disks ?? []).join(', '); selectContainer(Object.keys(service.containers ?? {})[0] ?? 'app') } else if (kind === 'storage') storage = structuredClone(result.config.storage?.[resourceID] ?? storage); else if (kind === 'share') { share = structuredClone(result.config.shares?.[resourceID] ?? share); users = (share.users ?? []).join(', '); clients = (share.clients ?? []).join(', '); if (share.storage && result.config.storage?.[share.storage]) manualPath = result.config.storage[share.storage]?.path ?? ''; else if (share.path) manualPath = share.path } else if (kind === 'binding') binding = structuredClone(result.config.bindings?.[resourceID] ?? binding); else privatePath = result.config.secrets?.[resourceID] ?? '' }
+    if (resourceID) {
+      if (kind === 'service') {
+        service = structuredClone(result.config.services?.[resourceID] ?? service)
+        if (service.containers && result.config.storage) {
+          for (const c of Object.values(service.containers)) {
+            for (const m of c.mounts ?? []) {
+              if (m.path) {
+                m.source = 'custom'
+                m.kind = m.kind || (result.config.storage[m.storage]?.kind === 'file' ? 'file' : 'directory')
+              } else if (m.storage && result.config.storage[m.storage]) {
+                m.source = 'storage'
+                const st = result.config.storage[m.storage]
+                m.path = st.path
+                m.kind = st.kind === 'file' ? 'file' : 'directory'
+              } else {
+                m.source = 'custom'
+                m.kind = 'directory'
+              }
+            }
+          }
+        }
+        dependencyText = (service.dependsOn ?? []).join(', ')
+        vmDisks = (service.vm?.disks ?? []).join(', ')
+        selectContainer(Object.keys(service.containers ?? {})[0] ?? 'app')
+      } else if (kind === 'storage') storage = structuredClone(result.config.storage?.[resourceID] ?? storage)
+      else if (kind === 'share') { share = structuredClone(result.config.shares?.[resourceID] ?? share); users = (share.users ?? []).join(', '); clients = (share.clients ?? []).join(', '); if (share.storage && result.config.storage?.[share.storage]) manualPath = result.config.storage[share.storage]?.path ?? ''; else if (share.path) manualPath = share.path }
+      else if (kind === 'binding') binding = structuredClone(result.config.bindings?.[resourceID] ?? binding)
+      else privatePath = result.config.secrets?.[resourceID] ?? ''
+    }
     if (kind === 'share') {
       const dirChoices = Object.entries(result.config.storage ?? {}).filter(([, s]) => s.kind !== 'file')
       if (dirChoices.length === 0 || (resourceID && !share.storage && manualPath)) folderSource = 'manual'
@@ -179,6 +263,58 @@
     <label>Apply changes <select aria-label="Apply changes" bind:value={mode}><option value="now">Apply now</option><option value="next_start">Save for next start</option></select></label>
     <div class="actions"><button disabled={busy} onclick={() => { plan = null }}>Back to editing</button><button disabled={busy} onclick={save}>{busy ? 'Starting save…' : 'Confirm and save'}</button></div>
   {:else}
+    {#snippet directoryBrowser(isMount: boolean)}
+      <div class="directory-browser" role="region" aria-label="Directory browser">
+        <header class="browser-header">
+          <strong class="mono">{browsePath}</strong>
+          <div class="browser-actions">
+            <button type="button" class="small-button" disabled={browsePath === '/'} onclick={browseUp}>Up</button>
+            <button type="button" class="small-button primary" onclick={selectCurrentFolder}>Select this folder</button>
+            <button type="button" class="small-button" onclick={closeBrowser}>Close</button>
+          </div>
+        </header>
+        {#if browseLoading}
+          <p class="browser-status">Reading directory…</p>
+        {:else if browseError}
+          <p class="browser-status error">{browseError}</p>
+        {:else}
+          <div class="browser-contents">
+            {#if browseEntries.length > 0}
+              <div class="browser-section">
+                <span class="browser-section-title">Folders</span>
+                <ul class="dir-grid">
+                  {#each browseEntries as dir}
+                    <li>
+                      <button type="button" class="dir-button mono" onclick={() => selectDirectory(dir)}>
+                        📁 {dir}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+            {#if browseFiles.length > 0}
+              <div class="browser-section">
+                <span class="browser-section-title">Files {isMount ? '(click to mount file)' : ''}</span>
+                <ul class="dir-grid">
+                  {#each browseFiles as file}
+                    <li>
+                      <button type="button" class="file-button mono" onclick={() => selectFile(file)}>
+                        📄 {file}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+            {#if browseEntries.length === 0 && browseFiles.length === 0}
+              <p class="browser-status">Empty directory.</p>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/snippet}
+
     <form onsubmit={(e) => { e.preventDefault(); void review() }}>
       <label>Resource ID <input required maxlength="63" bind:value={id} disabled={!!resourceID} /></label>
       {#if kind === 'service'}
@@ -196,7 +332,70 @@
               <label>Command arguments (one per line) <textarea bind:value={commandText}></textarea></label><label>Published ports (one per line) <textarea bind:value={portText} placeholder="8080:80"></textarea></label>
               <label>Non-secret environment (NAME=value per line) <textarea bind:value={envText}></textarea></label><label>Private environment-file reference IDs <input bind:value={privateRefs} /></label>
               <label>CPU limit (0 for default) <input type="number" min="0" max="1024" bind:value={container.cpus} /></label><label>Memory limit in MiB (0 for default) <input type="number" min="0" bind:value={container.memoryMiB} /></label>
-              <fieldset><legend>Data mounts</legend>{#each container.mounts ?? [] as mount,index}<div class="mount"><label>Storage <select aria-label="Mount storage" required bind:value={mount.storage}><option value="">Choose storage</option>{#each storageChoices as [storageID]}<option value={storageID}>{storageID}</option>{/each}</select></label><label>Container path <input required bind:value={mount.target} placeholder="/data" /></label><label><input type="checkbox" bind:checked={mount.readOnly} /> Read only</label><button type="button" onclick={() => { container.mounts = container.mounts?.filter((_,i) => i !== index) }}>Remove mount</button></div>{/each}<button type="button" onclick={() => { container.mounts ??= []; container.mounts.push({ storage: '', target: '/data', readOnly: false }) }}>Add data mount</button></fieldset>
+              <fieldset><legend>Data mounts</legend>
+                {#each container.mounts ?? [] as mount, index}
+                  <div class="mount">
+                    <div class="mount-row">
+                      <label>Host source
+                        <select aria-label="Mount source" bind:value={mount.source} onchange={(e) => {
+                          if (e.currentTarget.value === 'storage' && !mount.storage && storageChoices.length > 0) {
+                            mount.storage = storageChoices[0][0]
+                          }
+                        }}>
+                          <option value="custom">Custom host path (browse/manual)</option>
+                          <option value="storage" disabled={storageChoices.length === 0}>Configured storage reference</option>
+                        </select>
+                      </label>
+                      {#if mount.source === 'storage'}
+                        <label class="mount-field-grow">Storage reference
+                          <select aria-label="Mount storage" required bind:value={mount.storage}>
+                            <option value="">Choose storage</option>
+                            {#each storageChoices as [storageID, st]}
+                              <option value={storageID}>{storageID} ({st.kind}: {st.path})</option>
+                            {/each}
+                          </select>
+                        </label>
+                      {:else}
+                        <label>Host type
+                          <select aria-label="Host type" bind:value={mount.kind}>
+                            <option value="directory">Directory</option>
+                            <option value="file">File</option>
+                          </select>
+                        </label>
+                        <label class="mount-field-grow">Host {mount.kind === 'file' ? 'file' : 'directory'} path
+                          <div class="input-with-button">
+                            <input required aria-label="Host path" bind:value={mount.path} placeholder={mount.kind === 'file' ? '/etc/localtime or config/app.conf' : '/srv/data or data/app'} />
+                            <button type="button" class="browse-button" onclick={() => openMountBrowser(index)}>Browse…</button>
+                          </div>
+                        </label>
+                      {/if}
+                    </div>
+                    {#if browseTarget && typeof browseTarget === 'object' && browseTarget.mountIndex === index}
+                      {@render directoryBrowser(true)}
+                    {/if}
+                    <div class="mount-row">
+                      <label class="mount-field-grow">Container target path
+                        <input required aria-label="Container path" bind:value={mount.target} placeholder={mount.kind === 'file' ? '/etc/config.json' : '/data'} />
+                      </label>
+                      <label class="checkbox-inline">
+                        <input type="checkbox" bind:checked={mount.readOnly} /> Read only
+                      </label>
+                      <button type="button" class="danger-button small" onclick={() => { container.mounts = container.mounts?.filter((_, i) => i !== index) }}>Remove mount</button>
+                    </div>
+                  </div>
+                {/each}
+                <button type="button" onclick={() => {
+                  container.mounts ??= []
+                  container.mounts.push({
+                    storage: '',
+                    path: '',
+                    kind: 'directory',
+                    source: 'custom',
+                    target: '/data',
+                    readOnly: false
+                  })
+                }}>Add data mount</button>
+              </fieldset>
             {/if}
           </fieldset>
         {:else if service.vm}
@@ -236,7 +435,7 @@
             <label>Directory path to share
               <div class="input-with-button">
                 <input aria-label="Directory path to share" required bind:value={manualPath} placeholder="/srv/shares/documents or data/documents" />
-                <button type="button" class="browse-button" onclick={openBrowser}>Browse…</button>
+                <button type="button" class="browse-button" onclick={() => openBrowser('share', manualPath)}>Browse…</button>
               </div>
             </label>
             {#if directoryStorageChoices.length === 0}
@@ -244,34 +443,8 @@
             {/if}
           </div>
         {/if}
-        {#if browsing}
-          <div class="directory-browser" role="region" aria-label="Directory browser">
-            <header class="browser-header">
-              <strong class="mono">{browsePath}</strong>
-              <div class="browser-actions">
-                <button type="button" class="small-button" disabled={browsePath === '/'} onclick={browseUp}>Up</button>
-                <button type="button" class="small-button primary" onclick={selectCurrentPath}>Select this folder</button>
-                <button type="button" class="small-button" onclick={() => { browsing = false }}>Close</button>
-              </div>
-            </header>
-            {#if browseLoading}
-              <p class="browser-status">Reading directory…</p>
-            {:else if browseError}
-              <p class="browser-status error">{browseError}</p>
-            {:else if browseEntries.length === 0}
-              <p class="browser-status">No subdirectories.</p>
-            {:else}
-              <ul class="dir-grid">
-                {#each browseEntries as dir}
-                  <li>
-                    <button type="button" class="dir-button mono" onclick={() => selectDirectory(dir)}>
-                      📁 {dir}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </div>
+        {#if browseTarget === 'share'}
+          {@render directoryBrowser(false)}
         {/if}
         <label><input type="checkbox" bind:checked={share.enabled} /> Publish this share</label><label><input type="checkbox" bind:checked={share.readOnly} /> Read only</label>
         {#if share.protocol === 'samba'}<label><input type="checkbox" bind:checked={share.guest} /> Guest access (requires host setup)</label><label><input type="checkbox" bind:checked={share.browseable} /> Browseable (discoverable on network)</label>{#if !share.guest}<label>Local users and @groups <input required bind:value={users} placeholder="alice, @staff" /></label>{/if}
@@ -353,11 +526,64 @@
   }
   .mount {
     display: grid;
-    gap: 10px;
-    padding: 12px 14px;
+    gap: 12px;
+    padding: 14px;
     background: var(--panel);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
+  }
+  .mount-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .mount-field-grow {
+    flex: 1;
+    min-width: 200px;
+  }
+  .checkbox-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .checkbox-inline input {
+    margin: 0;
+  }
+  .browser-contents {
+    display: grid;
+    gap: 12px;
+  }
+  .browser-section {
+    display: grid;
+    gap: 6px;
+  }
+  .browser-section-title {
+    font-size: 11px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+  }
+  .file-button {
+    width: 100%;
+    text-align: left;
+    padding: 6px 8px;
+    font-size: 11.5px;
+    background: var(--panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+  }
+  .file-button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
   p, li, h2 {
     overflow-wrap: anywhere;

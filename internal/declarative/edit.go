@@ -3,6 +3,7 @@ package declarative
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -69,6 +70,67 @@ func (c Coordinator) EditResource(kind, id, operation, value, revision string) (
 			var v Service
 			if err = decode(&v); err != nil {
 				return Config{}, err
+			}
+			if cfg.Storage == nil {
+				cfg.Storage = map[string]Storage{}
+			}
+			for cName, cVal := range v.Containers {
+				for i, m := range cVal.Mounts {
+					if m.Path != "" {
+						cleanPath := filepath.Clean(m.Path)
+						mKind := m.Kind
+						if mKind != "file" && mKind != "directory" {
+							if fi, err := os.Stat(cleanPath); err == nil && !fi.IsDir() {
+								mKind = "file"
+							} else {
+								mKind = "directory"
+							}
+						}
+						if m.Storage == "" || cfg.Storage[m.Storage].Path != cleanPath {
+							m.Storage = ""
+							for sID, st := range cfg.Storage {
+								if st.Path == cleanPath && (mKind == "" || st.Kind == mKind) {
+									m.Storage = sID
+									break
+								}
+							}
+							if m.Storage == "" {
+								base := id + "-" + filepath.Base(cleanPath)
+								base = strings.Map(func(r rune) rune {
+									if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+										return r
+									}
+									if r >= 'A' && r <= 'Z' {
+										return r + ('a' - 'A')
+									}
+									return '-'
+								}, base)
+								storageID := strings.Trim(base, "-")
+								if storageID == "" {
+									storageID = id + "-storage"
+								}
+								candidate := storageID
+								for counter := 1; ; counter++ {
+									if existing, ok := cfg.Storage[candidate]; !ok || existing.Path == cleanPath {
+										storageID = candidate
+										break
+									}
+									candidate = fmt.Sprintf("%s-%d", storageID, counter)
+								}
+								m.Storage = storageID
+							}
+						}
+						if _, ok := cfg.Storage[m.Storage]; !ok {
+							cfg.Storage[m.Storage] = Storage{
+								Path:     cleanPath,
+								External: filepath.IsAbs(cleanPath),
+								Kind:     mKind,
+							}
+						}
+						cVal.Mounts[i] = m
+					}
+				}
+				v.Containers[cName] = cVal
 			}
 			cfg.Services[id] = v
 		}

@@ -66,6 +66,8 @@ type Container struct {
 }
 type Mount struct {
 	Storage  string `yaml:"storage" json:"storage"`
+	Path     string `yaml:"path,omitempty" json:"path,omitempty"`
+	Kind     string `yaml:"kind,omitempty" json:"kind,omitempty"`
 	Target   string `yaml:"target" json:"target"`
 	ReadOnly bool   `yaml:"read_only,omitempty" json:"readOnly"`
 }
