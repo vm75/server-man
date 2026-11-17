@@ -3,6 +3,7 @@ package declarative
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,11 +11,12 @@ import (
 )
 
 type fakeAdapter struct {
-	calls   []string
-	matches map[string]bool
-	fail    string
-	invalid bool
-	active  bool
+	calls      []string
+	matches    map[string]bool
+	fail       string
+	invalid    bool
+	active     bool
+	applyError error
 }
 
 func (a *fakeAdapter) Validate(context.Context, Config, string) error {
@@ -29,10 +31,34 @@ func (a *fakeAdapter) Inspect(_ context.Context, _ Config, key string) (Observat
 func (a *fakeAdapter) Apply(_ context.Context, _ Config, _ Config, key, _ string) error {
 	a.calls = append(a.calls, key)
 	if a.fail == key {
+		if a.applyError != nil {
+			return a.applyError
+		}
 		return errors.New("private diagnostic")
 	}
 	a.matches[key] = true
 	return nil
+}
+
+func TestArtifactConflictRetainsConfigAndDurableSanitizedRemedy(t *testing.T) {
+	c, cfg, a := coordinatorFixture(t)
+	a.fail = "service/website"
+	a.applyError = fmt.Errorf("private-native-data: %w", errArtifactConflict)
+	j, err := c.SaveApply(context.Background(), cfg, "missing", "now")
+	if err == nil || j.Stage != "failed" || !strings.Contains(err.Error(), artifactConflictRemedy) || strings.Contains(err.Error(), "private-native-data") {
+		t.Fatal(j, err)
+	}
+	snapshot, err := c.Store.Read()
+	if err != nil || snapshot.Revision != j.DesiredRevision {
+		t.Fatal("desired config lost", err)
+	}
+	j, err = c.ReadJournal()
+	if err != nil || j.Resources["service/website"].Message != artifactConflictRemedy {
+		t.Fatal("durable remedy missing", j, err)
+	}
+	if len(a.calls) != 1 {
+		t.Fatal("conflict was retried without acknowledgement", a.calls)
+	}
 }
 func coordinatorFixture(t *testing.T) (Coordinator, Config, *fakeAdapter) {
 	t.Helper()

@@ -3,6 +3,7 @@ package declarative
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -77,8 +78,11 @@ func TestArtifactPublicationOwnership(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "b.container"), []byte("foreign"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := publishArtifacts(root, next, first); err == nil {
+	if err := publishArtifacts(root, next, first); !errors.Is(err, errArtifactConflict) {
 		t.Fatal("foreign edit overwritten")
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "b.container")); err != nil || string(data) != "foreign" {
+		t.Fatal("conflicting file changed", err)
 	}
 }
 

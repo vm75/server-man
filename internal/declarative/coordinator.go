@@ -22,13 +22,13 @@ type Adapter interface {
 	Apply(context.Context, Config, Config, string, string) error
 }
 type Observation struct {
-	State         string  `json:"state,omitempty"`
+	State         string                  `json:"state,omitempty"`
 	Members       []ContainerMemberStatus `json:"members,omitempty"`
-	Registered    bool    `json:"registered"`
-	ActiveMatches bool    `json:"activeMatches"`
-	Active        bool    `json:"active"`
-	Matches       bool    `json:"matches"`
-	Issues        []Issue `json:"issues,omitempty"`
+	Registered    bool                    `json:"registered"`
+	ActiveMatches bool                    `json:"activeMatches"`
+	Active        bool                    `json:"active"`
+	Matches       bool                    `json:"matches"`
+	Issues        []Issue                 `json:"issues,omitempty"`
 }
 type Change struct {
 	Resource    string `json:"resource"`
@@ -393,11 +393,17 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 		}
 		if err != nil {
 			j.Stage = "failed"
-			j.Resources[change.Resource] = ResourceResult{change.Fingerprint, "failed", "Native application or verification failed; inspect backend state before retry."}
+			message, jobError := "Native application or verification failed; inspect backend state before retry.", "application failed"
+			// Only known domain errors supply public detail. Native errors may
+			// contain secret-derived output and must retain generic diagnostics.
+			if errors.Is(err, errArtifactConflict) {
+				message, jobError = artifactConflictRemedy, artifactConflictRemedy
+			}
+			j.Resources[change.Resource] = ResourceResult{change.Fingerprint, "failed", message}
 			if e := c.writeJournal(&j); e != nil {
 				return j, e
 			}
-			return j, fmt.Errorf("%s: application failed", change.Resource)
+			return j, fmt.Errorf("%s: %s", change.Resource, jobError)
 		}
 		j.Resources[change.Resource] = ResourceResult{Fingerprint: change.Fingerprint, State: state}
 		if err = c.writeJournal(&j); err != nil {

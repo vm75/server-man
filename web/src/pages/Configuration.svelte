@@ -22,6 +22,7 @@
   let rawReviewed = $state('')
   let mode = $state('now')
   let applyStage = $state('none')
+  let applyResources = $state<Record<string,{state:string;message?:string}>>({})
   let controller: AbortController | undefined
   let stopped = false
   function entries(kind:ResourceKind): [string, string][] {
@@ -38,7 +39,8 @@
       content = raw.content; revision = raw.revision; valid = raw.valid
       if (raw.valid) model = await invokeTool<ModelSnapshot>('managed_config_model',{},signal)
       else { model = null; rawOpen = true; error = raw.error || 'Repair invalid YAML before using definition forms.' }
-      const status = await invokeTool<{stage:string}>('managed_apply_status',{},signal); if (!stopped) applyStage = status.stage
+      const status = await invokeTool<{stage:string;resources?:Record<string,{state:string;message?:string}>}>('managed_apply_status',{},signal)
+      if (!stopped && !signal.aborted) { applyStage = status.stage; applyResources = status.resources ?? {} }
     } catch (e) { if (!signal.aborted) error = e instanceof Error ? e.message : 'Could not read configuration' }
     finally { if (!signal.aborted) busy = false }
   }
@@ -56,7 +58,9 @@
 {:else}
   <div class="actions"><button disabled={busy || activeJob !== null} onclick={load}>Refresh configuration</button><button disabled={busy || activeJob !== null} onclick={() => { rawOpen = !rawOpen }}>YAML / recovery editor</button></div>
   {#if error}<p role="alert" class="form-error">{error}</p>{/if}{#if feedback}<p role="status">{feedback}</p>{/if}
-  {#if !['none','complete','aborted'].includes(applyStage)}<section class="panel"><h2>Apply needs attention: {applyStage}</h2><p>The saved configuration may differ from registered or running resources. Retry inspects native state before repeating work; uncertain destructive operations are refused.</p><button disabled={busy || activeJob !== null} onclick={retry}>Inspect and retry apply</button></section>{/if}
+  {#if !['none','complete','aborted'].includes(applyStage)}<section class="panel" aria-label="Configuration apply recovery"><h2>Apply needs attention: {applyStage}</h2><p>The saved configuration may differ from registered or running resources. Retry inspects native state before repeating work; uncertain destructive operations are refused.</p>
+    <ul>{#each Object.entries(applyResources).sort(([a],[b]) => a.localeCompare(b)) as [resource,result]}<li><div><strong>{resource}</strong>: {result.state.replaceAll('_', ' ')}{#if result.message}<p>{result.message}</p>{/if}</div></li>{/each}</ul>
+    <button disabled={busy || activeJob !== null} onclick={retry}>Inspect and retry apply</button></section>{/if}
   {#if provisioning}<StorageProvision storageID={provisioning} {revision} kind={model?.config.storage?.[provisioning]?.kind || 'directory'} sourceConfigured={!!model?.config.storage?.[provisioning]?.source} onClose={() => { provisioning = null }} onStarted={(id) => { activeJob = id; provisioning = null; feedback = 'New data creation started. Follow Activity for results; workloads remain stopped.' }} />{/if}
   {#if editor}{#key `${editor.kind}/${editor.id}`}<DefinitionEditor kind={editor.kind} resourceID={editor.id} onClose={() => { editor = null }} onSaved={(id) => { editor = null; activeJob = id; feedback = 'Definition save started. Follow Activity for apply results.' }} />{/key}{/if}
   {#if valid}{#each [{kind:'storage',title:'Storage references'},{kind:'binding',title:'Host bindings'},{kind:'secret',title:'Private file references'}] as group}

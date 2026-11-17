@@ -9,6 +9,10 @@ import (
 	"syscall"
 )
 
+var errArtifactConflict = errors.New("generated artifacts differ from the expected previous or desired definitions")
+
+const artifactConflictRemedy = "Generated files differ from server-man's expected output. Configuration remains saved, but publication is blocked. Inspect and preserve this resource's owned artifacts before explicit repair and retry."
+
 // publishArtifacts owns a dedicated resource directory. Existing outputs must
 // match either the prior definition or the desired definition (interrupted apply).
 // It rejects foreign files and symlinks and never touches workload data.
@@ -123,7 +127,7 @@ func checkArtifactOwnership(dir string, previous, desired map[string][]byte) err
 		old, was := previous[entry.Name()]
 		next, want := desired[entry.Name()]
 		if (!was || !bytes.Equal(old, actual)) && (!want || !bytes.Equal(next, actual)) {
-			return errors.New("generated artifacts were modified externally or contain foreign files")
+			return errArtifactConflict
 		}
 	}
 	return nil
