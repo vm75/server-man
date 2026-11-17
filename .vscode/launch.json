@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Server-man: API (reload)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "make api-watch",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Server-man: frontend (HMR)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "make dev",
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Server-man: development",
+      "configurations": [
+        "Server-man: API (reload)",
+        "Server-man: frontend (HMR)"
+      ],
+      "stopAll": true
+    }
+  ]
+}

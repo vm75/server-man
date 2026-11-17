@@ -8,6 +8,14 @@ Prioritize a single-server Ubuntu reference deployment, retaining Debian and Arc
 
 Updated 2026-11-16: defer native Arch testing per user instruction. Keep Arch implementation/package mappings, mark native support unverified, and exclude its test-host/install/workload/boot acceptance from current release gates. Continue active Ubuntu/Debian work; do not resume native Arch testing until requested.
 
+## VS Code development launcher (complete, 2026-11-17)
+
+- [x] Add a compound launcher for Vite and the Go API in integrated terminals, with shared stop behavior and no additional editor extension requirement.
+- [x] Retain Vite HMR and add `make api-watch` using pinned Air v1.67.4, installed under the ignored cache on first use. Watch application Go sources and module files, exclude frontend/generated files and tests, and interrupt the old process before replacement.
+- [x] Document launcher use, first-run download, compile-error recovery, and the distinction between automatic Go restarts and breakpoint debugging.
+
+Verification: launcher JSON and Air TOML parse; compound references and shutdown settings validate; `make -n` confirms existing and new development commands; `go build -o .cache/dev-api-verify ./cmd/server-man` and `git diff --check` pass. An isolated temporary Go fixture using the actual Make target and Air configuration verified initial startup, graceful source-change restart, compile-error shutdown, recovery after correction, module-file rebuilds, exclusion of frontend/test edits, and interrupt cleanup without surviving child processes. The fixture disabled VCS stamping because its temporary module was outside a Git repository. No host management operations ran. VS Code GUI launch/stop and browser HMR were not exercised; Vite's existing development configuration is unchanged.
+
 ## Next phase: declarative management (in progress, 2026-11-14)
 
 The [declarative management implementation plan](declarative-management.md) is the scope and progress authority for the next phase. It supersedes this document's legacy workload discovery, Compose authoring, LXD/classic LXC, and fragment-owned share configuration requirements for that work. No compatibility or migration layer is required. Existing evidence below describes the earlier implementation, not completion of the new plan. The new phase follows DRY, KISS, and YAGNI and ends with architecture updates and consolidation of obsolete planning material. Partial implementation and verification are recorded in that plan; native acceptance remains open.

@@ -1,8 +1,10 @@
-.PHONY: setup dev api dev-admin check test mcp-test mcp-vm-test ui-test build install release clean
+.PHONY: setup dev api api-watch dev-admin check test mcp-test mcp-vm-test ui-test build install release clean
 
 export GOCACHE ?= $(CURDIR)/.cache/go-build
 export GOMODCACHE ?= $(CURDIR)/.cache/go-mod
 export NPM_CONFIG_CACHE ?= $(CURDIR)/.cache/npm
+
+AIR := $(CURDIR)/.cache/tools/air/v1.67.4/air
 
 setup:
 	go mod download
@@ -12,6 +14,13 @@ setup:
 
 api:
 	go run ./cmd/server-man
+
+api-watch: $(AIR)
+	"$(AIR)" -c .air.toml
+
+$(AIR):
+	mkdir -p "$(@D)"
+	GOBIN="$(@D)" go install github.com/air-verse/air@v1.67.4
 
 dev:
 	npm --prefix web run dev

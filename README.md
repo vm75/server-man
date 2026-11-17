@@ -50,6 +50,10 @@ Management writes are disabled by default. When enabled, jobs run one at a time 
 
 Run `make api` in one terminal and `make dev` in another. Open the Vite address (`http://127.0.0.1:5173`); Vite proxies API requests to Go. Rebuild with `make build` to embed updated frontend assets in the executable. A Go-only build without generated UI assets serves APIs and an explanatory 503 response for the UI.
 
+In VS Code, open this repository folder, choose **Server-man: development** in **Run and Debug**, and press **F5** (or **Ctrl+F5**). This launches both servers in integrated terminals; stopping either launch stops both. Run `make setup` first if dependencies are missing, and stop any existing development servers to free ports 8080 and 5173. No additional VS Code extension is required.
+
+Vite hot-reloads frontend edits. The API launcher runs `make api-watch`, which uses [Air](https://github.com/air-verse/air) to rebuild and restart Go on application source or `go.mod`/`go.sum` changes. Its first run downloads the pinned development tool into `.cache/tools`; it requires network access and leaves the application's Go dependencies unchanged. Build errors appear in the API terminal; fixing and saving the source retries the build. Go restarts reset in-memory state and active connections. This launcher runs the servers without Go breakpoint debugging. You can also use `make api-watch` directly alongside `make dev`.
+
 server-man uses one private YAML configuration: `~/.config/server-man/server-man.yaml` (under `XDG_CONFIG_HOME` when set). Select another absolute path with `./bin/server-man -config /absolute/path/server-man.yaml`.
 
 ```yaml
