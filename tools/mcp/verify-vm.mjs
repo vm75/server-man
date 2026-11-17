@@ -29,7 +29,10 @@ const connectionArgs = [
   '-p',String(port),'manager@127.0.0.1',
 ]
 const transport = new StdioClientTransport({command:'ssh',args:[
-  ...connectionArgs,'/usr/local/bin/server-man',
+  // Debian's non-login SSH PATH omits sbin, including the packaged nft tool.
+  // Use the same standard system-tool directories as the installed service
+  // and user manager rather than testing an accidental SSH-only environment.
+  ...connectionArgs,'env','PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin','/usr/local/bin/server-man',
   '-transport','stdio','-config','/home/manager/.config/server-man/server-man.yaml',
 ],stderr:'pipe'})
 // Native error output stays in the disposable guest's job/audit records; do not
