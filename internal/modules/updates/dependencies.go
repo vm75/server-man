@@ -33,11 +33,21 @@ func DependencyPackages(manager, distribution, target string) ([]string, error) 
 	return names, nil
 }
 
+// UserSessionPackages supplies the native session-bus component split from
+// base D-Bus on APT systems. Other managers retain their existing package
+// policy; readiness verifies the actual socket independently of package names.
+func UserSessionPackages(manager string) []string {
+	if manager == "apt" {
+		return []string{"dbus-user-session"}
+	}
+	return nil
+}
+
 func dependencyPackageNames(manager, distribution, target string) (string, error) {
 	switch target {
 	case "podman":
 		if manager == "apt" {
-			return "podman podman-compose uidmap slirp4netns passt netavark aardvark-dns", nil
+			return "podman podman-compose uidmap slirp4netns passt netavark aardvark-dns " + strings.Join(UserSessionPackages(manager), " "), nil
 		}
 		return "podman podman-compose passt netavark aardvark-dns", nil
 	case "docker":

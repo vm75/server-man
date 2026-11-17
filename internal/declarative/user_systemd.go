@@ -41,3 +41,32 @@ func userManagerIssues(ctx context.Context, program string, runner core.Executor
 	}
 	return issues
 }
+
+func userBusIssues(ctx context.Context, program string, runner core.Executor, target string) []Issue {
+	if program == "" {
+		return nil // The manager probe already reports the missing program.
+	}
+	issue := Issue{"unknown", "backend/" + target, "systemd", "user_bus_unknown", "The account's D-Bus socket could not be checked.", "Install native user-session D-Bus support if missing, then start the account's dbus.socket or rerun the installer and recheck."}
+	cmd := userSystemdCommand(program, "show", "dbus.socket", "--property=LoadState,ActiveState")
+	cmd.Timeout = 3 * time.Second
+	output, err := runner.Capture(ctx, cmd)
+	if err != nil {
+		return []Issue{issue}
+	}
+	fields := map[string]string{}
+	for _, line := range strings.Split(output, "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if ok {
+			fields[key] = value
+		}
+	}
+	if fields["LoadState"] == "loaded" && fields["ActiveState"] == "active" {
+		return nil
+	}
+	if fields["LoadState"] != "" && fields["ActiveState"] != "" {
+		issue.Severity = "error"
+		issue.Code = "user_bus_unavailable"
+		issue.Message = "The account's D-Bus socket is missing or inactive."
+	}
+	return []Issue{issue}
+}

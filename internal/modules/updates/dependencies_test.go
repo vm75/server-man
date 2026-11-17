@@ -50,6 +50,9 @@ func TestPodmanInstallIncludesRootlessNetworkHelper(t *testing.T) {
 		if err != nil || !slices.Contains(packages, "passt") || !slices.Contains(packages, "netavark") || !slices.Contains(packages, "aardvark-dns") {
 			t.Fatal(host, packages, err)
 		}
+		if host.manager == "apt" && !slices.Contains(packages, "dbus-user-session") {
+			t.Fatal("rootless systemd user bus dependency omitted", host, packages)
+		}
 	}
 }
 
@@ -92,7 +95,7 @@ func TestIncusInstallIncludesVMDependenciesWithoutRecommendations(t *testing.T) 
 func TestDependencyPresetsUseUnpinnedNativeRepositoryCandidates(t *testing.T) {
 	for _, host := range []struct {
 		manager, distribution string
-		targets []string
+		targets               []string
 	}{
 		{"apt", "ubuntu", []string{"podman", "docker", "incus", "samba", "nfs", "virtualization"}},
 		{"apt", "debian", []string{"podman", "docker", "incus", "samba", "nfs", "virtualization"}},

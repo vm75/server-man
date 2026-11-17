@@ -16,13 +16,13 @@ import (
 )
 
 type Quadlet struct {
-	Store     Store
-	Directory string
-	Generator string
-	Systemctl string
+	Store      Store
+	Directory  string
+	Generator  string
+	Systemctl  string
 	Journalctl string
-	Podman    string
-	Runner    core.Executor
+	Podman     string
+	Runner     core.Executor
 }
 
 func NewQuadlet(store Store, runner core.Executor) *Quadlet {
@@ -317,6 +317,7 @@ func (q *Quadlet) Prerequisites(ctx context.Context) []Issue {
 		}
 	}
 	issues = append(issues, userManagerIssues(ctx, q.Systemctl, q.Runner, "podman/quadlet")...)
+	issues = append(issues, userBusIssues(ctx, q.Systemctl, q.Runner, "podman/quadlet")...)
 	issues = append(issues, podmanBootIssues(ctx, q.Systemctl, q.Runner, "podman/quadlet")...)
 	return issues
 }

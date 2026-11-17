@@ -65,6 +65,7 @@ func packagePlan(distribution string, backends []string) (string, []string, erro
 		return "", nil, fmt.Errorf("unsupported distribution %q; supported: Ubuntu, Debian, Arch Linux", distribution)
 	}
 	packages := []string{"sudo"}
+	packages = append(packages, updates.UserSessionPackages(manager)...)
 	for _, target := range backends {
 		names, err := updates.DependencyPackages(manager, distribution, target)
 		if err != nil {
@@ -375,6 +376,13 @@ func (p plan) apply(ctx context.Context, out io.Writer) error {
 	}
 	// Replace only server-man's user service, preserving the desktop session.
 	userSystemctl := []string{"-u", p.Account, "--", "env", "XDG_RUNTIME_DIR=/run/user/" + p.UID, "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/" + p.UID + "/bus", "systemctl", "--user"}
+	// New user-unit packages may be installed while the manager is already
+	// running. Reload/start its bus socket without restarting the user session.
+	for _, action := range [][]string{{"daemon-reload"}, {"start", "dbus.socket"}} {
+		if err = run(ctx, out, "runuser", append(slices.Clone(userSystemctl), action...)...); err != nil {
+			return err
+		}
+	}
 	var loaded bytes.Buffer
 	if err = run(ctx, &loaded, "runuser", append(slices.Clone(userSystemctl), "show", "--property=LoadState", "--value", "server-man.service")...); err != nil {
 		return err

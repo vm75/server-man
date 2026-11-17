@@ -36,6 +36,8 @@ The installer installs root-owned executables, validates the exact helper rule, 
 
 The installed **system service runs as the selected workload account**, with its home and user bus, so rootless Podman still belongs to that account. Systemd obtains current supplementary groups at service start without restarting the account's desktop session. The installer stops/disables an existing server-man user service to avoid duplicate listeners. It never restarts the user manager or logs you out.
 
+APT installation explicitly includes `dbus-user-session`, also shared with the Podman dependency preset. Bootstrap reloads the account's user units and starts `dbus.socket` after ensuring its manager is running; it does not restart that manager or an existing desktop session. A manager reachable through its private control socket alone is insufficient for Podman's systemd resource delegation. Podman readiness therefore reports a missing/inactive/unreadable user D-Bus socket before activation. Docker does not inherit this Podman runtime blocker. With `--skip-packages`, the native user-bus unit must already be installed.
+
 ```sh
 sudo systemctl status server-man.service
 sudo journalctl -u server-man.service

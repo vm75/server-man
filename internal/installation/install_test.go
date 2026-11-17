@@ -59,6 +59,15 @@ func TestCLIRejectsUnsafeAccountsBeforeMutation(t *testing.T) {
 	}
 }
 
+func TestAPTUserBusIsRequiredEvenWithoutPodman(t *testing.T) {
+	for _, distro := range []string{"ubuntu", "debian"} {
+		_, packages, err := packagePlan(distro, []string{"docker"})
+		if err != nil || !slices.Contains(packages, "dbus-user-session") {
+			t.Fatal("user session prerequisite omitted from base installation", distro, packages, err)
+		}
+	}
+}
+
 func TestAtomicInstallReplacesLeafSymlinkWithoutFollowingIt(t *testing.T) {
 	dir := t.TempDir()
 	outside := filepath.Join(dir, "outside")

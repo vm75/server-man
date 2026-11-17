@@ -8,6 +8,8 @@ The current delivery priority is a single-host deployment of the existing contai
 
 Host bootstrap is separate from workload configuration. `install.sh` builds from source without root or uses an extracted binary bundle, then invokes `cmd/server-man-install`. `internal/installation` shares native dependency package selection with Updates, reviews package/account/helper changes and installs a workload-account system service. Root-owned binaries and a validated no-argument sudo rule provide the helper boundary; systemd supplies fresh supplementary groups, the account home and its user bus. Existing unified YAML configuration is preserved. Incus storage/network and workload/share definitions are not created by bootstrap. `make release` packages static native-architecture binaries, the shared entry script and instructions; it does not publish artifacts.
 
+APT's separately packaged user-session D-Bus support is shared between base installation and Podman dependency setup. Bootstrap reloads user units and starts the account's bus socket without restarting its manager. Podman readiness verifies the actual user-bus socket separately from the manager's private control socket, preventing unavailable cgroup delegation from appearing healthy.
+
 ## Components
 
 | Path | Responsibility |
