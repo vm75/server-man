@@ -23,6 +23,38 @@ type Health struct {
 	Issues           []Issue   `json:"issues"`
 }
 
+// A successful access(2) probe (especially as root) does not prove that a
+// writable storage reference lives on a writable filesystem. Unknown mount
+// inventory also must not be mistaken for a healthy relocated workload.
+func writableMountIssue(resource, path string, mounts []MountInfo, inventoryErr error) *Issue {
+	unknown := func() *Issue {
+		return &Issue{
+			Severity: "unknown", Resource: resource, Field: "path", Code: "mount_state_unavailable",
+			Message: "The filesystem write state could not be verified.",
+			Remedy:  "Restore access to /proc/self/mountinfo and recheck before starting workloads that write to this storage.",
+		}
+	}
+	if inventoryErr != nil {
+		return unknown()
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil // Missing or inaccessible paths have their own diagnostics.
+	}
+	mount, ok := mountedFilesystem(resolved, mounts)
+	if !ok {
+		return unknown()
+	}
+	if mount.ReadOnly {
+		return &Issue{
+			Severity: "error", Resource: resource, Field: "path", Code: "read_only_mount",
+			Message: "Required writable storage is on a read-only filesystem.",
+			Remedy:  "Restore a writable filesystem mount or rebind this storage to a writable location, then check configuration.",
+		}
+	}
+	return nil
+}
+
 // CheckFiles is the static filesystem part of preflight. Runtime/backend checks
 // are separate; an empty result here is not a claim that a service can start.
 // It deliberately never creates directories or substitutes an empty disk.
@@ -125,11 +157,14 @@ func (s Store) CheckFiles(c Config) Health {
 				if err = syscall.Access(s.Resolve(st.Path), 2); err != nil {
 					add("storage/"+id, "path", "storage_not_writable", "The service account cannot write required persistent data.", "Restore ownership, ACLs and mount write access before starting the workload.")
 				}
+				if issue := writableMountIssue("storage/"+id, s.Resolve(st.Path), mounts, mountErr); issue != nil {
+					h.Issues = append(h.Issues, *issue)
+				}
 			}
 		}
 		if st.Mount != "" {
 			if mountErr != nil {
-				add("storage/"+id, "mount", "mount_inventory_unavailable", "Mounted filesystem identity could not be checked.", "Restore access to the host mount inventory and recheck.")
+				h.Issues = append(h.Issues, Issue{"unknown", "storage/" + id, "mount", "mount_inventory_unavailable", "Mounted filesystem identity could not be checked.", "Restore access to the host mount inventory and recheck."})
 			} else if !filepath.IsAbs(st.Mount) {
 				add("storage/"+id, "mount", "mount_check_pending", "The expected mounted filesystem requires an absolute device source.", "Set mount to the expected mount source, such as /dev/mapper/data.")
 			} else {
@@ -167,6 +202,7 @@ func (s Store) CheckFiles(c Config) Health {
 			}
 		}
 	}
+	h.Issues = append(h.Issues, publishedPortIssues(c)...)
 	slices.SortFunc(h.Issues, func(a, b Issue) int {
 		if a.Resource != b.Resource {
 			if a.Resource < b.Resource {

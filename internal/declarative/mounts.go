@@ -8,7 +8,21 @@ import (
 	"strings"
 )
 
-type MountInfo struct{ Point, Source string }
+type MountInfo struct {
+	Point, Source string
+	ReadOnly      bool
+}
+
+// Mount and superblock flags both matter: bind mounts may be rw while the
+// underlying filesystem is ro. This inventory is read-only and bounded.
+func mountHasOption(options, option string) bool {
+	for _, item := range strings.Split(options, ",") {
+		if item == option {
+			return true
+		}
+	}
+	return false
+}
 
 func mountUnescape(s string) string {
 	return strings.NewReplacer(`\040`, " ", `\011`, "\t", `\012`, "\n", `\134`, `\`).Replace(s)
@@ -29,24 +43,37 @@ func ParseMountInfo(r io.Reader) ([]MountInfo, error) {
 				break
 			}
 		}
-		if len(fields) < 10 || sep < 6 || sep+2 >= len(fields) {
+		if len(fields) < 10 || sep < 6 || sep+3 >= len(fields) {
 			return nil, errors.New("invalid mount inventory")
 		}
-		result = append(result, MountInfo{mountUnescape(fields[4]), mountUnescape(fields[sep+2])})
+		result = append(result, MountInfo{
+			Point:    mountUnescape(fields[4]),
+			Source:   mountUnescape(fields[sep+2]),
+			ReadOnly: mountHasOption(fields[5], "ro") || mountHasOption(fields[sep+3], "ro"),
+		})
 		if len(result) > 8192 {
 			return nil, errors.New("mount inventory limit exceeded")
 		}
 	}
 	return result, scanner.Err()
 }
-func mountedSource(path string, mounts []MountInfo) string {
-	point, source := "", ""
+// The last of equally specific mounts is the visible one. Never infer
+// writability from the process's privilege or an ancestor mount alone.
+func mountedFilesystem(path string, mounts []MountInfo) (MountInfo, bool) {
+	selected, found := MountInfo{}, false
 	for _, m := range mounts {
 		rel, err := filepath.Rel(m.Point, path)
-		if err == nil && rel != ".." && !strings.HasPrefix(rel, "../") && len(m.Point) >= len(point) {
-			point = m.Point
-			source = m.Source
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, "../") && (!found || len(m.Point) >= len(selected.Point)) {
+			selected, found = m, true
 		}
 	}
-	return source
+	return selected, found
+}
+
+func mountedSource(path string, mounts []MountInfo) string {
+	selected, ok := mountedFilesystem(path, mounts)
+	if !ok {
+		return ""
+	}
+	return selected.Source
 }
