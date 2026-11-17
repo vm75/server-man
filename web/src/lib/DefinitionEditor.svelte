@@ -26,6 +26,7 @@
   let reviewDefinition = $state('')
   let operation = $state('save')
   let mode = $state('now')
+  const incusEditNotice = 'Incus v1: Stop the VM before changing CPU, memory, storage, network, firmware or native description. Save for next start does not defer running hardware edits. Start at boot can be changed without stopping the VM.'
   const storageChoices = $derived(Object.entries(snapshot?.config.storage ?? {}))
   const bindingChoices = $derived(Object.entries(snapshot?.config.bindings ?? {}))
   const container = $derived(service.containers?.[selectedContainer])
@@ -82,6 +83,7 @@
   {#if !snapshot}{#if !error}<p role="status">Loading private definition…</p>{/if}
   {:else if plan}
     <h3>Review changes</h3><p>{operation === 'remove' ? 'Remove the definition. Persistent data is retained where supported; unsafe removal is refused.' : 'Save this definition and update affected native configuration. Existing running workloads may need recreation or shutdown/start.'}</p>
+    {#if kind === 'service' && service.kind === 'vm' && service.backend === 'incus' && operation !== 'remove'}<p>{incusEditNotice}</p>{/if}
     {#if plan.changes.length}<ul>{#each plan.changes as change}<li>{change.operation}: {change.resource} ({change.backend})</li>{/each}</ul>{:else}<p>No native definition changes. Reference settings will still be saved.</p>{/if}
     {#if plan.files.issues.length}<ul>{#each plan.files.issues as issue}<li><strong>{issue.resource}: {issue.message}</strong> {issue.remedy}</li>{/each}</ul>{/if}
     <label>Apply changes <select aria-label="Apply changes" bind:value={mode}><option value="now">Apply now</option><option value="next_start">Save for next start</option></select></label>
@@ -109,6 +111,7 @@
           </fieldset>
         {:else if service.vm}
           <label>VM backend <select aria-label="VM backend" bind:value={service.backend} disabled={!!resourceID}><option value="libvirt">KVM/libvirt</option><option value="incus">Incus</option></select></label>
+          {#if service.backend === 'incus'}<p>{incusEditNotice}</p>{/if}
           <label>Virtual CPUs <input required type="number" min="1" max="1024" bind:value={service.vm.cpus} /></label><label>Memory in MiB <input required type="number" min="128" bind:value={service.vm.memoryMiB} /></label>
           <label>Network binding <select aria-label="Network binding" required bind:value={service.vm.network}><option value="">Choose network</option>{#each bindingChoices.filter(([,b]) => b.kind === 'network' || b.kind === 'bridge') as [bindingID,b]}<option value={bindingID}>{bindingID} ({b.name})</option>{/each}</select></label>
           {#if service.backend === 'incus'}<label>Local image alias or fingerprint <input bind:value={service.vm.image} disabled={!!resourceID} /></label><label>Root disk GiB <input type="number" min="1" bind:value={service.vm.rootSizeGiB} placeholder="20" /></label>

@@ -62,7 +62,7 @@ func TestIncusStoppedDefinitionsLoadOnNativeAutostart(t *testing.T) {
 	}
 }
 
-func TestIncusRunningUpdateRetainsLoadedRuntimeWhenMarkerAbsent(t *testing.T) {
+func TestIncusRunningHardwareRejectsMissingRuntimeTracking(t *testing.T) {
 	for _, known := range []bool{true, false} {
 		i, cfg, r := incusFixture(t)
 		if err := i.Apply(context.Background(), Config{Version: 1}, cfg, "service/guest", "now"); err != nil {
@@ -73,15 +73,14 @@ func TestIncusRunningUpdateRetainsLoadedRuntimeWhenMarkerAbsent(t *testing.T) {
 		loaded := r.actual.Config[incusRuntimeKey]
 		if !known {
 			delete(r.actual.Config, incusRuntimeKey)
-			loaded = "unverified"
+			loaded = ""
 		}
-		next := incusMemoryChange(cfg)
-		if err := i.Apply(context.Background(), cfg, next, "service/guest", "next_start"); err != nil {
-			t.Fatal(err)
+		before := len(r.payloads)
+		if err := i.Apply(context.Background(), cfg, incusMemoryChange(cfg), "service/guest", "next_start"); err != errIncusStoppedUpdate {
+			t.Fatal("running hardware edited with missing tracking", err)
 		}
-		observed, err := i.Inspect(context.Background(), next, "service/guest")
-		if err != nil || !observed.Matches || observed.ActiveMatches || r.actual.Config[incusActiveRuntimeKey] != loaded {
-			t.Fatal("running update falsely stamped desired settings as loaded", observed, err)
+		if len(r.payloads) != before || r.actual.Config[incusActiveRuntimeKey] != "" || r.actual.Config[incusRuntimeKey] != loaded {
+			t.Fatal("rejected update rewrote native runtime tracking")
 		}
 	}
 }

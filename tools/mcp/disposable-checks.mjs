@@ -129,9 +129,24 @@ export async function verifyGuest({call,job,selected = targets,image,acknowledge
     snapshot = await call('managed_config_model');service = structuredClone(snapshot.config.services[id])
     if (service.vm) service.vm.memoryMiB = 2048
     else service.containers.idle.memoryMiB = 128
-    await edit('service',id,'save',service,'next_start')
-    await serviceState(id,'running',true,'restart_required')
-    await action(id,'stop'); await serviceState(id,'stopped',true,'registered')
+    if (target === 'incus') {
+      // v1 explicitly rejects running hardware edits at review time, even
+      // when the user selects Save for next start. No YAML/job is changed.
+      const before = await call('managed_config_model')
+      await assert.rejects(
+        call('managed_resource_plan',{kind:'service',id,operation:'save',revision:before.revision,definition:JSON.stringify(service)}),
+        /stop.*Incus|Incus.*stop/i
+      )
+      const after = await call('managed_config_model')
+      assert.equal(after.revision,before.revision,'Rejected running Incus edit changed YAML')
+      await action(id,'stop'); await serviceState(id,'stopped',true,'registered')
+      await edit('service',id,'save',service,'next_start')
+      await serviceState(id,'stopped',true,'registered')
+    } else {
+      await edit('service',id,'save',service,'next_start')
+      await serviceState(id,'running',true,'restart_required')
+      await action(id,'stop'); await serviceState(id,'stopped',true,'registered')
+    }
     await action(id,'start'); await serviceState(id,'running',true,'registered')
     await action(id,'restart'); await serviceState(id,'running',true,'registered')
     await action(id,'stop'); await serviceState(id,'stopped',true,'registered')
@@ -141,7 +156,7 @@ export async function verifyGuest({call,job,selected = targets,image,acknowledge
       await edit('service',id,'remove')
       assert(!(await call('managed_config_model')).config.services?.[id],`${id}: removal did not remove the central definition`)
     }
-    report(`${target}: define/update stopped, start/stop/restart, independent boot policy and deferred update passed`)
+    report(`${target}: define/update stopped, start/stop/restart, independent boot policy and ${target === 'incus' ? 'running hardware refusal plus explicit stopped update' : 'deferred update'} passed`)
   }
   for (const protocol of selected.filter(target => ['samba','nfs'].includes(target))) {
     const id = `${prefix}${protocol}`

@@ -97,21 +97,38 @@ func (r *incusRecorder) Run(ctx context.Context, c core.Command, _ io.Writer) er
 	}
 	operation := c.Args[3]
 	if operation == "config" && c.Args[4] == "set" {
+		if len(c.Args) != 7 || c.Args[5] != "local:sm-guest" || c.Stdin != nil {
+			return errors.New("unexpected native setting mutation")
+		}
+		key, value, ok := strings.Cut(c.Args[6], "=")
+		if !ok {
+			return errors.New("invalid native setting")
+		}
 		deadline, bounded := ctx.Deadline()
-		if !bounded || time.Until(deadline) > 10*time.Second || time.Until(deadline) <= 0 {
-			return errors.New("unbounded tracking mutation")
+		limit := 20 * time.Second
+		if key == incusActiveRuntimeKey {
+			limit = 10 * time.Second
 		}
-		if len(c.Args) != 7 || c.Args[5] != "local:sm-guest" || !strings.HasPrefix(c.Args[6], "user.server-man.active-runtime=") || c.Stdin != nil {
-			return errors.New("unexpected tracking mutation")
+		if !bounded || time.Until(deadline) > limit || time.Until(deadline) <= 0 {
+			return errors.New("unbounded native setting mutation")
 		}
-		if r.failTracking {
-			return errors.New("private tracking diagnostic")
+		switch key {
+		case incusActiveRuntimeKey:
+			if r.failTracking || !revisionPattern.MatchString(value) {
+				return errors.New("private tracking diagnostic")
+			}
+		case "user.server-man.fingerprint":
+			if !revisionPattern.MatchString(value) {
+				return errors.New("invalid native fingerprint")
+			}
+		case "boot.autostart":
+			if value != "true" && value != "false" {
+				return errors.New("invalid native boot policy")
+			}
+		default:
+			return errors.New("unexpected native setting key")
 		}
-		_, value, _ := strings.Cut(c.Args[6], "=")
-		if !revisionPattern.MatchString(value) {
-			return errors.New("unvalidated tracking value")
-		}
-		r.actual.Config["user.server-man.active-runtime"] = value
+		r.actual.Config[key] = value
 		return nil
 	}
 	var data []byte
@@ -266,36 +283,65 @@ func TestIncusAbsentCreationCanBeRemovedWithoutNativeDeletion(t *testing.T) {
 		t.Fatal("native instance ignored", removed, err)
 	}
 }
-func TestIncusUpdatePreservesVolatileAndDefersRunningHardware(t *testing.T) {
-	i, c, r := incusFixture(t)
-	if err := i.Apply(context.Background(), Config{Version: 1}, c, "service/guest", "now"); err != nil {
-		t.Fatal(err)
-	}
-	if err := i.Action(context.Background(), c, "service/guest", "start"); err != nil {
-		t.Fatal(err)
-	}
-	raw, _ := Encode(c)
-	next, _ := Parse(raw)
-	next.Services["guest"].VM.MemoryMiB = 2048
-	if err := i.Apply(context.Background(), c, next, "service/guest", "now"); err == nil {
-		t.Fatal("running hardware implicitly changed")
-	}
-	if err := i.Apply(context.Background(), c, next, "service/guest", "next_start"); err != nil {
-		t.Fatal(err)
-	}
-	if r.actual.Config["volatile.uuid"] != "daemon-owned-uuid" || r.actual.Config["volatile.vm.rtc_offset"] != "123" {
-		t.Fatal("volatile identity changed")
-	}
-	obs, err := i.Inspect(context.Background(), next, "service/guest")
-	if err != nil || !obs.Matches || !obs.Active || obs.ActiveMatches {
-		t.Fatal(obs, err)
-	}
-	if err = i.Action(context.Background(), next, "service/guest", "restart"); err != nil {
-		t.Fatal(err)
-	}
-	obs, err = i.Inspect(context.Background(), next, "service/guest")
-	if err != nil || !obs.ActiveMatches {
-		t.Fatal("full restart did not load configuration", obs, err)
+func TestIncusHardwareAndNativeDescriptionRequireStoppedV1(t *testing.T) {
+	for _, change := range []string{"memory", "cpu", "root", "network", "description"} {
+		t.Run(change, func(t *testing.T) {
+			i, cfg, r := incusFixture(t)
+			if err := i.Apply(context.Background(), Config{Version: 1}, cfg, "service/guest", "now"); err != nil {
+				t.Fatal(err)
+			}
+			if err := i.Action(context.Background(), cfg, "service/guest", "start"); err != nil {
+				t.Fatal(err)
+			}
+			raw, _ := Encode(cfg)
+			next, _ := Parse(raw)
+			s := next.Services["guest"]
+			s.VM = &(*s.VM)
+			switch change {
+			case "memory":
+				s.VM.MemoryMiB = 2048
+			case "cpu":
+				s.VM.CPUs++
+			case "root":
+				s.VM.RootSizeGiB = 24
+			case "network":
+				next.Bindings["lan"] = Binding{Kind: "network", Name: "other"}
+			case "description":
+				s.Description = "revised native description"
+			}
+			next.Services["guest"] = s
+			oldHardware := r.actual.Config["limits.memory"]
+			oldDevices, _ := json.Marshal(r.actual.Devices)
+			for _, mode := range []string{"now", "next_start"} {
+				before := len(r.payloads)
+				if err := i.Apply(context.Background(), cfg, next, "service/guest", mode); !errors.Is(err, errIncusStoppedUpdate) {
+					t.Fatalf("%s: running change was not rejected: %v", mode, err)
+				}
+				if len(r.payloads) != before || r.actual.StatusCode != 103 || r.actual.Config["limits.memory"] != oldHardware {
+					t.Fatal("rejected update changed the running guest")
+				}
+				devices, _ := json.Marshal(r.actual.Devices)
+				if string(devices) != string(oldDevices) {
+					t.Fatal("rejected update changed native devices")
+				}
+			}
+			if err := i.Action(context.Background(), cfg, "service/guest", "stop"); err != nil {
+				t.Fatal(err)
+			}
+			if err := i.Apply(context.Background(), cfg, next, "service/guest", "next_start"); err != nil {
+				t.Fatal("stopped update failed", err)
+			}
+			if r.actual.StatusCode != 102 || r.actual.Config["volatile.uuid"] != "daemon-owned-uuid" {
+				t.Fatal("stopped update lost state or native identity")
+			}
+			if err := i.Action(context.Background(), next, "service/guest", "start"); err != nil {
+				t.Fatal(err)
+			}
+			obs, err := i.Inspect(context.Background(), next, "service/guest")
+			if err != nil || !obs.Matches || !obs.Active || !obs.ActiveMatches {
+				t.Fatal("stopped hardware update did not load on next start", obs, err)
+			}
+		})
 	}
 }
 func TestIncusOwnershipAndRemovalProtectData(t *testing.T) {
@@ -339,8 +385,9 @@ func TestIncusBootPolicyDoesNotInterruptGuest(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cmd := range r.commands {
-		if len(cmd.Args) > 3 && (cmd.Args[3] == "start" || cmd.Args[3] == "stop") {
-			t.Fatal("boot policy changed execution")
+		if len(cmd.Args) > 3 && (cmd.Args[3] == "start" || cmd.Args[3] == "stop" ||
+			len(cmd.Args) > 4 && cmd.Args[3] == "config" && cmd.Args[4] == "edit") {
+			t.Fatal("boot policy changed execution or republished running hardware")
 		}
 	}
 	if r.actual.Config["boot.autostart"] != "true" {
