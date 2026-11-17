@@ -82,6 +82,13 @@ func readArtifactManifest(dir string) (artifactManifest, []byte, error) {
 	if decoder.Decode(&extra) != io.EOF || !validArtifactManifest(m) {
 		return artifactManifest{}, nil, errors.New("invalid publication manifest")
 	}
+	// Sidecars are written only by our json.Marshal path. Requiring its exact
+	// canonical bytes also refuses duplicate keys and ambiguous field order,
+	// rather than silently adopting a hand-edited or forged inventory.
+	canonical, err := json.Marshal(m)
+	if err != nil || !bytes.Equal(canonical, data) {
+		return artifactManifest{}, nil, errors.New("invalid publication manifest")
+	}
 	return m, data, nil
 }
 

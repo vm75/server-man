@@ -1,6 +1,7 @@
 package declarative
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -142,5 +143,49 @@ func TestPublicationRejectsForeignWellFormedManifest(t *testing.T) {
 	}
 	if err := publishArtifacts(dir, old, next); err != nil {
 		t.Fatal("desired manifest blocked interrupted retry", err)
+	}
+}
+
+func TestPublicationManifestRejectsAmbiguousJSON(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "application")
+	files := map[string][]byte{"service.container": []byte(ownedHeader + "original\n")}
+	if err := publishArtifacts(dir, nil, files); err != nil {
+		t.Fatal(err)
+	}
+	path := artifactManifestPath(dir)
+	canonical, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicateOwner := bytes.Replace(canonical, []byte(`"owner":"server-man"`), []byte(`"owner":"server-man","owner":"server-man"`), 1)
+	duplicateFile := bytes.Replace(canonical, []byte(`"service.container":`), []byte(`"service.container":"`+digest(files["service.container"])+`","service.container":`), 1)
+	for _, altered := range [][]byte{
+		append([]byte{' '}, canonical...),
+		append(append([]byte{}, canonical...), '\n'),
+		duplicateOwner,
+		duplicateFile,
+	} {
+		if bytes.Equal(altered, canonical) {
+			t.Fatal("test did not alter manifest bytes")
+		}
+		if err := os.WriteFile(path, altered, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := readArtifactManifest(dir); err == nil {
+			t.Fatal("noncanonical publication manifest accepted")
+		}
+		if err := publishArtifacts(dir, files, files); !errors.Is(err, errArtifactConflict) {
+			t.Fatal("noncanonical sidecar permitted publication", err)
+		}
+		got, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(got, altered) {
+			t.Fatal("rejected sidecar was overwritten", err)
+		}
+	}
+	if err := os.WriteFile(path, canonical, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := readArtifactManifest(dir); err != nil {
+		t.Fatal("canonical sidecar incorrectly rejected", err)
 	}
 }
