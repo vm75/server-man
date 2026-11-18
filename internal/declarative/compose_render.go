@@ -111,7 +111,7 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 		}
 		if v.Healthcheck != nil {
 			h := v.Healthcheck
-			out.Healthcheck = &composeHealth{Test: h.Test, Interval: h.Interval, Timeout: h.Timeout, Retries: h.Retries, StartPeriod: h.StartPeriod}
+			out.Healthcheck = &composeHealth{Test: append([]string(nil), h.Test...), Interval: h.Interval, Timeout: h.Timeout, Retries: h.Retries, StartPeriod: h.StartPeriod}
 			for i, arg := range out.Healthcheck.Test { out.Healthcheck.Test[i] = literalCompose(arg) }
 		}
 		if v.LogDriver != "" || len(v.LogOptions) > 0 {

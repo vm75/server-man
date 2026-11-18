@@ -119,7 +119,7 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 				for _,arg:=range h.Test[1:] { parts=append(parts,quadletShellQuote(arg)) }
 				command=strings.Join(parts," ")
 			}
-			val,e:=unitScalarValue(strings.ReplaceAll(command,"$","$"));if e!=nil{return nil,errors.New("invalid Quadlet health command")}
+			val,e:=unitScalarValue(strings.ReplaceAll(command,"$","$$"));if e!=nil{return nil,errors.New("invalid Quadlet health command")}
 			fmt.Fprintf(&b,"HealthCmd=%s\n",val)
 			if h.Interval!=""{fmt.Fprintf(&b,"HealthInterval=%s\n",h.Interval)}
 			if h.Timeout!=""{fmt.Fprintf(&b,"HealthTimeout=%s\n",h.Timeout)}
@@ -188,5 +188,5 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 }
 
 func quadletShellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }

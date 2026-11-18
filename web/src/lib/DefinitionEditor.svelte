@@ -48,6 +48,8 @@
   let portText = $state('')
   let envText = $state('')
   let privateRefs = $state('')
+  let advancedText = $state('{}')
+  const advancedKeys = ['entrypoint', 'workingDir', 'uidMaps', 'gidMaps', 'groupAdd', 'dependsOn', 'devices', 'capAdd', 'capDrop', 'securityOpt', 'init', 'tty', 'tmpfs', 'shmSize', 'stopGracePeriod', 'pullPolicy', 'logDriver', 'logOptions', 'healthcheck', 'mode'] as const
   let vmDisks = $state('')
   let plan = $state<ImpactPlan | null>(null)
   let reviewDefinition = $state('')
@@ -154,11 +156,20 @@
     selectedContainer = name
     const c = service.containers?.[name]
     commandText = (c?.command ?? []).map(a => JSON.stringify(a)).join('\n'); portText = (c?.ports ?? []).join('\n'); envText = Object.entries(c?.environment ?? {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join('\n'); privateRefs = (c?.envFiles ?? []).join(', ')
+    const opts = c as unknown as Record<string, unknown> | undefined
+    advancedText = JSON.stringify(Object.fromEntries(advancedKeys.filter(k => opts?.[k] !== undefined).map(k => [k, opts?.[k]])), null, 2)
   }
   function saveContainerInputs() {
     const c = service.containers?.[selectedContainer]; if (!c) return
     c.command = commandText ? commandText.split('\n').map(a => a.startsWith('"') ? JSON.parse(a) as string : a) : []; c.ports = splitList(portText); c.envFiles = splitList(privateRefs)
     const env: Record<string, string> = Object.create(null); for (const line of envText.split('\n').filter(Boolean)) { const at = line.indexOf('='); if (at < 1) throw new Error('Environment entries need NAME=value.'); const value = line.slice(at + 1); env[line.slice(0, at)] = value.startsWith('"') ? JSON.parse(value) as string : value }; c.environment = env
+    const advanced: unknown = JSON.parse(advancedText || '{}')
+    if (!advanced || typeof advanced !== 'object' || Array.isArray(advanced)) throw new Error('Advanced container settings must be a JSON object.')
+    const values = advanced as Record<string, unknown>
+    for (const key of Object.keys(values)) if (!(advancedKeys as readonly string[]).includes(key)) throw new Error(`Unsupported advanced setting: ${key}`)
+    const opts = c as unknown as Record<string, unknown>
+    for (const key of advancedKeys) delete opts[key]
+    Object.assign(opts, values)
   }
   function switchContainer(name: string) { try { saveContainerInputs(); selectContainer(name); error = '' } catch (e) { error = e instanceof Error ? e.message : 'Invalid container fields' } }
   function addContainer() {
@@ -359,7 +370,17 @@
               <label>Container image <input required bind:value={container.image} placeholder="docker.io/library/nginx:stable" /></label>
               <label>Command arguments (one per line) <textarea bind:value={commandText}></textarea></label><label>Published ports (one per line) <textarea bind:value={portText} placeholder="8080:80"></textarea></label>
               <label>Non-secret environment (NAME=value per line) <textarea bind:value={envText}></textarea></label><label>Private environment-file reference IDs <input bind:value={privateRefs} /></label>
-              <label>CPU limit (0 for default) <input type="number" min="0" max="1024" bind:value={container.cpus} /></label><label>Memory limit in MiB (0 for default) <input type="number" min="0" bind:value={container.memoryMiB} /></label>
+              <fieldset><legend>Rootless identity, networking and recovery</legend>
+                 <label>Container user (UID[:GID] or name) <input bind:value={container.user} placeholder="0:0" /></label>
+                 <label>User namespace <input bind:value={container.usernsMode} placeholder="keep-id:uid=1000,gid=1000" /></label>
+                 <label>Network mode <input bind:value={container.networkMode} placeholder="blank, host, none or service:vpn" /></label>
+                 <label>Restart recovery <select bind:value={container.restart}><option value="">Default</option><option value="no">Never</option><option value="on-failure">On failure</option><option value="always">Always</option><option value="unless-stopped">Unless stopped</option></select></label>
+                 <label><input type="checkbox" bind:checked={container.privileged} /> Privileged (high risk; host permissions still apply)</label>
+                 <label><input type="checkbox" bind:checked={container.readOnly} /> Read-only container root filesystem</label>
+                 <p>Advanced options use common JSON fields for UID/GID maps, groups, devices, capabilities, healthchecks, dependencies, logging, tmpfs and more. Validation rejects unsupported options.</p>
+                 <label>Advanced container options (JSON) <textarea bind:value={advancedText} rows="10" spellcheck="false" placeholder='{"uidMaps":["1000:0:1"],"devices":["/dev/dri:/dev/dri"],"healthcheck":{"test":["CMD-SHELL","true"]}}'></textarea></label>
+               </fieldset>
+               <label>CPU limit (0 for default) <input type="number" min="0" max="1024" bind:value={container.cpus} /></label><label>Memory limit in MiB (0 for default) <input type="number" min="0" bind:value={container.memoryMiB} /></label>
               <fieldset><legend>Data mounts</legend>
                 {#each container.mounts ?? [] as mount, index}
                   <div class="mount">
@@ -435,6 +456,8 @@
                       <label class="checkbox-inline">
                         <input type="checkbox" bind:checked={mount.readOnly} /> Read only
                       </label>
+                       <label>SELinux relabel <select bind:value={mount.selinux}><option value="">None</option><option value="private">Private :Z</option><option value="shared">Shared :z</option></select></label>
+                       <label class="checkbox-inline"><input type="checkbox" bind:checked={mount.chown} /> :U recursively changes host ownership</label>
                       <button type="button" class="danger-button small" onclick={() => { container.mounts = container.mounts?.filter((_, i) => i !== index) }}>Remove mount</button>
                     </div>
                   </div>
