@@ -58,7 +58,7 @@
       <form onsubmit={signIn}>
         {#if adminConfigured || !tokenSignIn}
           <label for="admin-username">Username</label>
-          <input id="admin-username" name="username" type="text" bind:value={username} autocomplete="username" required maxlength="64" pattern="[A-Za-z][A-Za-z0-9_.-]*" disabled={busy} placeholder="Administrator username" />
+          <input id="admin-username" name="username" type="text" bind:value={username} autocomplete="username" required maxlength="64" pattern="[A-Za-z][A-Za-z0-9_.\\-]*" disabled={busy} placeholder="Administrator username" />
           <label for="admin-password">Password</label>
           <input id="admin-password" name="password" type="password" bind:value={password} autocomplete={adminConfigured ? 'current-password' : 'new-password'} required minlength={adminConfigured ? undefined : 12} maxlength="256" disabled={busy} placeholder="Administrator password" />
           {#if !adminConfigured}
