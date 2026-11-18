@@ -378,7 +378,7 @@
                  <label><input type="checkbox" bind:checked={container.privileged} /> Privileged (high risk; host permissions still apply)</label>
                  <label><input type="checkbox" bind:checked={container.readOnly} /> Read-only container root filesystem</label>
                  <p>Advanced options use common JSON fields for UID/GID maps, groups, devices, capabilities, healthchecks, dependencies, logging, tmpfs and more. Validation rejects unsupported options.</p>
-                 <label>Advanced container options (JSON) <textarea bind:value={advancedText} rows="10" spellcheck="false" placeholder='{"uidMaps":["1000:0:1"],"devices":["/dev/dri:/dev/dri"],"healthcheck":{"test":["CMD-SHELL","true"]}}'></textarea></label>
+                 <label>Advanced container options (JSON) <textarea bind:value={advancedText} rows="10" spellcheck="false" placeholder="Optional JSON object with typed advanced container settings"></textarea></label>
                </fieldset>
                <label>CPU limit (0 for default) <input type="number" min="0" max="1024" bind:value={container.cpus} /></label><label>Memory limit in MiB (0 for default) <input type="number" min="0" bind:value={container.memoryMiB} /></label>
               <fieldset><legend>Data mounts</legend>
