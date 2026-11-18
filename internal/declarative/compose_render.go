@@ -148,6 +148,9 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 			}
 			mount := composeMount{Type:"bind", Source:literalCompose(path), Target:literalCompose(m.Target), ReadOnly:m.ReadOnly, Bind:map[string]bool{"create_host_path":false}}
 			if m.SELinux != "" || m.Chown {
+				if strings.Contains(path, ":") || strings.Contains(m.Target, ":") {
+					return nil, errors.New("SELinux or ownership mount path cannot be represented by Compose short syntax")
+				}
 				mount.Short = literalCompose(path + ":" + m.Target + ":" + volumeOptions(m))
 			}
 			out.Volumes = append(out.Volumes, mount)

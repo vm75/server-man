@@ -375,7 +375,8 @@
                  <label>Container user (UID[:GID] or name) <input bind:value={container.user} placeholder="0:0" /></label>
                  <label>User namespace <input bind:value={container.usernsMode} placeholder="keep-id:uid=1000,gid=1000" /></label>
                  <label>Network mode <input bind:value={container.networkMode} placeholder="blank, host, none or service:vpn" /></label>
-                 <label>Restart recovery <select bind:value={container.restart}><option value="">Default</option><option value="no">Never</option><option value="on-failure">On failure</option><option value="always">Always</option><option value="unless-stopped">Unless stopped</option></select></label>
+                 <label>Restart recovery (Quadlet only) <select bind:value={container.restart} disabled={service.backend === 'compose'}><option value="">Default</option><option value="no">Never</option><option value="on-failure">On failure</option><option value="always">Always</option><option value="unless-stopped">Unless stopped</option></select></label>
+                 {#if service.backend === 'compose'}<p>Compose restart remains fixed to no to keep boot enablement independent. Remove any previous explicit restart value before switching to Compose.</p>{/if}
                  <label><input type="checkbox" bind:checked={container.privileged} /> Privileged (high risk; host permissions still apply)</label>
                  <label><input type="checkbox" bind:checked={container.readOnly} /> Read-only container root filesystem</label>
                  <p>Advanced options use common JSON fields for UID/GID maps, groups, devices, capabilities, healthchecks, dependencies, logging, tmpfs and more. Validation rejects unsupported options.</p>

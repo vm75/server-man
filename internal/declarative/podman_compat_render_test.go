@@ -1,7 +1,9 @@
 package declarative
 
 import (
+	"context"
 	"strings"
+	"server-man/internal/core"
 	"testing"
 )
 
@@ -162,5 +164,70 @@ func TestComposeRestartDoesNotOverrideIndependentBootPolicy(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	if !strings.Contains(string(out), "restart: \"no\"") && !strings.Contains(string(out), "restart: \"no\"\n") {
 		t.Fatalf("Compose restart guard missing:\n%s", out)
+	}
+}
+
+func TestNativeAdvancedPodmanQuadletGenerator(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	q := NewQuadlet(c.Store, core.Runner{})
+	if q.Generator == "" { t.Skip("Quadlet generator is not installed") }
+	s := cfg.Services["website"]
+	v := s.Containers["web"]
+	v.ContainerName = "managed-web"
+	v.UserNSMode = "keep-id"
+	v.Mounts[0].SELinux = "private"
+	v.Mounts[0].Chown = true
+	v.ReadOnly = true
+	v.Init = true
+	v.ShmSize = "256mb"
+	v.LogDriver = "k8s-file"
+	v.LogOptions = map[string]string{"max-size":"100k"}
+	v.Healthcheck = &ContainerHealth{Test:[]string{"CMD-SHELL","test -f /srv/content"},Interval:"10s",Retries:3}
+	s.Containers["web"] = v
+	cfg.Services["website"] = s
+	if err := q.Validate(context.Background(), cfg, "service/website"); err != nil {
+		t.Fatalf("native Quadlet generator rejected runtime compatibility fields: %v", err)
+	}
+}
+
+func TestPodmanExplicitContainerName(t *testing.T) {
+	for _, backend := range []string{"quadlet","compose"} {
+		t.Run(backend,func(t *testing.T) {
+			c,cfg,_:=coordinatorFixture(t)
+			s:=cfg.Services["website"]
+			s.Backend=backend
+			v:=s.Containers["web"]
+			v.ContainerName="custom-managed-web"
+			s.Containers["web"]=v
+			cfg.Services["website"]=s
+			var generated string
+			if backend=="quadlet" {
+				files,err:=RenderQuadlet(c.Store,cfg,"service/website")
+				if err!=nil{t.Fatal(err)}
+				generated=string(files[quadletBase("website","web")+".container"])
+				if !strings.Contains(generated,"ContainerName=custom-managed-web\n") {t.Fatal(generated)}
+			}else{
+				data,err:=RenderCompose(c.Store,cfg,"service/website")
+				if err!=nil{t.Fatal(err)}
+				generated=string(data)
+				if !strings.Contains(generated,"container_name: custom-managed-web") {t.Fatal(generated)}
+			}
+		})
+	}
+}
+
+func TestComposeShortBindRequiresUnambiguousPaths(t *testing.T) {
+	c,cfg,_:=coordinatorFixture(t)
+	s:=cfg.Services["website"]
+	s.Backend="compose"
+	v:=s.Containers["web"]
+	v.Mounts[0].SELinux="private"
+	s.Containers["web"]=v
+	cfg.Services["website"]=s
+	st:=cfg.Storage["content"]
+	st.Path="data/colon:path"
+	cfg.Storage["content"]=st
+	if _,err:=RenderCompose(c.Store,cfg,"service/website");err==nil {
+		t.Fatal("Compose relabeling mount accepted a colon in the host path")
 	}
 }
