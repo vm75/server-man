@@ -368,6 +368,7 @@
             <div class="actions"><label>New container ID <input bind:value={newContainer} /></label><button type="button" onclick={addContainer}>Add container</button><button type="button" disabled={Object.keys(service.containers ?? {}).length <= 1} onclick={() => { if (!service.containers) return; delete service.containers[selectedContainer]; selectContainer(Object.keys(service.containers)[0] ?? 'app') }}>Remove selected container</button></div>
             {#if container}
               <label>Container image <input required bind:value={container.image} placeholder="docker.io/library/nginx:stable" /></label>
+               <label>Native container name (optional) <input bind:value={container.containerName} placeholder="Leave blank for a generated managed name" /></label>
               <label>Command arguments (one per line) <textarea bind:value={commandText}></textarea></label><label>Published ports (one per line) <textarea bind:value={portText} placeholder="8080:80"></textarea></label>
               <label>Non-secret environment (NAME=value per line) <textarea bind:value={envText}></textarea></label><label>Private environment-file reference IDs <input bind:value={privateRefs} /></label>
               <fieldset><legend>Rootless identity, networking and recovery</legend>

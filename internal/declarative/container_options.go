@@ -16,6 +16,7 @@ var (
 	containerIdentity = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.-]*$|^[0-9]+$`)
 	containerCapability = regexp.MustCompile(`^(ALL|[A-Z][A-Z0-9_]*)$`)
 	containerSize = regexp.MustCompile(`^[0-9]+([kKmMgGtT][bB]?)?$`)
+	containerNativeName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 	containerUserNS = regexp.MustCompile(`^(keep-id(:uid=[0-9]+(,gid=[0-9]+)?)?|host|private|auto|nomap)$`)
 )
 
@@ -32,6 +33,7 @@ func containerDuration(s string) bool {
 func validateContainerOptions(engine, backend string, containers map[string]Container) error {
 	for name, v := range containers {
 		fail := func(field string) error { return fmt.Errorf("invalid container %s %s", name, field) }
+		if v.ContainerName != "" && !containerNativeName.MatchString(v.ContainerName) { return fail("container_name") }
 		if len(v.Entrypoint) > 32 || len(v.Devices) > 32 || len(v.Tmpfs) > 32 || len(v.DependsOn) > 32 || len(v.UIDMaps) > 64 || len(v.GIDMaps) > 64 || len(v.SecurityOpt) > 32 || len(v.LogOptions) > 32 {
 			return fail("option count")
 		}

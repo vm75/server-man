@@ -1,7 +1,7 @@
 export interface Mount { storage: string; path?: string; kind?: 'directory' | 'file'; source?: 'selector' | 'manual' | 'custom' | 'storage'; target: string; readOnly: boolean; selinux?: 'private' | 'shared' | ''; chown?: boolean }
 export interface ContainerHealth { test: string[]; interval?: string; timeout?: string; retries?: number; startPeriod?: string }
 export interface ContainerDefinition {
-  image: string; command?: string[]; entrypoint?: string[]; workingDir?: string; ports?: string[]; environment?: Record<string, string>; envFiles?: string[]; mounts?: Mount[]; memoryMiB?: number; cpus?: number
+  image: string; containerName?: string; command?: string[]; entrypoint?: string[]; workingDir?: string; ports?: string[]; environment?: Record<string, string>; envFiles?: string[]; mounts?: Mount[]; memoryMiB?: number; cpus?: number
   user?: string; usernsMode?: string; uidMaps?: string[]; gidMaps?: string[]; groupAdd?: string[]; networkMode?: string; dependsOn?: Record<string, 'started' | 'healthy'>
   devices?: string[]; capAdd?: string[]; capDrop?: string[]; securityOpt?: string[]; privileged?: boolean; readOnly?: boolean; init?: boolean; tty?: boolean; tmpfs?: string[]
   shmSize?: string; stopGracePeriod?: string; pullPolicy?: string; restart?: string; logDriver?: string; logOptions?: Record<string, string>; healthcheck?: ContainerHealth
