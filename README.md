@@ -54,6 +54,8 @@ In VS Code, open this repository folder, choose **Server-man: development** in *
 
 Vite hot-reloads frontend edits. The API launcher runs `make api-watch`, which uses [Air](https://github.com/air-verse/air) to rebuild and restart Go on application source or `go.mod`/`go.sum` changes. Its first run downloads the pinned development tool into `.cache/tools`; it requires network access and leaves the application's Go dependencies unchanged. Build errors appear in the API terminal; fixing and saving the source retries the build. Go restarts reset in-memory state and active connections. This launcher runs the servers without Go breakpoint debugging. You can also use `make api-watch` directly alongside `make dev`.
 
+Privileged operations use the separately installed, root-owned admin helper. Air and `make build` do not replace that installed executable. Run `make dev-admin` to build and install the current helper for development, and rerun it after changes to privileged package, service or share operations. The command uses sudo to install the helper and its execution rule; the next operation uses the updated helper without restarting the API.
+
 server-man uses one private YAML configuration: `~/.config/server-man/server-man.yaml` (under `XDG_CONFIG_HOME` when set). Select another absolute path with `./bin/server-man -config /absolute/path/server-man.yaml`.
 
 Both development API commands read this same configuration under the account running VS Code's remote terminals. `.air.toml` configures only the Go reload tool. For testing from another machine, merge the following settings into the existing YAML's `server` section, replacing the documentation IP with the headless server's address, then restart the launcher:

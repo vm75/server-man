@@ -16,6 +16,8 @@ Updated 2026-11-16: defer native Arch testing per user instruction. Keep Arch im
 
 Verification: package/service fixtures cover native package mappings, missing discovery package errors without fallback installation, enable/start failures, both discovery unit names, and helper-to-UI status propagation. `make check`, `make build`, and `make test` (Go race tests) pass. A read-only APT simulation confirmed that `wsdd-server` selects both `wsdd` and `wsdd-server` without package removals. An initial test run overlapped frontend asset regeneration and failed the embedded-asset compilation; the full race suite was rerun after the build completed. No host packages, services, shares or firewall settings changed; native daemon startup and Windows discovery remain unverified.
 
+Runtime follow-up: the development API was current but the installed admin helper differed from the rebuilt binary, so privileged setup still ran the previous Samba-only path. Replaced only the installed helper with the verified binary and confirmed identical SHA256 hashes. Its read-only Samba inspection succeeds and reports `available: true`, `discoveryAvailable: false`, matching the absent discovery service. Documented that Air/build do not update the installed helper and that `make dev-admin` is required after privileged code changes. No native package installation or service changes ran; the user's next setup attempt remains the native mutation check.
+
 ## VS Code development launcher (complete, 2026-11-17)
 
 - [x] Add a compound launcher for Vite and the Go API in integrated terminals, with shared stop behavior and no additional editor extension requirement.
