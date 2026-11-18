@@ -56,6 +56,7 @@ type Service struct {
 }
 type Container struct {
 	Image           string            `yaml:"image" json:"image"`
+	ContainerName   string            `yaml:"container_name,omitempty" json:"containerName,omitempty"`
 	Command         []string          `yaml:"command,omitempty" json:"command,omitempty"`
 	Entrypoint      []string          `yaml:"entrypoint,omitempty" json:"entrypoint,omitempty"`
 	WorkingDir      string            `yaml:"working_dir,omitempty" json:"workingDir,omitempty"`

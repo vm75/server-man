@@ -65,7 +65,9 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 		if err != nil {
 			return nil, err
 		}
-		fmt.Fprintf(&b, "Image=%s\nContainerName=%s\n", image, quadletBase(id, name))
+		containerName := v.ContainerName
+		if containerName == "" { containerName = quadletBase(id, name) }
+		fmt.Fprintf(&b, "Image=%s\nContainerName=%s\n", image, containerName)
 		switch {
 		case v.NetworkMode == "host" || v.NetworkMode == "none":
 			fmt.Fprintf(&b,"Network=%s\n",v.NetworkMode)

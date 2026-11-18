@@ -51,6 +51,7 @@ type composePodman struct {
 }
 type composeContainer struct {
 	Image           string            `yaml:"image"`
+	ContainerName   string            `yaml:"container_name,omitempty"`
 	Command         []string          `yaml:"command,omitempty"`
 	Entrypoint      []string          `yaml:"entrypoint,omitempty"`
 	WorkingDir      string            `yaml:"working_dir,omitempty"`
@@ -100,7 +101,7 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 	services := map[string]composeContainer{}
 	for _, name := range slices.Sorted(maps.Keys(s.Containers)) {
 		v := s.Containers[name]
-		out := composeContainer{Image: literalCompose(v.Image), Ports: v.Ports, Restart: "no", CPUs: v.CPUs, SecurityOpt: []string{}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": runtimeFingerprint(c, key)},
+		out := composeContainer{Image: literalCompose(v.Image), ContainerName: v.ContainerName, Ports: v.Ports, Restart: "no", CPUs: v.CPUs, SecurityOpt: []string{}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": runtimeFingerprint(c, key)},
 			Entrypoint: append([]string(nil), v.Entrypoint...), WorkingDir: literalCompose(v.WorkingDir), User: v.User, UserNSMode: v.UserNSMode, UIDMaps: v.UIDMaps, GIDMaps: v.GIDMaps, GroupAdd: v.GroupAdd,
 			NetworkMode: v.NetworkMode, Devices: append([]string(nil), v.Devices...), CapAdd: v.CapAdd, CapDrop: v.CapDrop, Privileged: v.Privileged, ReadOnly: v.ReadOnly, Init: v.Init, TTY: v.TTY,
 			Tmpfs: append([]string(nil), v.Tmpfs...), ShmSize: v.ShmSize, StopGracePeriod: v.StopGracePeriod, PullPolicy: v.PullPolicy}
