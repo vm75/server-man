@@ -35,7 +35,8 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	root := os.Args[1]
-	authentication, err := auth.Load(filepath.Join(root, "token"), "")
+	cfg := config.Config{StateDir: root, Path: filepath.Join(root, "server-man.yaml"), TokenFile: filepath.Join(root, "token")}
+	authentication, err := auth.LoadWithConfig(cfg)
 	if err != nil {
 		return err
 	}
@@ -46,7 +47,7 @@ func run() error {
 	defer jobs.Close()
 	monitoring := monitor.New(ctx, time.Second)
 	defer monitoring.Close()
-	registry, err := app.Registry(config.Config{StateDir: root, Path: filepath.Join(root, "server-man.yaml")}, jobs, monitoring, core.Runner{})
+	registry, err := app.Registry(cfg, jobs, monitoring, core.Runner{}, authentication.AdminCredentials)
 	if err != nil {
 		return err
 	}
