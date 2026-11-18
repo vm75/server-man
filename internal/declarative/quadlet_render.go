@@ -2,6 +2,7 @@ package declarative
 
 import (
 	"errors"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"path/filepath"
@@ -51,14 +52,83 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 				fmt.Fprintf(&b, "Requires=%s\nAfter=%s\n", unit, unit)
 			}
 		}
+		for dep := range v.DependsOn {
+			unit := quadletBase(id, dep)+".service"
+			fmt.Fprintf(&b, "Requires=%s\nAfter=%s\n", unit, unit)
+		}
+		if strings.HasPrefix(v.NetworkMode, "service:") {
+			unit := quadletBase(id, strings.TrimPrefix(v.NetworkMode, "service:"))+".service"
+			fmt.Fprintf(&b, "Requires=%s\nAfter=%s\n", unit, unit)
+		}
 		b.WriteString("\n[Container]\n")
 		image, err := unitScalarValue(v.Image)
 		if err != nil {
 			return nil, err
 		}
-		fmt.Fprintf(&b, "Image=%s\nContainerName=%s\nNetwork=%s.network\nNetworkAlias=%s\n", image, quadletBase(id, name), network, name)
+		fmt.Fprintf(&b, "Image=%s\nContainerName=%s\n", image, quadletBase(id, name))
+		switch {
+		case v.NetworkMode == "host" || v.NetworkMode == "none":
+			fmt.Fprintf(&b,"Network=%s\n",v.NetworkMode)
+		case strings.HasPrefix(v.NetworkMode,"service:"):
+			fmt.Fprintf(&b,"Network=%s.container\n",quadletBase(id,strings.TrimPrefix(v.NetworkMode,"service:")))
+		default:
+			fmt.Fprintf(&b,"Network=%s.network\nNetworkAlias=%s\n",network,name)
+		}
 		fmt.Fprintf(&b, "Label=io.server-man.service=%s\nLabel=io.server-man.container=%s\nLabel=io.server-man.fingerprint=%s\n", id, name, fingerprint)
-		b.WriteString("NoNewPrivileges=true\n")
+		fmt.Fprintf(&b,"NoNewPrivileges=%t\n",effectiveNoNewPrivileges(v))
+		if v.Privileged { b.WriteString("PodmanArgs=--privileged\n") }
+		if v.TTY { b.WriteString("PodmanArgs=--tty\n") }
+		if v.ReadOnly { b.WriteString("ReadOnly=true\n") }
+		if v.Init { b.WriteString("RunInit=true\n") }
+		if v.User != "" {
+			parts:=strings.SplitN(v.User,":",2)
+			fmt.Fprintf(&b,"User=%s\n",parts[0])
+			if len(parts)>1 { fmt.Fprintf(&b,"Group=%s\n",parts[1]) }
+		}
+		if v.UserNSMode != "" { fmt.Fprintf(&b,"UserNS=%s\n",v.UserNSMode) }
+		for _,x:=range v.UIDMaps { fmt.Fprintf(&b,"UIDMap=%s\n",x) }
+		for _,x:=range v.GIDMaps { fmt.Fprintf(&b,"GIDMap=%s\n",x) }
+		for _,x:=range v.GroupAdd { fmt.Fprintf(&b,"GroupAdd=%s\n",x) }
+		for _,x:=range v.Devices { fmt.Fprintf(&b,"AddDevice=%s\n",x) }
+		for _,x:=range v.CapAdd { fmt.Fprintf(&b,"AddCapability=%s\n",x) }
+		for _,x:=range v.CapDrop { fmt.Fprintf(&b,"DropCapability=%s\n",x) }
+		for _,x:=range v.SecurityOpt {
+			if x=="label=disable" { b.WriteString("SecurityLabelDisable=true\n") }
+			if x=="seccomp:unconfined" || x=="seccomp=unconfined" { b.WriteString("SeccompProfile=unconfined\n") }
+		}
+		for _,x:=range v.Tmpfs { fmt.Fprintf(&b,"Tmpfs=%s\n",x) }
+		if v.ShmSize!="" { fmt.Fprintf(&b,"ShmSize=%s\n",v.ShmSize) }
+		if v.PullPolicy!="" { fmt.Fprintf(&b,"Pull=%s\n",v.PullPolicy) }
+		if v.LogDriver!="" { fmt.Fprintf(&b,"LogDriver=%s\n",v.LogDriver) }
+		for _,k:=range slices.Sorted(maps.Keys(v.LogOptions)) {
+			value,e:=unitScalarValue(k+"="+v.LogOptions[k]); if e!=nil{return nil,errors.New("invalid Quadlet log option")}
+			fmt.Fprintf(&b,"LogOpt=%s\n",value)
+		}
+		if v.WorkingDir!="" { fmt.Fprintf(&b,"WorkingDir=%s\n",v.WorkingDir) }
+		if len(v.Entrypoint)>0 {
+			ep:=v.Entrypoint[0]
+			if len(v.Entrypoint)>1 {encoded,_:=json.Marshal(v.Entrypoint); ep=string(encoded)}
+			val,e:=unitScalarValue(ep); if e!=nil{return nil,errors.New("invalid Quadlet entrypoint")}
+			fmt.Fprintf(&b,"Entrypoint=%s\n",val)
+		}
+		if v.Healthcheck!=nil {
+			h:=v.Healthcheck
+			command:=h.Test[1]
+			if h.Test[0]=="CMD" {
+				parts:=make([]string,0,len(h.Test)-1)
+				for _,arg:=range h.Test[1:] { parts=append(parts,quadletShellQuote(arg)) }
+				command=strings.Join(parts," ")
+			}
+			val,e:=unitScalarValue(strings.ReplaceAll(command,"$","$"));if e!=nil{return nil,errors.New("invalid Quadlet health command")}
+			fmt.Fprintf(&b,"HealthCmd=%s\n",val)
+			if h.Interval!=""{fmt.Fprintf(&b,"HealthInterval=%s\n",h.Interval)}
+			if h.Timeout!=""{fmt.Fprintf(&b,"HealthTimeout=%s\n",h.Timeout)}
+			if h.Retries>0{fmt.Fprintf(&b,"HealthRetries=%d\n",h.Retries)}
+			if h.StartPeriod!=""{fmt.Fprintf(&b,"HealthStartPeriod=%s\n",h.StartPeriod)}
+			for _,member:=range s.Containers {
+				if member.DependsOn[name]=="healthy" { b.WriteString("Notify=healthy\n"); break }
+			}
+		}
 		for _, port := range v.Ports {
 			fmt.Fprintf(&b, "PublishPort=%s\n", port)
 		}
@@ -81,10 +151,7 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 			if !filepath.IsAbs(path) || strings.ContainsAny(path, ":\n\r") || strings.Contains(m.Target, ":") {
 				return nil, errors.New("mount path cannot be represented by Quadlet volume syntax")
 			}
-			suffix := ":rw"
-			if m.ReadOnly {
-				suffix = ":ro"
-			}
+			suffix := ":" + volumeOptions(m)
 			value, err := unitScalarValue(path + ":" + m.Target + suffix)
 			if err != nil {
 				return nil, errors.New("mount path cannot be represented by Quadlet Volume syntax")
@@ -103,7 +170,12 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 			}
 			fmt.Fprintf(&b, "Exec=%s\n", strings.Join(args, " "))
 		}
-		b.WriteString("\n[Service]\nRestart=on-failure\nRestartSec=5\nTimeoutStartSec=900\nTimeoutStopSec=90\n")
+		restart := "on-failure"
+		if v.Restart=="always" || v.Restart=="unless-stopped" {restart="always"}
+		if v.Restart=="no" || v.Mode=="job" {restart="no"}
+		fmt.Fprintf(&b,"\n[Service]\nRestart=%s\nRestartSec=5\nTimeoutStartSec=900\n",restart)
+		stop:=stopSeconds(v.StopGracePeriod)
+		if stop>0 {fmt.Fprintf(&b,"TimeoutStopSec=%d\n",stop+30)}else{b.WriteString("TimeoutStopSec=90\n")}
 		if v.CPUs > 0 {
 			fmt.Fprintf(&b, "CPUQuota=%d%%\n", v.CPUs*100)
 		}
@@ -113,4 +185,8 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 		files[quadletBase(id, name)+".container"] = []byte(b.String())
 	}
 	return files, nil
+}
+
+func quadletShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
