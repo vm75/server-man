@@ -36,6 +36,7 @@ func validPort(s string) bool {
 }
 func (c Config) validateFields() error {
 	uuids, macs := map[string]bool{}, map[string]bool{}
+	containerNames := map[string]bool{}
 	if len(c.Bindings) > 128 || len(c.Secrets) > 128 {
 		return errors.New("configuration reference limit exceeded")
 	}
@@ -48,6 +49,9 @@ func (c Config) validateFields() error {
 		}
 	}
 	for _, s := range c.Services {
+		if s.Kind == "container" {
+			if err := validateContainerOptions(s.Engine, s.Backend, s.Containers); err != nil { return err }
+		}
 		if !literal(s.Name) || len(s.Name) > 128 || len(s.Description) > 4096 {
 			return errors.New("invalid service display fields")
 		}
@@ -59,6 +63,10 @@ func (c Config) validateFields() error {
 			deps[d] = true
 		}
 		for _, v := range s.Containers {
+			if v.ContainerName != "" {
+				if containerNames[v.ContainerName] { return errors.New("duplicate native container name") }
+				containerNames[v.ContainerName] = true
+			}
 			if strings.HasPrefix(v.Image, "-") || strings.ContainsAny(v.Image, " \t\n\r\x00") || len(v.Image) > 512 {
 				return errors.New("invalid container image")
 			}

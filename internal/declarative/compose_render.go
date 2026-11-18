@@ -17,19 +17,73 @@ type composeMount struct {
 	Target   string          `yaml:"target"`
 	ReadOnly bool            `yaml:"read_only"`
 	Bind     map[string]bool `yaml:"bind"`
+	Short    string          `yaml:"-"`
+}
+
+// Podman Compose accepts SELinux :Z/:z and ownership :U as short bind
+// options. Keep the non-creating long representation for ordinary mounts.
+func (m composeMount) MarshalYAML() (any, error) {
+	if m.Short != "" { return m.Short, nil }
+	return struct {
+		Type string `yaml:"type"`
+		Source string `yaml:"source"`
+		Target string `yaml:"target"`
+		ReadOnly bool `yaml:"read_only"`
+		Bind map[string]bool `yaml:"bind"`
+	}{m.Type, m.Source, m.Target, m.ReadOnly, m.Bind}, nil
+}
+type composeDependency struct {
+	Condition string `yaml:"condition"`
+}
+type composeHealth struct {
+	Test []string `yaml:"test"`
+	Interval string `yaml:"interval,omitempty"`
+	Timeout string `yaml:"timeout,omitempty"`
+	Retries int `yaml:"retries,omitempty"`
+	StartPeriod string `yaml:"start_period,omitempty"`
+}
+type composeLogging struct {
+	Driver string `yaml:"driver,omitempty"`
+	Options map[string]string `yaml:"options,omitempty"`
+}
+type composePodman struct {
+	InPod bool `yaml:"in_pod"`
 }
 type composeContainer struct {
-	Image       string            `yaml:"image"`
-	Command     []string          `yaml:"command,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
-	EnvFile     []string          `yaml:"env_file,omitempty"`
-	Ports       []string          `yaml:"ports,omitempty"`
-	Volumes     []composeMount    `yaml:"volumes,omitempty"`
-	Labels      map[string]string `yaml:"labels"`
-	Restart     string            `yaml:"restart"`
-	MemLimit    string            `yaml:"mem_limit,omitempty"`
-	CPUs        int               `yaml:"cpus,omitempty"`
-	SecurityOpt []string          `yaml:"security_opt"`
+	Image           string            `yaml:"image"`
+	ContainerName   string            `yaml:"container_name,omitempty"`
+	Command         []string          `yaml:"command,omitempty"`
+	Entrypoint      []string          `yaml:"entrypoint,omitempty"`
+	WorkingDir      string            `yaml:"working_dir,omitempty"`
+	Environment     map[string]string `yaml:"environment,omitempty"`
+	EnvFile         []string          `yaml:"env_file,omitempty"`
+	Ports           []string          `yaml:"ports,omitempty"`
+	Volumes         []composeMount    `yaml:"volumes,omitempty"`
+	Labels          map[string]string `yaml:"labels"`
+	Restart         string            `yaml:"restart"`
+	MemLimit        string            `yaml:"mem_limit,omitempty"`
+	CPUs            int               `yaml:"cpus,omitempty"`
+	SecurityOpt     []string          `yaml:"security_opt"`
+	User            string            `yaml:"user,omitempty"`
+	UserNSMode      string            `yaml:"userns_mode,omitempty"`
+	UIDMaps         []string          `yaml:"x-podman.uidmaps,omitempty"`
+	GIDMaps         []string          `yaml:"x-podman.gidmaps,omitempty"`
+	GroupAdd        []string          `yaml:"group_add,omitempty"`
+	NetworkMode     string            `yaml:"network_mode,omitempty"`
+	DependsOn       map[string]composeDependency `yaml:"depends_on,omitempty"`
+	Devices         []string          `yaml:"devices,omitempty"`
+	CapAdd          []string          `yaml:"cap_add,omitempty"`
+	CapDrop         []string          `yaml:"cap_drop,omitempty"`
+	Privileged      bool              `yaml:"privileged,omitempty"`
+	ReadOnly        bool              `yaml:"read_only,omitempty"`
+	Init            bool              `yaml:"init,omitempty"`
+	TTY             bool              `yaml:"tty,omitempty"`
+	Tmpfs           []string          `yaml:"tmpfs,omitempty"`
+	ShmSize         string            `yaml:"shm_size,omitempty"`
+	StopGracePeriod string            `yaml:"stop_grace_period,omitempty"`
+	PullPolicy      string            `yaml:"pull_policy,omitempty"`
+	Logging         *composeLogging   `yaml:"logging,omitempty"`
+	Healthcheck     *composeHealth    `yaml:"healthcheck,omitempty"`
 }
 
 func composeProject(id string) string { return "sm-" + id + "-" + digest([]byte(id))[:12] }
@@ -47,7 +101,30 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 	services := map[string]composeContainer{}
 	for _, name := range slices.Sorted(maps.Keys(s.Containers)) {
 		v := s.Containers[name]
-		out := composeContainer{Image: literalCompose(v.Image), Ports: v.Ports, Restart: "no", CPUs: v.CPUs, SecurityOpt: []string{"no-new-privileges:true"}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": runtimeFingerprint(c, key)}}
+		out := composeContainer{Image: literalCompose(v.Image), ContainerName: v.ContainerName, Ports: v.Ports, Restart: "no", CPUs: v.CPUs, SecurityOpt: []string{}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": runtimeFingerprint(c, key)},
+			Entrypoint: append([]string(nil), v.Entrypoint...), WorkingDir: literalCompose(v.WorkingDir), User: v.User, UserNSMode: v.UserNSMode, UIDMaps: v.UIDMaps, GIDMaps: v.GIDMaps, GroupAdd: v.GroupAdd,
+			NetworkMode: v.NetworkMode, Devices: append([]string(nil), v.Devices...), CapAdd: v.CapAdd, CapDrop: v.CapDrop, Privileged: v.Privileged, ReadOnly: v.ReadOnly, Init: v.Init, TTY: v.TTY,
+			Tmpfs: append([]string(nil), v.Tmpfs...), ShmSize: v.ShmSize, StopGracePeriod: v.StopGracePeriod, PullPolicy: v.PullPolicy}
+		for i, item := range out.Entrypoint { out.Entrypoint[i] = literalCompose(item) }
+		for i, item := range out.Devices { out.Devices[i] = literalCompose(item) }
+		for i, item := range out.Tmpfs { out.Tmpfs[i] = literalCompose(item) }
+		if effectiveNoNewPrivileges(v) { out.SecurityOpt = append(out.SecurityOpt, "no-new-privileges:true") }
+		for _, opt := range v.SecurityOpt {
+			if !strings.HasPrefix(opt, "no-new-privileges") { out.SecurityOpt = append(out.SecurityOpt, opt) }
+		}
+		if len(v.DependsOn) > 0 {
+			out.DependsOn = map[string]composeDependency{}
+			for dep, condition := range v.DependsOn { out.DependsOn[dep] = composeDependency{Condition:"service_"+condition} }
+		}
+		if v.Healthcheck != nil {
+			h := v.Healthcheck
+			out.Healthcheck = &composeHealth{Test: append([]string(nil), h.Test...), Interval: h.Interval, Timeout: h.Timeout, Retries: h.Retries, StartPeriod: h.StartPeriod}
+			for i, arg := range out.Healthcheck.Test { out.Healthcheck.Test[i] = literalCompose(arg) }
+		}
+		if v.LogDriver != "" || len(v.LogOptions) > 0 {
+			out.Logging = &composeLogging{Driver:v.LogDriver, Options:map[string]string{}}
+			for k,val := range v.LogOptions { out.Logging.Options[k] = literalCompose(val) }
+		}
 		for _, arg := range v.Command {
 			out.Command = append(out.Command, literalCompose(arg))
 		}
@@ -69,17 +146,32 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 			if !filepath.IsAbs(path) {
 				return nil, errors.New("manifest path must be absolute")
 			}
-			out.Volumes = append(out.Volumes, composeMount{"bind", literalCompose(path), literalCompose(m.Target), m.ReadOnly, map[string]bool{"create_host_path": false}})
+			mount := composeMount{Type:"bind", Source:literalCompose(path), Target:literalCompose(m.Target), ReadOnly:m.ReadOnly, Bind:map[string]bool{"create_host_path":false}}
+			if m.SELinux != "" || m.Chown {
+				if strings.Contains(path, ":") || strings.Contains(m.Target, ":") {
+					return nil, errors.New("SELinux or ownership mount path cannot be represented by Compose short syntax")
+				}
+				mount.Short = literalCompose(path + ":" + m.Target + ":" + volumeOptions(m))
+			}
+			out.Volumes = append(out.Volumes, mount)
 		}
 		if v.MemoryMiB > 0 {
 			out.MemLimit = fmt.Sprintf("%dm", v.MemoryMiB)
 		}
 		services[name] = out
 	}
+	var podman *composePodman
+	if s.Engine == "podman" {
+		// Independent containers are necessary for custom UID/GID mappings
+		// and per-container namespace choices. The provider may otherwise
+		// create one pod with shared user/network namespaces.
+		podman = &composePodman{InPod: false}
+	}
 	body, err := yaml.Marshal(struct {
 		Name     string                      `yaml:"name"`
 		Services map[string]composeContainer `yaml:"services"`
-	}{composeProject(id), services})
+		Podman   *composePodman               `yaml:"x-podman,omitempty"`
+	}{composeProject(id), services, podman})
 	if err != nil {
 		return nil, err
 	}

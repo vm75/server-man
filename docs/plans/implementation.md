@@ -314,3 +314,12 @@ deployment-only change. See the [HTTP host ledger](../operations/host-setup.md#d
 The active follow-up and its verification evidence are tracked in
 [privileged helper implementation](privileged-helper.md). This supersedes the
 original single-account privilege assumption without replacing earlier evidence.
+
+## Podman workload compatibility merge (2026-11-18)
+
+Merged `feat/podman-compose-quadlet-workload-compat-20261117` into `main`,
+preserving the administrator authentication changes. The merge required no
+conflict resolution; one trailing space in the incoming code was removed.
+Verification: `make check` and `make test` passed, including Go race tests and
+Svelte/TypeScript checks. Native Podman/Quadlet acceptance was not run; this
+verification used the existing test fixtures and did not change host workloads.
