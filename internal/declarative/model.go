@@ -55,14 +55,47 @@ type Service struct {
 	VM          *VM                  `yaml:"vm,omitempty" json:"vm,omitempty"`
 }
 type Container struct {
-	Image       string            `yaml:"image" json:"image"`
-	Command     []string          `yaml:"command,omitempty" json:"command,omitempty"`
-	Ports       []string          `yaml:"ports,omitempty" json:"ports,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
-	EnvFiles    []string          `yaml:"env_files,omitempty" json:"envFiles,omitempty"`
-	Mounts      []Mount           `yaml:"mounts,omitempty" json:"mounts,omitempty"`
-	MemoryMiB   int               `yaml:"memory_mib,omitempty" json:"memoryMiB,omitempty"`
-	CPUs        int               `yaml:"cpus,omitempty" json:"cpus,omitempty"`
+	Image           string            `yaml:"image" json:"image"`
+	Command         []string          `yaml:"command,omitempty" json:"command,omitempty"`
+	Entrypoint      []string          `yaml:"entrypoint,omitempty" json:"entrypoint,omitempty"`
+	WorkingDir      string            `yaml:"working_dir,omitempty" json:"workingDir,omitempty"`
+	Ports           []string          `yaml:"ports,omitempty" json:"ports,omitempty"`
+	Environment     map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
+	EnvFiles        []string          `yaml:"env_files,omitempty" json:"envFiles,omitempty"`
+	Mounts          []Mount           `yaml:"mounts,omitempty" json:"mounts,omitempty"`
+	MemoryMiB       int               `yaml:"memory_mib,omitempty" json:"memoryMiB,omitempty"`
+	CPUs            int               `yaml:"cpus,omitempty" json:"cpus,omitempty"`
+	User            string            `yaml:"user,omitempty" json:"user,omitempty"`
+	UserNSMode      string            `yaml:"userns_mode,omitempty" json:"usernsMode,omitempty"`
+	UIDMaps         []string          `yaml:"uid_maps,omitempty" json:"uidMaps,omitempty"`
+	GIDMaps         []string          `yaml:"gid_maps,omitempty" json:"gidMaps,omitempty"`
+	GroupAdd        []string          `yaml:"group_add,omitempty" json:"groupAdd,omitempty"`
+	NetworkMode     string            `yaml:"network_mode,omitempty" json:"networkMode,omitempty"`
+	DependsOn       map[string]string `yaml:"depends_on,omitempty" json:"dependsOn,omitempty"`
+	Devices         []string          `yaml:"devices,omitempty" json:"devices,omitempty"`
+	CapAdd          []string          `yaml:"cap_add,omitempty" json:"capAdd,omitempty"`
+	CapDrop         []string          `yaml:"cap_drop,omitempty" json:"capDrop,omitempty"`
+	SecurityOpt     []string          `yaml:"security_opt,omitempty" json:"securityOpt,omitempty"`
+	Privileged      bool              `yaml:"privileged,omitempty" json:"privileged,omitempty"`
+	ReadOnly        bool              `yaml:"read_only,omitempty" json:"readOnly,omitempty"`
+	Init            bool              `yaml:"init,omitempty" json:"init,omitempty"`
+	TTY             bool              `yaml:"tty,omitempty" json:"tty,omitempty"`
+	Tmpfs           []string          `yaml:"tmpfs,omitempty" json:"tmpfs,omitempty"`
+	ShmSize         string            `yaml:"shm_size,omitempty" json:"shmSize,omitempty"`
+	StopGracePeriod string            `yaml:"stop_grace_period,omitempty" json:"stopGracePeriod,omitempty"`
+	PullPolicy      string            `yaml:"pull_policy,omitempty" json:"pullPolicy,omitempty"`
+	Restart         string            `yaml:"restart,omitempty" json:"restart,omitempty"`
+	LogDriver       string            `yaml:"log_driver,omitempty" json:"logDriver,omitempty"`
+	LogOptions      map[string]string `yaml:"log_options,omitempty" json:"logOptions,omitempty"`
+	Healthcheck     *ContainerHealth  `yaml:"healthcheck,omitempty" json:"healthcheck,omitempty"`
+	Mode            string            `yaml:"mode,omitempty" json:"mode,omitempty"`
+}
+type ContainerHealth struct {
+	Test        []string `yaml:"test" json:"test"`
+	Interval    string   `yaml:"interval,omitempty" json:"interval,omitempty"`
+	Timeout     string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Retries     int      `yaml:"retries,omitempty" json:"retries,omitempty"`
+	StartPeriod string   `yaml:"start_period,omitempty" json:"startPeriod,omitempty"`
 }
 type Mount struct {
 	Storage  string `yaml:"storage" json:"storage"`
@@ -70,6 +103,8 @@ type Mount struct {
 	Kind     string `yaml:"kind,omitempty" json:"kind,omitempty"`
 	Target   string `yaml:"target" json:"target"`
 	ReadOnly bool   `yaml:"read_only,omitempty" json:"readOnly"`
+	SELinux  string `yaml:"selinux,omitempty" json:"selinux,omitempty"`
+	Chown    bool   `yaml:"chown,omitempty" json:"chown,omitempty"`
 }
 type VM struct {
 	RootSizeGiB  int      `yaml:"root_size_gib,omitempty" json:"rootSizeGiB,omitempty"`
