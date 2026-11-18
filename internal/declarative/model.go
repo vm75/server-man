@@ -88,7 +88,6 @@ type Container struct {
 	LogDriver       string            `yaml:"log_driver,omitempty" json:"logDriver,omitempty"`
 	LogOptions      map[string]string `yaml:"log_options,omitempty" json:"logOptions,omitempty"`
 	Healthcheck     *ContainerHealth  `yaml:"healthcheck,omitempty" json:"healthcheck,omitempty"`
-	Mode            string            `yaml:"mode,omitempty" json:"mode,omitempty"`
 }
 type ContainerHealth struct {
 	Test        []string `yaml:"test" json:"test"`

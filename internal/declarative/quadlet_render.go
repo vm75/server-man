@@ -99,6 +99,7 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 		for _,x:=range v.Tmpfs { fmt.Fprintf(&b,"Tmpfs=%s\n",x) }
 		if v.ShmSize!="" { fmt.Fprintf(&b,"ShmSize=%s\n",v.ShmSize) }
 		if v.PullPolicy!="" { fmt.Fprintf(&b,"Pull=%s\n",v.PullPolicy) }
+		if stop:=stopSeconds(v.StopGracePeriod); stop>0 { fmt.Fprintf(&b,"StopTimeout=%d\n",stop) }
 		if v.LogDriver!="" { fmt.Fprintf(&b,"LogDriver=%s\n",v.LogDriver) }
 		for _,k:=range slices.Sorted(maps.Keys(v.LogOptions)) {
 			value,e:=unitScalarValue(k+"="+v.LogOptions[k]); if e!=nil{return nil,errors.New("invalid Quadlet log option")}
@@ -172,7 +173,7 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 		}
 		restart := "on-failure"
 		if v.Restart=="always" || v.Restart=="unless-stopped" {restart="always"}
-		if v.Restart=="no" || v.Mode=="job" {restart="no"}
+		if v.Restart=="no" {restart="no"}
 		fmt.Fprintf(&b,"\n[Service]\nRestart=%s\nRestartSec=5\nTimeoutStartSec=900\n",restart)
 		stop:=stopSeconds(v.StopGracePeriod)
 		if stop>0 {fmt.Fprintf(&b,"TimeoutStopSec=%d\n",stop+30)}else{b.WriteString("TimeoutStopSec=90\n")}

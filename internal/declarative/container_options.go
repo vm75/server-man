@@ -29,13 +29,12 @@ func containerDuration(s string) bool {
 	return err == nil && d > 0
 }
 
-func validateContainerOptions(engine string, containers map[string]Container) error {
+func validateContainerOptions(engine, backend string, containers map[string]Container) error {
 	for name, v := range containers {
 		fail := func(field string) error { return fmt.Errorf("invalid container %s %s", name, field) }
 		if len(v.Entrypoint) > 32 || len(v.Devices) > 32 || len(v.Tmpfs) > 32 || len(v.DependsOn) > 32 || len(v.UIDMaps) > 64 || len(v.GIDMaps) > 64 || len(v.SecurityOpt) > 32 || len(v.LogOptions) > 32 {
 			return fail("option count")
 		}
-		if v.Mode != "" && v.Mode != "service" && v.Mode != "job" { return fail("mode") }
 		if v.User != "" {
 			parts := strings.Split(v.User, ":")
 			if len(parts) > 2 { return fail("user") }
@@ -96,6 +95,9 @@ func validateContainerOptions(engine string, containers map[string]Container) er
 		if !containerDuration(v.StopGracePeriod) { return fail("stop_grace_period") }
 		if v.PullPolicy != "" && v.PullPolicy != "missing" && v.PullPolicy != "always" && v.PullPolicy != "never" && v.PullPolicy != "newer" { return fail("pull_policy") }
 		if v.Restart != "" && v.Restart != "no" && v.Restart != "always" && v.Restart != "unless-stopped" && v.Restart != "on-failure" { return fail("restart") }
+		if backend == "compose" && v.Restart != "" && v.Restart != "no" {
+			return errors.New("Compose restart supervision is not supported with independent boot enablement; use Quadlet or omit restart")
+		}
 		if v.LogDriver != "" && v.LogDriver != "k8s-file" && v.LogDriver != "journald" && v.LogDriver != "none" && v.LogDriver != "passthrough" && v.LogDriver != "passthrough-tty" { return fail("log_driver") }
 		for key, val := range v.LogOptions {
 			if !envName.MatchString(strings.ReplaceAll(key, "-", "_")) || !literal(val) || len(val) > 4096 { return fail("log_options") }

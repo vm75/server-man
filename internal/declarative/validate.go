@@ -49,7 +49,7 @@ func (c Config) validateFields() error {
 	}
 	for _, s := range c.Services {
 		if s.Kind == "container" {
-			if err := validateContainerOptions(s.Engine, s.Containers); err != nil { return err }
+			if err := validateContainerOptions(s.Engine, s.Backend, s.Containers); err != nil { return err }
 		}
 		if !literal(s.Name) || len(s.Name) > 128 || len(s.Description) > 4096 {
 			return errors.New("invalid service display fields")

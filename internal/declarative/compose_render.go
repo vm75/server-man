@@ -46,6 +46,9 @@ type composeLogging struct {
 	Driver string `yaml:"driver,omitempty"`
 	Options map[string]string `yaml:"options,omitempty"`
 }
+type composePodman struct {
+	InPod bool `yaml:"in_pod"`
+}
 type composeContainer struct {
 	Image           string            `yaml:"image"`
 	Command         []string          `yaml:"command,omitempty"`
@@ -97,7 +100,7 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 	services := map[string]composeContainer{}
 	for _, name := range slices.Sorted(maps.Keys(s.Containers)) {
 		v := s.Containers[name]
-		out := composeContainer{Image: literalCompose(v.Image), Ports: v.Ports, Restart: effectiveRestart(v), CPUs: v.CPUs, SecurityOpt: []string{}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": runtimeFingerprint(c, key)},
+		out := composeContainer{Image: literalCompose(v.Image), Ports: v.Ports, Restart: "no", CPUs: v.CPUs, SecurityOpt: []string{}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": runtimeFingerprint(c, key)},
 			Entrypoint: v.Entrypoint, WorkingDir: v.WorkingDir, User: v.User, UserNSMode: v.UserNSMode, UIDMaps: v.UIDMaps, GIDMaps: v.GIDMaps, GroupAdd: v.GroupAdd,
 			NetworkMode: v.NetworkMode, Devices: v.Devices, CapAdd: v.CapAdd, CapDrop: v.CapDrop, Privileged: v.Privileged, ReadOnly: v.ReadOnly, Init: v.Init, TTY: v.TTY,
 			Tmpfs: v.Tmpfs, ShmSize: v.ShmSize, StopGracePeriod: v.StopGracePeriod, PullPolicy: v.PullPolicy}
@@ -150,10 +153,18 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 		}
 		services[name] = out
 	}
+	var podman *composePodman
+	if s.Engine == "podman" {
+		// Independent containers are necessary for custom UID/GID mappings
+		// and per-container namespace choices. The provider may otherwise
+		// create one pod with shared user/network namespaces.
+		podman = &composePodman{InPod: false}
+	}
 	body, err := yaml.Marshal(struct {
 		Name     string                      `yaml:"name"`
 		Services map[string]composeContainer `yaml:"services"`
-	}{composeProject(id), services})
+		Podman   *composePodman               `yaml:"x-podman,omitempty"`
+	}{composeProject(id), services, podman})
 	if err != nil {
 		return nil, err
 	}

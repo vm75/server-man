@@ -49,7 +49,7 @@
   let envText = $state('')
   let privateRefs = $state('')
   let advancedText = $state('{}')
-  const advancedKeys = ['entrypoint', 'workingDir', 'uidMaps', 'gidMaps', 'groupAdd', 'dependsOn', 'devices', 'capAdd', 'capDrop', 'securityOpt', 'init', 'tty', 'tmpfs', 'shmSize', 'stopGracePeriod', 'pullPolicy', 'logDriver', 'logOptions', 'healthcheck', 'mode'] as const
+  const advancedKeys = ['entrypoint', 'workingDir', 'uidMaps', 'gidMaps', 'groupAdd', 'dependsOn', 'devices', 'capAdd', 'capDrop', 'securityOpt', 'init', 'tty', 'tmpfs', 'shmSize', 'stopGracePeriod', 'pullPolicy', 'logDriver', 'logOptions', 'healthcheck'] as const
   let vmDisks = $state('')
   let plan = $state<ImpactPlan | null>(null)
   let reviewDefinition = $state('')

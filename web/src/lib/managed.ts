@@ -4,7 +4,7 @@ export interface ContainerDefinition {
   image: string; command?: string[]; entrypoint?: string[]; workingDir?: string; ports?: string[]; environment?: Record<string, string>; envFiles?: string[]; mounts?: Mount[]; memoryMiB?: number; cpus?: number
   user?: string; usernsMode?: string; uidMaps?: string[]; gidMaps?: string[]; groupAdd?: string[]; networkMode?: string; dependsOn?: Record<string, 'started' | 'healthy'>
   devices?: string[]; capAdd?: string[]; capDrop?: string[]; securityOpt?: string[]; privileged?: boolean; readOnly?: boolean; init?: boolean; tty?: boolean; tmpfs?: string[]
-  shmSize?: string; stopGracePeriod?: string; pullPolicy?: string; restart?: string; logDriver?: string; logOptions?: Record<string, string>; healthcheck?: ContainerHealth; mode?: 'service' | 'job'
+  shmSize?: string; stopGracePeriod?: string; pullPolicy?: string; restart?: string; logDriver?: string; logOptions?: Record<string, string>; healthcheck?: ContainerHealth
 }
 export interface VMDefinition { uuid?: string; mac?: string; image?: string; cpus: number; memoryMiB: number; disks?: string[]; network: string; pool?: string; project?: string; rootSizeGiB?: number; architecture?: string; machine?: string; firmware?: string }
 export interface ServiceDefinition { name?: string; description?: string; kind: 'container' | 'vm'; engine?: string; backend?: string; enabled: boolean; dependsOn?: string[]; containers?: Record<string, ContainerDefinition>; vm?: VMDefinition }
