@@ -166,3 +166,6 @@ func effectiveRestart(v Container) string {
 
 // Only accept integer map values and fixed security flags; unlike a raw
 // PodmanArgs field, these settings cannot turn into arbitrary command options.
+// Podman's native size parser expects single-letter binary units, whereas
+// Compose commonly uses strings such as "1gb" and "256mb".
+func podmanSize(s string) string { return strings.TrimSuffix(strings.ToLower(s), "b") }

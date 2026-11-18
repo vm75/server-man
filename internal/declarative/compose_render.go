@@ -101,9 +101,12 @@ func RenderCompose(store Store, c Config, key string) ([]byte, error) {
 	for _, name := range slices.Sorted(maps.Keys(s.Containers)) {
 		v := s.Containers[name]
 		out := composeContainer{Image: literalCompose(v.Image), Ports: v.Ports, Restart: "no", CPUs: v.CPUs, SecurityOpt: []string{}, Labels: map[string]string{"io.server-man.service": id, "io.server-man.container": name, "io.server-man.fingerprint": runtimeFingerprint(c, key)},
-			Entrypoint: v.Entrypoint, WorkingDir: v.WorkingDir, User: v.User, UserNSMode: v.UserNSMode, UIDMaps: v.UIDMaps, GIDMaps: v.GIDMaps, GroupAdd: v.GroupAdd,
-			NetworkMode: v.NetworkMode, Devices: v.Devices, CapAdd: v.CapAdd, CapDrop: v.CapDrop, Privileged: v.Privileged, ReadOnly: v.ReadOnly, Init: v.Init, TTY: v.TTY,
-			Tmpfs: v.Tmpfs, ShmSize: v.ShmSize, StopGracePeriod: v.StopGracePeriod, PullPolicy: v.PullPolicy}
+			Entrypoint: append([]string(nil), v.Entrypoint...), WorkingDir: literalCompose(v.WorkingDir), User: v.User, UserNSMode: v.UserNSMode, UIDMaps: v.UIDMaps, GIDMaps: v.GIDMaps, GroupAdd: v.GroupAdd,
+			NetworkMode: v.NetworkMode, Devices: append([]string(nil), v.Devices...), CapAdd: v.CapAdd, CapDrop: v.CapDrop, Privileged: v.Privileged, ReadOnly: v.ReadOnly, Init: v.Init, TTY: v.TTY,
+			Tmpfs: append([]string(nil), v.Tmpfs...), ShmSize: v.ShmSize, StopGracePeriod: v.StopGracePeriod, PullPolicy: v.PullPolicy}
+		for i, item := range out.Entrypoint { out.Entrypoint[i] = literalCompose(item) }
+		for i, item := range out.Devices { out.Devices[i] = literalCompose(item) }
+		for i, item := range out.Tmpfs { out.Tmpfs[i] = literalCompose(item) }
 		if effectiveNoNewPrivileges(v) { out.SecurityOpt = append(out.SecurityOpt, "no-new-privileges:true") }
 		for _, opt := range v.SecurityOpt {
 			if !strings.HasPrefix(opt, "no-new-privileges") { out.SecurityOpt = append(out.SecurityOpt, opt) }

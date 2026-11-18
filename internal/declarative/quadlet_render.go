@@ -89,15 +89,23 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 		for _,x:=range v.UIDMaps { fmt.Fprintf(&b,"UIDMap=%s\n",x) }
 		for _,x:=range v.GIDMaps { fmt.Fprintf(&b,"GIDMap=%s\n",x) }
 		for _,x:=range v.GroupAdd { fmt.Fprintf(&b,"GroupAdd=%s\n",x) }
-		for _,x:=range v.Devices { fmt.Fprintf(&b,"AddDevice=%s\n",x) }
+		for _,x:=range v.Devices {
+			value, err := unitScalarValue(x)
+			if err != nil { return nil, errors.New("invalid Quadlet device path") }
+			fmt.Fprintf(&b,"AddDevice=%s\n",value)
+		}
 		for _,x:=range v.CapAdd { fmt.Fprintf(&b,"AddCapability=%s\n",x) }
 		for _,x:=range v.CapDrop { fmt.Fprintf(&b,"DropCapability=%s\n",x) }
 		for _,x:=range v.SecurityOpt {
 			if x=="label=disable" { b.WriteString("SecurityLabelDisable=true\n") }
 			if x=="seccomp:unconfined" || x=="seccomp=unconfined" { b.WriteString("SeccompProfile=unconfined\n") }
 		}
-		for _,x:=range v.Tmpfs { fmt.Fprintf(&b,"Tmpfs=%s\n",x) }
-		if v.ShmSize!="" { fmt.Fprintf(&b,"ShmSize=%s\n",v.ShmSize) }
+		for _,x:=range v.Tmpfs {
+			value, err := unitScalarValue(x)
+			if err != nil { return nil, errors.New("invalid Quadlet tmpfs option") }
+			fmt.Fprintf(&b,"Tmpfs=%s\n",value)
+		}
+		if v.ShmSize!="" { fmt.Fprintf(&b,"ShmSize=%s\n",podmanSize(v.ShmSize)) }
 		if v.PullPolicy!="" { fmt.Fprintf(&b,"Pull=%s\n",v.PullPolicy) }
 		if stop:=stopSeconds(v.StopGracePeriod); stop>0 { fmt.Fprintf(&b,"StopTimeout=%d\n",stop) }
 		if v.LogDriver!="" { fmt.Fprintf(&b,"LogDriver=%s\n",v.LogDriver) }
@@ -105,7 +113,11 @@ func RenderQuadlet(store Store, c Config, key string) (map[string][]byte, error)
 			value,e:=unitScalarValue(k+"="+v.LogOptions[k]); if e!=nil{return nil,errors.New("invalid Quadlet log option")}
 			fmt.Fprintf(&b,"LogOpt=%s\n",value)
 		}
-		if v.WorkingDir!="" { fmt.Fprintf(&b,"WorkingDir=%s\n",v.WorkingDir) }
+		if v.WorkingDir!="" {
+			value, err := unitScalarValue(v.WorkingDir)
+			if err != nil { return nil, errors.New("invalid Quadlet working directory") }
+			fmt.Fprintf(&b,"WorkingDir=%s\n",value)
+		}
 		if len(v.Entrypoint)>0 {
 			ep:=v.Entrypoint[0]
 			if len(v.Entrypoint)>1 {encoded,_:=json.Marshal(v.Entrypoint); ep=string(encoded)}

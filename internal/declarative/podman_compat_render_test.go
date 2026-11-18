@@ -48,7 +48,7 @@ func TestPodmanCommonRuntimeRenderers(t *testing.T) {
 					"AddDevice=/dev/dri:/dev/dri\n", "AddCapability=NET_ADMIN\n",
 					"DropCapability=ALL\n", "SecurityLabelDisable=true\n",
 					"SeccompProfile=unconfined\n", "Volume="+c.Store.Resolve(cfg.Storage["content"].Path)+":/srv/content:rw,U,Z\n",
-					"ReadOnly=true\n", "RunInit=true\n", "ShmSize=256mb\n", "Tmpfs=/tmp/cache:size=1000000\n",
+					"ReadOnly=true\n", "RunInit=true\n", "ShmSize=256m\n", "Tmpfs=/tmp/cache:size=1000000\n",
 					"StopTimeout=30\n", "LogDriver=k8s-file\n", "LogOpt=max-size=100k\n",
 					"HealthInterval=10s\n", "HealthRetries=3\n", "WorkingDir=/data\n",
 				} {
