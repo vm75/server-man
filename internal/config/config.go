@@ -25,6 +25,8 @@ type Config struct {
 	PackageManager        string `json:"packageManager" yaml:"package_manager,omitempty"`
 	StateDir              string `json:"stateDir" yaml:"state_dir,omitempty"`
 	TokenFile             string `json:"tokenFile" yaml:"token_file,omitempty"`
+	AdminUsername         string `json:"adminUsername" yaml:"admin_username,omitempty"`
+	AdminPasswordHash     string `json:"-" yaml:"admin_password_hash,omitempty"`
 	PublicOrigin          string `json:"publicOrigin" yaml:"public_origin,omitempty"`
 	PrivilegedOperations  bool   `json:"privilegedOperations" yaml:"privileged_operations,omitempty"`
 	AllowWrites           bool   `json:"allowWrites" yaml:"allow_writes,omitempty"`
@@ -92,6 +94,12 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if (c.AdminUsername == "") != (c.AdminPasswordHash == "") {
+		return errors.New("admin_username and admin_password_hash must be configured together")
+	}
+	if c.AdminUsername != "" && (!ValidAdminUsername(c.AdminUsername) || !ValidAdminPasswordHash(c.AdminPasswordHash)) {
+		return errors.New("invalid admin username or password hash")
+	}
 	if c.Path != "" && !filepath.IsAbs(c.Path) {
 		return errors.New("configuration path must be absolute")
 	}

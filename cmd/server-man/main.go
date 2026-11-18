@@ -55,16 +55,21 @@ func run() error {
 	defer jobs.Close()
 	monitoring := monitor.New(ctx, time.Duration(cfg.SampleIntervalSeconds)*time.Second)
 	defer monitoring.Close()
-	registry, err := app.Registry(cfg, jobs, monitoring, core.Runner{})
+	var authentication *auth.Auth
+	var adminCredentials []func() (string, string)
+	if *transport == "http" {
+		authentication, err = auth.LoadWithConfig(cfg)
+		if err != nil {
+			return err
+		}
+		adminCredentials = append(adminCredentials, authentication.AdminCredentials)
+	}
+	registry, err := app.Registry(cfg, jobs, monitoring, core.Runner{}, adminCredentials...)
 	if err != nil {
 		return err
 	}
 	if *transport == "stdio" {
 		return mcp.New(registry).Stdio(ctx, os.Stdin, os.Stdout)
-	}
-	authentication, err := auth.Load(cfg.TokenFile, cfg.PublicOrigin)
-	if err != nil {
-		return err
 	}
 	var handler http.Handler
 	if *devUI {

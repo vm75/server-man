@@ -19,6 +19,9 @@ func (c Coordinator) serverRestartRequired(desired Config) bool {
 		settings = *desired.Server
 	}
 	running := *c.RunningServer
+	if c.AdminCredentials != nil {
+		running.AdminUsername, running.AdminPasswordHash = c.AdminCredentials()
+	}
 	settings.Path = ""
 	running.Path = ""
 	return settings != running

@@ -42,7 +42,7 @@ make build
 
 Application versions use the committed [`VERSION`](VERSION) file and pre-1.0 prerelease tags while the implementation plan is unfinished. Untagged builds include a Git commit suffix; a clean build at an exact matching `v<VERSION>` tag reports the release version. `./bin/server-man -version`, `/api/status` and the UI footer expose it. `SERVER_MAN_VERSION` remains available as an explicit build override. See the [versioning and CI policy](docs/versioning.md) for tagging and release steps. The Go module, executables, service units, UI and native ownership markers use `server-man`.
 
-Open `http://127.0.0.1:8080`. Sign in with the access token from the private file created on first start. The startup log shows its path; the default is `~/.config/server-man/token` (or under `XDG_CONFIG_HOME`). The server binds to loopback. `GET /healthz` provides a small unauthenticated JSON health response.
+Open `http://127.0.0.1:8080`. On first use, choose an administrator username and password in the UI, authorized by the random access token created on first start. The startup log shows the token file path; the default is `~/.config/server-man/token` (or under `XDG_CONFIG_HOME`). Existing token-only deployments can still sign in with the token until an administrator is configured. The server binds to loopback. `GET /healthz` provides a small unauthenticated JSON health response.
 
 Management writes are disabled by default. When enabled, jobs run one at a time and appear in **Activity**. Instances using the same state directory also serialize writes through a file lock. Cancelling a job stops its remaining work; it does not undo completed changes. Package commands first receive an interrupt and have up to 30 seconds before forced termination; interrupted package transactions can require native recovery. Each process retains 64 recent jobs in memory and records audit metadata under `~/.local/state/server-man` (or `XDG_STATE_HOME`).
 
@@ -97,11 +97,13 @@ Native lifecycle acceptance is separate from normal checks. `make mcp-vm-test` r
 
 ## HTTP API
 
-All `/api/` routes require authentication except token sign-in. Send `Authorization: Bearer <token>` for an API client, or use the browser session cookie. Tokens in URL query parameters are not supported.
+All `/api/` routes require authentication except the login-mode check, first-time administrator setup and sign-in. The UI uses one administrator username/password after setup; the access token remains valid as `Authorization: Bearer <token>` for API and MCP clients. No extra users or roles are created. Tokens in URL query parameters are not supported. Browser login uses a 30-day, HttpOnly, SameSite Strict cookie, backed by private session state so it survives server and browser restarts. HTTPS deployments also mark the cookie Secure; logout revokes it.
 
 | Endpoint | Behavior |
 | --- | --- |
-| `POST /api/session` | Sign in using a JSON object with a `token` field |
+| `GET /api/auth/mode` | Check whether the single administrator has been configured |
+| `POST /api/admin/setup` | One-time setup with `token`, `username`, and `password`; saves `server.admin_username` and a salted `server.admin_password_hash` in the unified private YAML |
+| `POST /api/session` | Sign in with `username` and `password` after setup, or `token` before setup |
 | `DELETE /api/session` | Sign out the current browser session |
 | `GET /api/status` | Server identity and write policy |
 | `GET /api/tools` | Module availability and tool schemas |

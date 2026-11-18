@@ -94,6 +94,8 @@ Acceptance: frontend type checking/build and Go build pass; the built executable
 
 - [x] Implement module descriptors, tool schemas, capability discovery, and structured errors.
 - [x] Implement authenticated JSON APIs and browser session login/logout.
+
+Single-admin extension (2026-11-18): added one-time token-authorized admin credential setup in the unified YAML, salted PBKDF2-SHA256 verification, username/password UI sign-in and restart-persistent/revocable 30-day cookies; bearer access remains for MCP. Added configuration, auth, and HTTP regression tests. Verification remains pending execution with the repository's Go 1.26 and frontend toolchains; no live TCP/browser or native workload acceptance was performed in this online environment.
 - [x] Implement bounded process execution, write policy, cancellable jobs, and audit output.
 - [x] Verify authentication, origin restrictions, validation, cancellation, output limits, and denied writes.
 

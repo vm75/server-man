@@ -21,11 +21,17 @@ import (
 )
 
 const cookieName = "server-man_session"
-const sessionLifetime = 8 * time.Hour
+const sessionLifetime = 30 * 24 * time.Hour
 
 type Auth struct {
 	digest       [32]byte
 	publicOrigin string
+	username     string
+	passwordHash string
+	configPath   string
+	stateDir     string
+	sessionPath  string
+	attempts      map[string]failedAttempts
 	mu           sync.Mutex
 	sessions     map[[32]byte]time.Time
 }
@@ -72,7 +78,7 @@ func Load(path, publicOrigin string) (*Auth, error) {
 	if len(data) > 4096 || len(token) < 32 || len(token) > 256 || strings.ContainsAny(token, "\r\n\t ") {
 		return nil, errors.New("token file must contain a single token of 32 to 256 characters")
 	}
-	return &Auth{digest: sha256.Sum256([]byte(token)), publicOrigin: strings.TrimRight(publicOrigin, "/"), sessions: map[[32]byte]time.Time{}}, nil
+	return &Auth{digest: sha256.Sum256([]byte(token)), publicOrigin: strings.TrimRight(publicOrigin, "/"), sessions: map[[32]byte]time.Time{}, attempts: map[string]failedAttempts{}}, nil
 }
 
 func (a *Auth) MatchesToken(token string) bool {
@@ -142,17 +148,29 @@ func (a *Auth) secureCookie() bool {
 	return err == nil && origin.Scheme == "https"
 }
 
-func (a *Auth) Login(w http.ResponseWriter, token string) error {
-	if !a.MatchesToken(token) {
-		return errors.New("invalid access token")
+func (a *Auth) Login(w http.ResponseWriter, token string, client ...string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.allowAttemptLocked(client) {
+		return ErrRateLimited
 	}
+	if !a.MatchesToken(token) {
+		a.recordAttemptLocked(client, false)
+		return ErrInvalidCredentials
+	}
+	if a.username != "" {
+		return ErrInvalidCredentials
+	}
+	a.recordAttemptLocked(client, true)
+	return a.issueSessionLocked(w)
+}
+
+func (a *Auth) issueSessionLocked(w http.ResponseWriter) error {
 	var bytes [32]byte
 	if _, err := rand.Read(bytes[:]); err != nil {
 		return err
 	}
 	value := base64.RawURLEncoding.EncodeToString(bytes[:])
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	now := time.Now()
 	for key, expires := range a.sessions {
 		if !now.Before(expires) {
@@ -160,18 +178,33 @@ func (a *Auth) Login(w http.ResponseWriter, token string) error {
 		}
 	}
 	if len(a.sessions) >= 32 {
-		return errors.New("too many active sessions; sign out from another browser or wait for a session to expire")
+		return ErrTooManySessions
 	}
-	a.sessions[sha256.Sum256([]byte(value))] = now.Add(sessionLifetime)
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: value, Path: "/", HttpOnly: true, Secure: a.secureCookie(), SameSite: http.SameSiteStrictMode, MaxAge: int(sessionLifetime.Seconds())})
+	key := sha256.Sum256([]byte(value))
+	a.sessions[key] = now.Add(sessionLifetime)
+	if err := a.saveSessionsLocked(); err != nil {
+		delete(a.sessions, key)
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: value, Path: "/", HttpOnly: true, Secure: a.secureCookie(), SameSite: http.SameSiteStrictMode, MaxAge: int(sessionLifetime.Seconds()), Expires: now.Add(sessionLifetime)})
 	return nil
 }
 
-func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
+func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) error {
 	if cookie, err := r.Cookie(cookieName); err == nil {
 		a.mu.Lock()
-		delete(a.sessions, sha256.Sum256([]byte(cookie.Value)))
+		key := sha256.Sum256([]byte(cookie.Value))
+		previous, existed := a.sessions[key]
+		delete(a.sessions, key)
+		if err := a.saveSessionsLocked(); err != nil {
+			if existed {
+				a.sessions[key] = previous
+			}
+			a.mu.Unlock()
+			return err
+		}
 		a.mu.Unlock()
 	}
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: "/", HttpOnly: true, Secure: a.secureCookie(), SameSite: http.SameSiteStrictMode, MaxAge: -1})
+	return nil
 }

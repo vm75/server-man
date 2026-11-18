@@ -80,6 +80,7 @@ type Journal struct {
 }
 type Coordinator struct {
 	RunningServer *config.Config
+	AdminCredentials func() (string, string)
 	HealthCache   *HealthCache
 	Store         Store
 	Adapters      map[string]Adapter

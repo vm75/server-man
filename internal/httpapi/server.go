@@ -11,6 +11,7 @@ import (
 	"net/url"
 
 	"server-man/internal/auth"
+	"server-man/internal/config"
 	"server-man/internal/core"
 	"server-man/internal/mcp"
 	"server-man/internal/webui"
@@ -55,7 +56,10 @@ func handler(authentication *auth.Auth, registry *core.Registry, ui http.Handler
 		invoke(w, r, registry, r.PathValue("name"), arguments)
 	})
 	private.HandleFunc("DELETE /api/session", func(w http.ResponseWriter, r *http.Request) {
-		authentication.Logout(w, r)
+		if err := authentication.Logout(w, r); err != nil {
+			respondError(w, &core.Error{Code: "operation_failed", Message: "Could not revoke browser session.", Status: 500})
+			return
+		}
 		JSON(w, http.StatusOK, map[string]string{"status": "signed out"})
 	})
 	private.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -66,19 +70,73 @@ func handler(authentication *auth.Auth, registry *core.Registry, ui http.Handler
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	mux.HandleFunc("GET /api/auth/mode", func(w http.ResponseWriter, r *http.Request) {
+		if !authentication.ValidOrigin(r) {
+			respondError(w, &core.Error{Code: "forbidden_origin", Message: "Request origin or host is not allowed.", Status: 403})
+			return
+		}
+		JSON(w, http.StatusOK, map[string]bool{"adminConfigured": authentication.AdminConfigured()})
+	})
+	mux.HandleFunc("POST /api/admin/setup", func(w http.ResponseWriter, r *http.Request) {
+		if !authentication.ValidOrigin(r) {
+			respondError(w, &core.Error{Code: "forbidden_origin", Message: "Request origin or host is not allowed.", Status: 403})
+			return
+		}
+		var credentials struct {
+			Token    string `json:"token"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if !decode(w, r, &credentials, 4096) {
+			return
+		}
+		if !config.ValidAdminUsername(credentials.Username) || len(credentials.Password) < 12 || len(credentials.Password) > 256 {
+			respondError(w, core.Invalid("Username must start with a letter (maximum 64 characters); password must be 12 to 256 characters."))
+			return
+		}
+		if err := authentication.SetupAdmin(w, credentials.Token, credentials.Username, credentials.Password, r.RemoteAddr); err != nil {
+			if errors.Is(err, auth.ErrInvalidCredentials) {
+				respondError(w, &core.Error{Code: "unauthorized", Message: "Invalid access token.", Status: 401})
+			} else if errors.Is(err, auth.ErrRateLimited) {
+				respondError(w, &core.Error{Code: "rate_limited", Message: err.Error(), Status: 429})
+			} else if errors.Is(err, config.ErrAdminConfigured) || errors.Is(err, config.ErrSetupConflict) {
+				respondError(w, &core.Error{Code: "conflict", Message: "Administrator is already configured or configuration changed. Reload the page.", Status: 409})
+			} else {
+				respondError(w, &core.Error{Code: "operation_failed", Message: "Could not save administrator credentials. Check configuration permissions and retry.", Status: 500})
+			}
+			return
+		}
+		JSON(w, http.StatusOK, map[string]string{"status": "administrator configured"})
+	})
 	mux.HandleFunc("POST /api/session", func(w http.ResponseWriter, r *http.Request) {
 		if !authentication.ValidOrigin(r) {
 			respondError(w, &core.Error{Code: "forbidden_origin", Message: "Request origin or host is not allowed.", Status: 403})
 			return
 		}
 		var credentials struct {
-			Token string `json:"token"`
+			Token    string `json:"token"`
+			Username string `json:"username"`
+			Password string `json:"password"`
 		}
 		if !decode(w, r, &credentials, 4096) {
 			return
 		}
-		if err := authentication.Login(w, credentials.Token); err != nil {
-			respondError(w, &core.Error{Code: "unauthorized", Message: err.Error(), Status: 401})
+		var err error
+		if authentication.AdminConfigured() {
+			err = authentication.LoginPassword(w, credentials.Username, credentials.Password, r.RemoteAddr)
+		} else {
+			err = authentication.Login(w, credentials.Token, r.RemoteAddr)
+		}
+		if err != nil {
+			if errors.Is(err, auth.ErrInvalidCredentials) {
+				respondError(w, &core.Error{Code: "unauthorized", Message: "Invalid credentials.", Status: 401})
+			} else if errors.Is(err, auth.ErrRateLimited) {
+				respondError(w, &core.Error{Code: "rate_limited", Message: err.Error(), Status: 429})
+			} else if errors.Is(err, auth.ErrTooManySessions) {
+				respondError(w, &core.Error{Code: "too_many_sessions", Message: err.Error(), Status: 429})
+			} else {
+				respondError(w, &core.Error{Code: "operation_failed", Message: "Could not create browser session.", Status: 500})
+			}
 			return
 		}
 		JSON(w, http.StatusOK, map[string]string{"status": "signed in"})
@@ -97,7 +155,7 @@ func RequireAuth(authentication *auth.Auth, next http.Handler) http.Handler {
 		}
 		if !authentication.Authorized(r) {
 			w.Header().Set("WWW-Authenticate", "Bearer")
-			respondError(w, &core.Error{Code: "unauthorized", Message: "Sign in with the server access token.", Status: 401})
+			respondError(w, &core.Error{Code: "unauthorized", Message: "Sign in to your administrator account.", Status: 401})
 			return
 		}
 		next.ServeHTTP(w, r)

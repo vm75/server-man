@@ -18,7 +18,7 @@ import (
 	"server-man/internal/modules/updates"
 )
 
-func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, runner core.Executor) (*core.Registry, error) {
+func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, runner core.Executor, adminCredentials ...func() (string, string)) (*core.Registry, error) {
 	registry := core.NewRegistry(cfg.AllowWrites, jobs)
 	startedAt := time.Now().UTC()
 	var managed *declarative.Coordinator
@@ -61,6 +61,9 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 		err = declarative.RegisterInspection(registry, declarative.Store{Path: path})
 		if err == nil {
 			coordinator := declarative.Coordinator{RunningServer: &cfg, HealthCache: &declarative.HealthCache{}, Store: declarative.Store{Path: path}, Adapters: map[string]declarative.Adapter{"podman/quadlet": declarative.NewQuadlet(declarative.Store{Path: path}, runner), "podman/compose": declarative.NewCompose(declarative.Store{Path: path}, "podman", runner), "docker/compose": declarative.NewCompose(declarative.Store{Path: path}, "docker", runner), "libvirt": declarative.NewLibvirt(declarative.Store{Path: path}, cfg.LibvirtURI, runner), "incus": declarative.NewIncus(declarative.Store{Path: path}, runner)}}
+			if len(adminCredentials) > 0 {
+				coordinator.AdminCredentials = adminCredentials[0]
+			}
 			managed = &coordinator
 			nativeShares := shares.New(cfg, runner)
 			for _, protocol := range []string{"samba", "nfs"} {
