@@ -259,7 +259,13 @@ func action(ctx context.Context,uid int, req Request) (Observation,error) {
 	if err=verifyOwnedUnit(id,unit,unit);err!=nil{return Observation{},err}
 	running,_,err:=unitStatus(ctx,id)
 	if err!=nil{return Observation{},err}
-	if req.Action!="start" && req.Action!="stop" && req.Action!="restart" {return Observation{},errors.New("unsupported Firecracker action")}
+	if req.Action!="start" && req.Action!="stop" && req.Action!="restart" && req.Action!="force_stop" {return Observation{},errors.New("unsupported Firecracker action")}
+	if req.Action=="force_stop" {
+		if running {
+			if _,err=runCommand(ctx,Systemctl,"stop",UnitName(id));err!=nil{return Observation{},err}
+		}
+		return inspect(ctx,uid,Request{ID:req.ID})
+	}
 	if req.Action=="stop" || req.Action=="restart" {
 		if running {
 			if err=shutdown(ctx,id);err!=nil{return Observation{},err}

@@ -220,8 +220,8 @@
     {/if}
     <div class="actions">
       <button disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id:service.id} }}>Edit definition</button>
-      {#each ['start', 'stop', 'restart', service.enabled ? 'disable' : 'enable'] as action}
-        <button class:primary={action === 'start'} disabled={!allowWrites || activeJob !== null || loading || ((action === 'start' || action === 'restart' || action === 'enable') && service.issues.some(i => i.severity !== 'warning' && (action === 'enable' || i.field !== 'autostart')))} onclick={() => { if (action === 'start') void perform(service, action); else pending = { service, action } }}>{action === 'enable' ? 'Enable boot startup' : action === 'disable' ? 'Disable boot startup' : action.charAt(0).toUpperCase() + action.slice(1)}</button>
+      {#each ['start', 'stop', 'restart', ...(service.backend === 'firecracker' ? ['force_stop'] : []), service.enabled ? 'disable' : 'enable'] as action}
+        <button class:primary={action === 'start'} disabled={!allowWrites || activeJob !== null || loading || ((action === 'start' || action === 'restart' || action === 'enable') && service.issues.some(i => i.severity !== 'warning' && (action === 'enable' || i.field !== 'autostart')))} onclick={() => { if (action === 'start') void perform(service, action); else pending = { service, action } }}>{action === 'enable' ? 'Enable boot startup' : action === 'disable' ? 'Disable boot startup' : action === 'force_stop' ? 'Force stop VM' : action.charAt(0).toUpperCase() + action.slice(1)}</button>
       {/each}
     </div>
   </section>

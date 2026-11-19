@@ -132,7 +132,7 @@ func (f *Firecracker) VerifyRemoved(ctx context.Context,previous Config,key stri
 func (f *Firecracker) Action(ctx context.Context,c Config,key,operation string) error {
 	spec,err:=f.spec(c,key)
 	if err!=nil{return err}
-	if operation!="start"&&operation!="stop"&&operation!="restart" {return errors.New("unsupported Firecracker lifecycle action")}
+	if operation!="start"&&operation!="stop"&&operation!="restart"&&operation!="force_stop" {return errors.New("unsupported Firecracker lifecycle action")}
 	if _,err=f.request(ctx,"firecracker_action",core.Input{"id":spec.ResourceID,"action":operation});err!=nil {
 		return errors.New("Firecracker lifecycle failed; check host service state and VM logs. A failed graceful stop never force-kills the guest")
 	}
