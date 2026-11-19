@@ -139,6 +139,7 @@ func inspect(ctx context.Context, uid int, req Request) (Observation,error) {
 		result.Matches=bytes.Equal(a,b) && enabled==desired.Enabled
 	}
 	if _,pending,e:=readIntent(id);e!=nil {return Observation{},e} else if pending {result.Matches=false}
+	if _,removing,e:=readRemoval(id);e!=nil {return Observation{},e} else if removing {result.Matches=false}
 	if running {
 		marker,err:=regularRootFile(filepath.Join(Root(id),"started.hash"))
 		result.ActiveMatches=err==nil && strings.TrimSpace(string(marker))==runtimeHash(spec)
@@ -154,6 +155,9 @@ func publish(ctx context.Context, uid,gid int, req Request) (Observation,error) 
 	spec.UID,spec.GID=uid,gid
 	if err:=spec.Validate();err!=nil{return Observation{},err}
 	id:=req.nativeIdentity(uid)
+	if _,removing,e:=readRemoval(id);e!=nil{return Observation{},e} else if removing {
+		return Observation{},errors.New("complete interrupted Firecracker removal before publishing")
+	}
 	current,err:=readSpec(id)
 	had:=err==nil
 	if err!=nil && !os.IsNotExist(err) {return Observation{},err}
@@ -259,6 +263,9 @@ func shutdown(ctx context.Context,id string) error {
 }
 func action(ctx context.Context,uid int, req Request) (Observation,error) {
 	id:=req.nativeIdentity(uid)
+	if _,removing,e:=readRemoval(id);e!=nil{return Observation{},e} else if removing {
+		return Observation{},errors.New("Firecracker removal is incomplete; lifecycle changes are blocked")
+	}
 	spec,err:=readSpec(id)
 	if err!=nil{return Observation{},errors.New("Firecracker native definition is missing")}
 	unit,err:=spec.Unit()
