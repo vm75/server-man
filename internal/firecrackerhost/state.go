@@ -95,6 +95,14 @@ func writeRootFile(path string, data []byte, mode os.FileMode) error {
 	} else if err:=secureDirectory(dir);err!=nil {return err}
 	temp:=path+".pending"
 	file,err:=os.OpenFile(temp,os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW,0600)
+	if os.IsExist(err) {
+		previous,e:=regularRootFile(temp)
+		if e!=nil || !bytes.Equal(previous,data) {
+			return errors.New("interrupted native staging differs from the expected bytes; inspect before retry")
+		}
+		if e=os.Remove(temp);e!=nil{return e}
+		file,err=os.OpenFile(temp,os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW,0600)
+	}
 	if err!=nil {return errors.New("stale or unsafe native publication staging file")}
 	defer os.Remove(temp)
 	if _,err=file.Write(data);err!=nil {file.Close();return err}
