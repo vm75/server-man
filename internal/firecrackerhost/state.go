@@ -17,6 +17,12 @@ import (
 	"server-man/internal/core"
 )
 
+func ipBinary() string {
+	for _,path:=range []string{"/usr/sbin/ip","/usr/bin/ip"} {
+		if info,err:=os.Stat(path);err==nil && info.Mode().IsRegular() && info.Mode().Perm()&0111!=0 {return path}
+	}
+	return "/usr/sbin/ip"
+}
 func accountIDs(account string) (int, int, error) {
 	u, err := user.Lookup(account)
 	if err != nil { return 0, 0, errors.New("Firecracker workload account is unavailable") }
@@ -123,7 +129,7 @@ func checkSources(spec Spec) error {
 	if _,err:=os.Stat("/dev/kvm");err!=nil {
 		return errors.New("KVM is unavailable")
 	}
-	for _,path:=range []string{RuntimePath,VMMPath,JailerPath,Systemctl,IPPath} {
+	for _,path:=range []string{RuntimePath,VMMPath,JailerPath,Systemctl,ipBinary()} {
 		info,err:=os.Lstat(path)
 		if err!=nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111==0 {
 			return errors.New("Firecracker host dependency is unavailable")
@@ -152,7 +158,8 @@ func isRunning(ctx context.Context,id string) (bool,error) {
 	state:=strings.TrimSpace(out)
 	switch state {
 	case "active","activating","reloading": return true,nil
-	case "inactive","failed","deactivating":return false,nil
+	case "inactive","failed":return false,nil
+	case "deactivating":return true,nil
 	default:return false,errors.New("Firecracker unit state cannot be verified")
 	}
 }

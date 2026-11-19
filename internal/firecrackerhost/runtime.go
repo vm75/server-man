@@ -33,11 +33,11 @@ func prepareTAP(ctx context.Context,spec Spec) error {
 	}
 	if err!=nil {
 		if !os.IsNotExist(err) {return errors.New("Firecracker TAP cannot be inspected safely")}
-		if _,err=runCommand(ctx,IPPath,"tuntap","add","dev",tap,"mode","tap","user",fmt.Sprint(spec.UID));err!=nil{return err}
-		if _,err=runCommand(ctx,IPPath,"link","set","dev",tap,"alias",tag(id));err!=nil{return err}
+		if _,err=runCommand(ctx,ipBinary(),"tuntap","add","dev",tap,"mode","tap","user",fmt.Sprint(spec.UID));err!=nil{return err}
+		if _,err=runCommand(ctx,ipBinary(),"link","set","dev",tap,"alias",tag(id));err!=nil{return err}
 	}
-	if _,err=runCommand(ctx,IPPath,"link","set","dev",tap,"master",spec.Bridge);err!=nil{return err}
-	if _,err=runCommand(ctx,IPPath,"link","set","dev",tap,"up");err!=nil{return err}
+	if _,err=runCommand(ctx,ipBinary(),"link","set","dev",tap,"master",spec.Bridge);err!=nil{return err}
+	if _,err=runCommand(ctx,ipBinary(),"link","set","dev",tap,"up");err!=nil{return err}
 	return nil
 }
 func removeTAP(ctx context.Context,spec Spec) error {
@@ -47,7 +47,7 @@ func removeTAP(ctx context.Context,spec Spec) error {
 	if os.IsNotExist(err) {return nil}
 	if err!=nil{return errors.New("Firecracker TAP ownership cannot be verified")}
 	if alias!=tag(id) {return errors.New("Firecracker TAP belongs to another manager")}
-	_,err=runCommand(ctx,IPPath,"link","delete","dev",tap)
+	_,err=runCommand(ctx,ipBinary(),"link","delete","dev",tap)
 	return err
 }
 func bindJailSource(from,to string) error {

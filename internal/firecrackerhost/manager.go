@@ -77,7 +77,8 @@ func unitStatus(ctx context.Context,id string) (bool,bool,error) {
 	}
 	switch state {
 	case "active","activating","reloading":
-	case "inactive","failed","deactivating":
+	case "inactive","failed":
+	case "deactivating":return true,false,nil
 	default:return false,false,errors.New("Firecracker unit status is ambiguous")
 	}
 	return state=="active" || state=="activating" || state=="reloading",fileState=="enabled",nil

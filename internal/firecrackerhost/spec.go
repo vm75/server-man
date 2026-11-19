@@ -21,7 +21,6 @@ const (
 	JailerPath  = "/usr/bin/jailer"
 	VMMPath     = "/usr/bin/firecracker"
 	Systemctl   = "/usr/bin/systemctl"
-	IPPath      = "/usr/sbin/ip"
 )
 var (
 	idPattern = regexp.MustCompile("^[a-z][a-z0-9_-]{0,62}$")
