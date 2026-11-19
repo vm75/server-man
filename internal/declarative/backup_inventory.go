@@ -180,9 +180,18 @@ func (c Coordinator) BackupInventory(ctx context.Context) (BackupInventory, erro
 			}
 			continue
 		}
+		// Do not classify Firecracker native state as a libvirt export.
+		if service.Backend == "firecracker" {
+			addRequirement(key, "firecracker_native_state", "A Firecracker native-state export and jailed-runtime dependency inventory are required before backup preparation.")
+			addIssue("unknown", key, "native_state", "firecracker_backup_unavailable", "Firecracker native backup is not implemented.", "Preserve VM data until an explicit Firecracker backup workflow is available.")
+			continue
+		}
 		nativeKind := "libvirt_guest_state"
 		if service.Backend == "incus" {
 			nativeKind = "incus_instance_export"
+		} else if service.Backend != "libvirt" {
+			addIssue("unknown", key, "native_state", "vm_backup_unsupported", "Native backup for this VM backend is unsupported.", "Review supported export methods before capture.")
+			continue
 		}
 		baseInput := BackupInput{ID: "native/" + id, Kind: nativeKind, Strategy: "native_export", Resources: []string{key}, Required: true, Sensitive: true, Inspection: "native_dependencies_unchecked"}
 		probe, available := c.Adapters[service.Backend].(BackupDependencyAdapter)

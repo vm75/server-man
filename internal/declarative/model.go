@@ -106,7 +106,12 @@ type Mount struct {
 	SELinux  string `yaml:"selinux,omitempty" json:"selinux,omitempty"`
 	Chown    bool   `yaml:"chown,omitempty" json:"chown,omitempty"`
 }
+type FirecrackerVM struct {
+	Kernel string `yaml:"kernel" json:"kernel"`
+	BootArgs string `yaml:"boot_args,omitempty" json:"bootArgs,omitempty"`
+}
 type VM struct {
+	Firecracker *FirecrackerVM `yaml:"firecracker,omitempty" json:"firecracker,omitempty"`
 	RootSizeGiB  int      `yaml:"root_size_gib,omitempty" json:"rootSizeGiB,omitempty"`
 	Architecture string   `yaml:"architecture,omitempty" json:"architecture,omitempty"`
 	Machine      string   `yaml:"machine,omitempty" json:"machine,omitempty"`
@@ -268,7 +273,7 @@ func (c *Config) Validate() error {
 				}
 			}
 		case "vm":
-			if s.Engine != "" || len(s.Containers) != 0 || s.VM == nil || (s.Backend != "libvirt" && s.Backend != "incus") {
+			if s.Engine != "" || len(s.Containers) != 0 || s.VM == nil || (s.Backend != "libvirt" && s.Backend != "incus" && s.Backend != "firecracker") {
 				return errors.New("invalid VM backend or definition")
 			}
 			v := s.VM
@@ -282,6 +287,11 @@ func (c *Config) Validate() error {
 				if st, ok := c.Storage[disk]; !ok || st.Kind != "file" {
 					return errors.New("VM disk must reference file storage")
 				}
+			}
+			if s.Backend == "firecracker" {
+				if err := validateFirecrackerVM(*c, *v); err != nil { return err }
+			} else if v.Firecracker != nil {
+				return errors.New("Firecracker settings require the Firecracker backend")
 			}
 		default:
 			return errors.New("unsupported service kind")
