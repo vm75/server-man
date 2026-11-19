@@ -14,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"server-man/internal/core"
 )
 
 func accountIDs(account string) (int, int, error) {
@@ -53,7 +54,14 @@ func regularRootFile(path string) ([]byte,error) {
 func writeRootFile(path string, data []byte, mode os.FileMode) error {
 	if len(data)>64<<10 {return errors.New("oversize Firecracker native file")}
 	dir:=filepath.Dir(path)
-	if err:=secureDirectory(dir);err!=nil {return err}
+	if dir == "/etc/systemd/system" {
+		info,err:=os.Lstat(dir)
+		if err!=nil{return err}
+		stat,ok:=info.Sys().(*syscall.Stat_t)
+		if !ok || !info.IsDir() || stat.Uid!=0 || info.Mode().Perm()&0022!=0 {
+			return errors.New("unsafe Firecracker systemd directory")
+		}
+	} else if err:=secureDirectory(dir);err!=nil {return err}
 	temp:=path+".pending"
 	file,err:=os.OpenFile(temp,os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW,0600)
 	if err!=nil {return errors.New("stale or unsafe native publication staging file")}
@@ -131,10 +139,12 @@ func runCommand(ctx context.Context, program string, args ...string) (string,err
 	defer cancel()
 	cmd:=exec.CommandContext(timeoutCtx,program,args...)
 	cmd.Env=[]string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin","LC_ALL=C","LANG=C"}
-	output,err:=cmd.CombinedOutput()
-	if len(output)>32<<10 {return "",errors.New("native Firecracker command output exceeded bound")}
-	if err!=nil {return "",fmt.Errorf("Firecracker host operation failed: %w",err)}
-	return string(output),nil
+	output:=core.NewTail(32 << 10)
+	cmd.Stdout,cmd.Stderr=output,output
+	if err:=cmd.Run();err!=nil {return "",fmt.Errorf("Firecracker host operation failed: %w",err)}
+	text,truncated:=output.Snapshot()
+	if truncated{return "",errors.New("native Firecracker command output exceeded bound")}
+	return text,nil
 }
 func isRunning(ctx context.Context,id string) (bool,error) {
 	out,err:=runCommand(ctx,Systemctl,"show",UnitName(id),"--property=ActiveState","--value","--no-pager")

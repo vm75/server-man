@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 )
 
 func writeUnitFile(path string, data []byte) error {
@@ -164,4 +163,3 @@ func RuntimeMain(args []string) error {
 	default:return errors.New("unsupported Firecracker runtime operation")
 	}
 }
-var _ = time.Second
