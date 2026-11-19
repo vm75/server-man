@@ -152,7 +152,7 @@ func publish(ctx context.Context, uid,gid int, req Request) (Observation,error) 
 	spec:=*req.Spec
 	if spec.ResourceID!=req.ID {return Observation{},errors.New("mismatched Firecracker resource")}
 	spec.UID,spec.GID=uid,gid
-	if err:=checkSources(spec);err!=nil{return Observation{},err}
+	if err:=spec.Validate();err!=nil{return Observation{},err}
 	id:=req.nativeIdentity(uid)
 	current,err:=readSpec(id)
 	had:=err==nil
@@ -175,12 +175,19 @@ func publish(ctx context.Context, uid,gid int, req Request) (Observation,error) 
 	nextUnit,err:=spec.Unit()
 	if err!=nil{return Observation{},err}
 	if err=verifyOwnedUnit(id,oldUnit,nextUnit);err!=nil{return Observation{},err}
+	running:=false
 	if had {
-		running,_,e:=unitStatus(ctx,id)
+		var e error
+		running,_,e=unitStatus(ctx,id)
 		if e!=nil{return Observation{},e}
 		if running && !sameRuntime(current,spec) {
 			return Observation{},errors.New("stop Firecracker VM before changing its native hardware")
 		}
+	}
+	// Never conflate independent boot policy with current execution: a pure
+	// Enable/Disable is safe even if a running VM's disk is temporarily missing.
+	if !had || !running || !sameRuntime(current,spec) {
+		if err=checkSources(spec);err!=nil{return Observation{},err}
 	}
 	if !pending {
 		fresh:=publicationIntent{DesiredHash:specHash(spec)}
