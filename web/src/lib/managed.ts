@@ -6,7 +6,8 @@ export interface ContainerDefinition {
   devices?: string[]; capAdd?: string[]; capDrop?: string[]; securityOpt?: string[]; privileged?: boolean; readOnly?: boolean; init?: boolean; tty?: boolean; tmpfs?: string[]
   shmSize?: string; stopGracePeriod?: string; pullPolicy?: string; restart?: string; logDriver?: string; logOptions?: Record<string, string>; healthcheck?: ContainerHealth
 }
-export interface VMDefinition { uuid?: string; mac?: string; image?: string; cpus: number; memoryMiB: number; disks?: string[]; network: string; pool?: string; project?: string; rootSizeGiB?: number; architecture?: string; machine?: string; firmware?: string }
+export interface FirecrackerVMDefinition { kernel: string; bootArgs?: string }
+export interface VMDefinition { firecracker?: FirecrackerVMDefinition; uuid?: string; mac?: string; image?: string; cpus: number; memoryMiB: number; disks?: string[]; network: string; pool?: string; project?: string; rootSizeGiB?: number; architecture?: string; machine?: string; firmware?: string }
 export interface ServiceDefinition { name?: string; description?: string; kind: 'container' | 'vm'; engine?: string; backend?: string; enabled: boolean; dependsOn?: string[]; containers?: Record<string, ContainerDefinition>; vm?: VMDefinition }
 export interface DiskSource { path: string; format: string; sha256: string }
 export interface StorageDefinition { source?: DiskSource; path: string; kind?: string; external?: boolean; format?: string; mount?: string }

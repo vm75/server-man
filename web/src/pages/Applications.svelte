@@ -16,7 +16,7 @@
     id: string
     initialKind?: 'container' | 'vm'
     initialEngine?: 'podman' | 'docker'
-    initialBackend?: 'quadlet' | 'compose' | 'libvirt' | 'incus'
+    initialBackend?: 'quadlet' | 'compose' | 'libvirt' | 'incus' | 'firecracker'
   }
   let editor = $state<EditorState | null>(null)
   let feedback = $state('')
@@ -37,7 +37,7 @@
   function openEditor(
     kind: 'container' | 'vm',
     engine?: 'podman' | 'docker',
-    backend?: 'quadlet' | 'compose' | 'libvirt' | 'incus'
+    backend?: 'quadlet' | 'compose' | 'libvirt' | 'incus' | 'firecracker'
   ) {
     editor = {
       id: '',
@@ -94,6 +94,7 @@
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('container', 'docker', 'compose')}>Docker Compose</button>
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
+    <button class="small-button" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'firecracker')}>Firecracker VM (experimental)</button>
   </div>
   <div class="search-wrap">
     <label class="sr-only" for="app-search">Find an application</label>
@@ -136,6 +137,7 @@
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('container', 'docker', 'compose')}>Docker Compose</button>
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
+      <button disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'firecracker')}>Firecracker VM (experimental)</button>
     </div>
   </section>
 {:else if inventory && !inventory.error && inventory.services.length && !filtered.length}
@@ -214,7 +216,7 @@
         <p class="resource-hint">Logs can contain private application data and are requested only when you click Read logs.{service.backend === 'incus' ? ' Incus reports instance diagnostics, not guest application logs.' : ''}</p>
       {/if}
     {:else if service.kind === 'vm'}
-      <p class="resource-hint">Guest application logs are not exposed by the libvirt backend; inspect them inside the guest.</p>
+      <p class="resource-hint">Guest application logs are not exposed by this VM backend; inspect them inside the guest.</p>
     {/if}
     <div class="actions">
       <button disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id:service.id} }}>Edit definition</button>
