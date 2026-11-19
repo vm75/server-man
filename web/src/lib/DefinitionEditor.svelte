@@ -15,7 +15,7 @@
     resourceID?: string
     initialKind?: 'container' | 'vm'
     initialEngine?: 'podman' | 'docker'
-    initialBackend?: 'quadlet' | 'compose' | 'libvirt' | 'incus'
+    initialBackend?: 'quadlet' | 'compose' | 'libvirt' | 'incus' | 'firecracker'
     onClose: () => void
     onSaved: (job: string) => void
   } = $props()
@@ -29,7 +29,7 @@
     const b = initialBackend ?? (k === 'vm' ? 'libvirt' : 'quadlet')
     const e = initialEngine ?? (k === 'container' ? 'podman' : undefined)
     if (k === 'vm') {
-      return { kind: 'vm', backend: b, enabled: false, name: '', description: '', vm: { cpus: 2, memoryMiB: 2048, network: '', disks: [] } }
+      return { kind: 'vm', backend: b, enabled: false, name: '', description: '', vm: { cpus: 2, memoryMiB: b === 'firecracker' ? 512 : 2048, network: '', disks: [], ...(b === 'firecracker' ? { firecracker: { kernel: '' } } : {}) } }
     }
     return { kind: 'container', engine: e, backend: b, enabled: false, name: '', description: '', containers: { app: { image: '', mounts: [] } } }
   }
@@ -54,6 +54,7 @@
   let reviewDefinition = $state('')
   let operation = $state('save')
   let mode = $state('now')
+  const firecrackerEditNotice = 'Firecracker requires a prepared Linux kernel, raw disk images and an existing Linux bridge. Guest networking and application startup must be configured inside the VM. Native Firecracker execution is not yet available on this branch.'
   const incusEditNotice = 'Incus v1: Stop the VM before changing CPU, memory, storage, network, firmware or native description. Save for next start does not defer running hardware edits. Start at boot can be changed without stopping the VM.'
   const storageChoices = $derived(Object.entries(snapshot?.config.storage ?? {}))
   const directoryStorageChoices = $derived(storageChoices.filter(([, s]) => s.kind !== 'file'))
@@ -281,7 +282,7 @@
   const serviceTypeTitle = $derived.by(() => {
     if (kind !== 'service') return kind === 'secret' ? 'private file reference' : kind
     if (service.kind === 'vm') {
-      return service.backend === 'incus' ? 'Incus virtual machine' : 'KVM/libvirt virtual machine'
+      return service.backend === 'incus' ? 'Incus virtual machine' : service.backend === 'firecracker' ? 'Firecracker microVM' : 'KVM/libvirt virtual machine'
     }
     if (service.engine === 'docker') return 'Docker Compose application'
     if (service.backend === 'compose') return 'Podman Compose application'
@@ -296,6 +297,7 @@
   {:else if plan}
     <h3>Review changes</h3><p>{operation === 'remove' ? 'Remove the definition. Persistent data is retained where supported; unsafe removal is refused.' : 'Save this definition and update affected native configuration. Existing running workloads may need recreation or shutdown/start.'}</p>
     {#if kind === 'service' && service.kind === 'vm' && service.backend === 'incus' && operation !== 'remove'}<p>{incusEditNotice}</p>{/if}
+    {#if kind === 'service' && service.kind === 'vm' && service.backend === 'firecracker' && operation !== 'remove'}<p>{firecrackerEditNotice}</p>{/if}
     {#if plan.changes.length}<ul>{#each plan.changes as change}<li>{change.operation}: {change.resource} ({change.backend})</li>{/each}</ul>{:else}<p>No native definition changes. Reference settings will still be saved.</p>{/if}
     {#if plan.files.issues.length}<ul>{#each plan.files.issues as issue}<li><strong>{issue.resource}: {issue.message}</strong> {issue.remedy}</li>{/each}</ul>{/if}
     <label>Apply changes <select aria-label="Apply changes" bind:value={mode}><option value="now">Apply now</option><option value="next_start">Save for next start</option></select></label>
@@ -478,10 +480,11 @@
             {/if}
           </fieldset>
         {:else if service.vm}
-          <label>VM backend <select aria-label="VM backend" bind:value={service.backend} disabled={!!resourceID}><option value="libvirt">KVM/libvirt</option><option value="incus">Incus</option></select></label>
+          <label>VM backend <select aria-label="VM backend" bind:value={service.backend} disabled={!!resourceID} onchange={() => { if (!service.vm) return; if (service.backend === 'firecracker') { service.vm.firecracker ??= { kernel: '' }; service.vm.memoryMiB = Math.min(service.vm.memoryMiB, 512) } else { delete service.vm.firecracker } }}><option value="libvirt">KVM/libvirt</option><option value="incus">Incus</option><option value="firecracker">Firecracker microVM</option></select></label>
           {#if service.backend === 'incus'}<p>{incusEditNotice}</p>{/if}
-          <label>Virtual CPUs <input required type="number" min="1" max="1024" bind:value={service.vm.cpus} /></label><label>Memory in MiB <input required type="number" min="128" bind:value={service.vm.memoryMiB} /></label>
-          <label>Network binding <select aria-label="Network binding" required bind:value={service.vm.network}><option value="">Choose network</option>{#each bindingChoices.filter(([,b]) => b.kind === 'network' || b.kind === 'bridge') as [bindingID,b]}<option value={bindingID}>{bindingID} ({b.name})</option>{/each}</select></label>
+          {#if service.backend === 'firecracker'}<p class="resource-hint">{firecrackerEditNotice}</p>{/if}
+          <label>Virtual CPUs <input required type="number" min="1" max={service.backend === "firecracker" ? 32 : 1024} bind:value={service.vm.cpus} /></label><label>Memory in MiB <input required type="number" min="128" max={service.backend === "firecracker" ? 262144 : undefined} bind:value={service.vm.memoryMiB} /></label>
+          <label>Network binding <select aria-label="Network binding" required bind:value={service.vm.network}><option value="">Choose network</option>{#each bindingChoices.filter(([,b]) => service.backend === 'firecracker' ? b.kind === 'bridge' : b.kind === 'network' || b.kind === 'bridge') as [bindingID,b]}<option value={bindingID}>{bindingID} ({b.name})</option>{/each}</select></label>
           {#if service.backend === 'incus'}<label>Local image alias or fingerprint <input bind:value={service.vm.image} disabled={!!resourceID} /></label><label>Root disk GiB <input type="number" min="1" bind:value={service.vm.rootSizeGiB} placeholder="20" /></label>
             {#each ['pool', 'project'] as bindingType}<label>{bindingType === 'pool' ? 'Storage pool binding' : 'Project binding'} <select aria-label={bindingType === 'pool' ? 'Storage pool binding' : 'Project binding'} required value={bindingType === 'pool' ? service.vm.pool : service.vm.project} onchange={(e) => { if (!service.vm) return; if (bindingType === 'pool') service.vm.pool = e.currentTarget.value; else service.vm.project = e.currentTarget.value }}><option value="">Choose binding</option>{#each bindingChoices.filter(([,b]) => b.kind === bindingType) as [bindingID,b]}<option value={bindingID}>{bindingID} ({b.name})</option>{/each}</select></label>{/each}
           {:else}<label>Existing disk storage IDs <input bind:value={vmDisks} placeholder="vm-root" /></label><p>Choose existing file storage with an explicit raw or qcow2 format. Defining a guest never replaces its disk.</p>{/if}
