@@ -24,6 +24,7 @@ type Firecracker struct {
 	Directory string
 	Runner    core.Executor
 	Helper    admin.Client
+	callHost  func(context.Context, string, core.Input) (any, error) // isolated test seam; nil in production
 }
 func NewFirecracker(store Store, runner core.Executor) *Firecracker {
 	return &Firecracker{Store:store,Directory:store.Path+".generated/firecracker",Runner:runner,Helper:admin.Client{Runner:runner}}
@@ -50,6 +51,7 @@ func (f *Firecracker) spec(c Config,key string) (firecrackerhost.Spec,error) {
 	},nil
 }
 func (f *Firecracker) request(ctx context.Context,operation string,values core.Input) (any,error) {
+	if f.callHost != nil {return f.callHost(ctx,operation,values)}
 	return f.Helper.Call(ctx,operation,values,io.Discard)
 }
 func (f *Firecracker) readHost(ctx context.Context,c Config,key string) (firecrackerhost.Observation,error) {
