@@ -1,6 +1,7 @@
 package declarative
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net"
@@ -11,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"server-man/internal/firecrackerhost"
 )
 
 const firecrackerExample = `version: 1
@@ -59,6 +62,19 @@ func TestFirecrackerModelAndRenderer(t *testing.T) {
 	}
 	if native.NetworkInterfaces[0].HostDevName != firecrackerTAPName("11111111-2222-4222-8222-333333333333") || len(native.NetworkInterfaces[0].HostDevName) > 15 {
 		t.Fatal("invalid TAP name")
+	}
+	// The public typed renderer and root-owned execution renderer must agree
+	// byte-for-byte; drift would cause Apply to claim a different VM setup.
+	hostSpec := firecrackerhost.Spec{
+		ResourceID: "web", UUID: c.Services["web"].VM.UUID,
+		MAC: c.Services["web"].VM.MAC, Bridge: c.Bindings["lan"].Name,
+		Kernel: "/tmp/assets/vmlinux",
+		Disks: []string{"/tmp/data/root.ext4", "/tmp/data/extra.img"},
+		CPUs: 2, MemoryMiB: 512, UID: 1000, GID: 1000,
+	}
+	hostJSON, err := hostSpec.NativeJSON()
+	if err != nil || !bytes.Equal(out, hostJSON) {
+		t.Fatal("root-side and declarative native rendering disagree", err)
 	}
 	again, err := RenderFirecracker(c, "service/web")
 	if err != nil || string(again) != string(out) { t.Fatal("non-deterministic JSON", err) }
