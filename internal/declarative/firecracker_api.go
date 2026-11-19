@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -76,29 +77,33 @@ func (a *FirecrackerAPI) call(ctx context.Context, method, endpoint string, valu
 // Configure applies the supported typed resources to a *stopped*, already
 // securely launched VMM. A native supervisor must verify that precondition.
 func (a *FirecrackerAPI) Configure(ctx context.Context, cfg FirecrackerConfig) error {
+	if len(cfg.Drives) == 0 || len(cfg.Drives) > 8 || len(cfg.NetworkInterfaces) != 1 ||
+		cfg.MachineConfig.VCPUCount < 1 || cfg.MachineConfig.VCPUCount > 32 ||
+		cfg.MachineConfig.MemSizeMiB < 128 || cfg.MachineConfig.MemSizeMiB > 262144 ||
+		cfg.BootSource.KernelImagePath != "/kernel" || len(cfg.BootSource.BootArgs) > 2048 {
+		return errors.New("unsupported Firecracker native configuration")
+	}
 	if err := a.call(ctx, http.MethodPut, "/machine-config", cfg.MachineConfig, nil); err != nil { return err }
 	if err := a.call(ctx, http.MethodPut, "/boot-source", cfg.BootSource, nil); err != nil { return err }
 	for n, disk := range cfg.Drives {
 		expected := "rootfs"
-		if n != 0 { expected = "disk" + strings.TrimPrefix(disk.DriveID, "disk") }
-		if disk.DriveID != expected || (n != 0 && !validFirecrackerDiskID(disk.DriveID)) {
-			return errors.New("invalid Firecracker drive identifier")
+		path := "/disks/root"
+		if n != 0 {
+			expected = fmt.Sprintf("disk%d", n)
+			path = fmt.Sprintf("/disks/disk%d", n)
+		}
+		if disk.DriveID != expected || disk.PathOnHost != path || disk.IsRootDevice != (n == 0) {
+			return errors.New("invalid Firecracker drive configuration")
 		}
 		if err := a.call(ctx, http.MethodPut, "/drives/"+disk.DriveID, disk, nil); err != nil { return err }
 	}
 	for _, nic := range cfg.NetworkInterfaces {
-		if nic.IfaceID != "eth0" { return errors.New("unsupported Firecracker network interface") }
+		if nic.IfaceID != "eth0" || len(nic.HostDevName) > 15 || !strings.HasPrefix(nic.HostDevName, "smfc") || nic.GuestMAC == "" {
+			return errors.New("unsupported Firecracker network interface")
+		}
 		if err := a.call(ctx, http.MethodPut, "/network-interfaces/eth0", nic, nil); err != nil { return err }
 	}
 	return nil
-}
-
-func validFirecrackerDiskID(id string) bool {
-	if !strings.HasPrefix(id, "disk") || len(id) < 5 || len(id) > 6 { return false }
-	for _, digit := range id[4:] {
-		if digit < '0' || digit > '9' { return false }
-	}
-	return true
 }
 
 func (a *FirecrackerAPI) Start(ctx context.Context) error {

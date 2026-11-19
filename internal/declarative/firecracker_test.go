@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -94,8 +95,11 @@ func TestFirecrackerUnixAPI(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	defer listener.Close()
 	var received []string
+	var receivedMu sync.Mutex
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		receivedMu.Lock()
 		received = append(received, req.Method+" "+req.URL.Path)
+		receivedMu.Unlock()
 		if req.Method == http.MethodGet {
 			_, _ = w.Write([]byte(`{"id":"vm-test","state":"Running"}`))
 			return
@@ -120,6 +124,8 @@ func TestFirecrackerUnixAPI(t *testing.T) {
 	if err != nil || info.State != "Running" { t.Fatal(info,err) }
 	if err := api.RequestShutdown(ctx); err != nil { t.Fatal(err) }
 	want := []string{"PUT /machine-config","PUT /boot-source","PUT /drives/rootfs","PUT /network-interfaces/eth0","PUT /actions","GET /","PUT /actions"}
+	receivedMu.Lock()
+	defer receivedMu.Unlock()
 	if strings.Join(received,",") != strings.Join(want,",") {
 		t.Fatalf("request ordering: %#v", received)
 	}
