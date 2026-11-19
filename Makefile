@@ -52,6 +52,7 @@ build:
 	./tools/build.sh bin/server-man
 	CGO_ENABLED=0 go build -trimpath -o bin/server-man-admin ./cmd/server-man-admin
 	CGO_ENABLED=0 go build -trimpath -o bin/server-man-install ./cmd/server-man-install
+	CGO_ENABLED=0 go build -trimpath -o bin/server-man-firecracker-runtime ./cmd/server-man-firecracker-runtime
 
 release: build
 	./tools/release.sh
@@ -60,10 +61,12 @@ PREFIX ?= /usr/local
 DESTDIR ?=
 install:
 	test -x bin/server-man-install
+	test -x bin/server-man-firecracker-runtime
 	test -x bin/server-man-admin
 	test -x bin/server-man || { echo "run make build first" >&2; exit 1; }
 	install -D -m 0755 bin/server-man "$(DESTDIR)$(PREFIX)/bin/server-man"
 	install -D -m 0755 bin/server-man-admin "$(DESTDIR)$(PREFIX)/libexec/server-man-admin"
+	install -D -m 0755 bin/server-man-firecracker-runtime "$(DESTDIR)$(PREFIX)/libexec/server-man-firecracker-runtime"
 	install -D -m 0755 bin/server-man-install "$(DESTDIR)$(PREFIX)/sbin/server-man-install"
 	install -D -m 0644 packaging/server-man.sudoers.example "$(DESTDIR)$(PREFIX)/share/server-man/sudoers.example"
 	install -D -m 0644 packaging/server-man.example.yaml "$(DESTDIR)$(PREFIX)/share/server-man/server-man.example.yaml"

@@ -81,7 +81,15 @@ func dependencyPackageNames(manager, distribution, target string) (string, error
 			return "nfs-kernel-server", nil
 		}
 		return "nfs-utils", nil
-	case "virtualization":
+	case "firecracker":
+		// Ubuntu/Debian do not currently ship a consistently available
+		// upstream Firecracker+jailer pair. Install host prerequisites, then
+		// report both binary paths in readiness until an operator verifies
+		// official matching native binaries.
+		if manager == "pacman" { return "firecracker iproute2", nil }
+		if manager == "apt" { return "iproute2", nil }
+		return "", core.Invalid("Firecracker dependency installation is unsupported on this package manager")
+		case "virtualization":
 		switch manager {
 		case "apt":
 			return "qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-daemon-driver-qemu libvirt-clients", nil
