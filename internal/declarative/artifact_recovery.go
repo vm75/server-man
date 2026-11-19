@@ -87,6 +87,16 @@ func renderedArtifactTargets(adapter Adapter, previous, desired Config, key stri
         data, err := RenderLibvirt(a.Store, desired, key)
         if err != nil { return nil, err }
         return []artifactTarget{{"Native libvirt definition", a.resourceDir(key), oldFiles, map[string][]byte{"domain.xml": data}}}, nil
+    case *Firecracker:
+        oldFiles := map[string][]byte{}
+        if had {
+            old, err := a.definition(previous, key)
+            if err != nil { return nil, err }
+            oldFiles = old
+        }
+        next, err := a.definition(desired, key)
+        if err != nil { return nil, err }
+        return []artifactTarget{{"Native Firecracker definition", a.resourceDir(key), oldFiles, next}}, nil
     case *Incus:
         oldFiles := map[string][]byte{}
         if had {
@@ -382,7 +392,7 @@ func (c Coordinator) ReconcileArtifactMetadata(ctx context.Context, resource, re
 // fast paths; only backends with local generated artifacts participate.
 func artifactPublicationMatchesDesired(adapter Adapter, desired Config, resource string) bool {
     switch adapter.(type) {
-    case *Quadlet, *Compose, *Libvirt, *Incus:
+    case *Quadlet, *Compose, *Libvirt, *Incus, *Firecracker:
     default:
         return true // share adapters have their own native ownership checks
     }
