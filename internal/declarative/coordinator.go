@@ -219,6 +219,14 @@ func (c Coordinator) prepare(candidate Config, expected string) (Config, Config,
 			plan.Changes = append(plan.Changes, Change{key, backend(desired, key), op, fp})
 		}
 	}
+	// The typed Firecracker model can be reviewed before its secure native
+	// runner is implemented. Never persist an unapplyable Firecracker change:
+	// a failed journal would otherwise block unrelated managed mutations.
+	for _, change := range plan.Changes {
+		if change.Backend == "firecracker" && c.Adapters["firecracker"] == nil {
+			return Config{}, Config{}, Plan{}, errors.New("Firecracker native execution is not available; this definition cannot be applied yet")
+		}
+	}
 	plan.RestartRequired = c.serverRestartRequired(desired)
 	if plan.RestartRequired && len(plan.Changes) > 0 {
 		return Config{}, Config{}, Plan{}, errors.New("save server settings separately and restart server-man before changing managed resources")

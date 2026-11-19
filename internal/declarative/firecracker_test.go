@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -149,4 +150,20 @@ func TestFirecrackerAPIBoundsAndPrivateDiagnostics(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	err = api.Start(context.Background())
 	if err == nil || strings.Contains(err.Error(),"private") { t.Fatal("native error leaked",err) }
+}
+
+func TestFirecrackerUnavailableDoesNotPersistDesiredState(t *testing.T) {
+	store := Store{Path: filepath.Join(t.TempDir(), "server-man.yaml")}
+	c, err := Parse([]byte(firecrackerExample))
+	if err != nil { t.Fatal(err) }
+	coordinator := Coordinator{Store: store, Adapters: map[string]Adapter{}}
+	if _, err := coordinator.Preview(context.Background(), c, "missing"); err == nil || !strings.Contains(err.Error(), "not available") {
+		t.Fatal("unsupported backend should be blocked before save", err)
+	}
+	if _, err := coordinator.SaveApply(context.Background(), c, "missing", "now"); err == nil {
+		t.Fatal("unsupported backend was saved")
+	}
+	if _, _, err := store.ReadRaw(); !os.IsNotExist(err) {
+		t.Fatal("unsupported desired configuration was persisted", err)
+	}
 }
