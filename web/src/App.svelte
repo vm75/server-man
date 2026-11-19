@@ -12,6 +12,7 @@
   import Configuration from './pages/Configuration.svelte'
   import Updates from './pages/Updates.svelte'
   import { ApiError, request, type Status } from './lib/api'
+  import { themeState } from './lib/theme.svelte'
 
   const pages = [
     { id: 'overview', name: 'Overview', subtitle: 'Your server, at a glance.' },
@@ -44,6 +45,7 @@
   }
 
   onMount(() => {
+    themeState.init()
     const expired = () => { needsAuth = true; status = null; menuOpen = false }
     window.addEventListener('server-man:unauthorized', expired)
     void connect()
@@ -60,7 +62,7 @@
 <div class="app-shell">
   <aside class:open={menuOpen} aria-label="Main navigation">
     <a class="brand" href="#overview" onclick={() => { selected = 'overview'; menuOpen = false }}>
-      <span class="brand-mark"><Icon name="server" size={24} /></span>
+      <span class="brand-mark"><img src="/favicon.svg" alt="server-man" width="38" height="38" /></span>
       <span>server-man<span class="brand-caption">LINUX CONTROL</span></span>
     </a>
     <div class="nav-label">WORKSPACE</div>
@@ -80,7 +82,7 @@
   <div class="workspace">
     <header class="topbar">
       <div class="breadcrumb"><button class="icon-button mobile-menu" aria-label="Toggle navigation" aria-expanded={menuOpen} onclick={() => { menuOpen = !menuOpen }}><Icon name="menu" /></button><span class="muted">Workspace</span><span class="breadcrumb-divider">/</span><span>{page.name}</span></div>
-      <div class="topbar-actions">{#if status}<Jobs allowWrites={status.allowWrites} /><button class="small-button sign-out" onclick={signOut}>Sign out</button>{/if}<div class="host-pill"><span class="connection-dot" class:connected={status && !error}></span><span>{status?.hostname ?? 'Connecting'}</span></div></div>
+      <div class="topbar-actions"><button class="theme-toggle" aria-label={`Switch to ${themeState.current === 'dark' ? 'light' : 'dark'} mode`} title={`Current theme: ${themeState.current === 'dark' ? 'Dark' : 'Light'} (click to switch)`} onclick={() => themeState.toggle()}><Icon name={themeState.current === 'dark' ? 'sun' : 'moon'} size={18} /></button>{#if status}<Jobs allowWrites={status.allowWrites} /><button class="small-button sign-out" onclick={signOut}>Sign out</button>{/if}<div class="host-pill"><span class="connection-dot" class:connected={status && !error}></span><span>{status?.hostname ?? 'Connecting'}</span></div></div>
     </header>
     <main id="main">
       <div class="page-heading"><div><div class="eyebrow">SERVER WORKSPACE</div><h1>{page.name}</h1><p>{page.subtitle}</p></div><span class="badge" class:read-only={!status?.allowWrites}>{status?.allowWrites ? 'Management enabled' : 'Read only'}</span></div>

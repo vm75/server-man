@@ -377,11 +377,11 @@
     padding: 12px 16px;
   }
   .issue-item strong {
-    color: #fde68a;
+    color: var(--amber-text);
     font-size: 12.5px;
   }
   .issue-item p {
-    color: #fef3c7;
+    color: var(--amber-text-secondary);
     font-size: 12px;
     margin-top: 4px;
   }
@@ -392,12 +392,12 @@
     margin-bottom: 20px;
   }
   .health-alert h2 {
-    color: #fde68a;
+    color: var(--amber-text);
     font-size: 16px;
     margin-bottom: 6px;
   }
   .health-alert p {
-    color: #fef3c7;
+    color: var(--amber-text-secondary);
   }
   .actions {
     display: flex;

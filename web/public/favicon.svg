@@ -1,1 +1,134 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#10151c"/><path d="M16 21h32v10H16zm0 16h32v10H16z" stroke="#7be5b3" stroke-width="3" fill="none"/><circle cx="22" cy="26" r="2" fill="#7be5b3"/><circle cx="22" cy="42" r="2" fill="#7be5b3"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Rounded outer icon clip path (more rounded corners than original) -->
+    <clipPath id="icon-clip">
+      <rect x="0" y="0" width="512" height="512" rx="120" ry="120" />
+    </clipPath>
+
+    <!-- Background gradients -->
+    <linearGradient id="bg-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ebf1fd" />
+      <stop offset="55%" stop-color="#dbe6f9" />
+      <stop offset="100%" stop-color="#c9d9f5" />
+    </linearGradient>
+
+    <linearGradient id="bg-dark" x1="20%" y1="30%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334365" />
+      <stop offset="55%" stop-color="#283656" />
+      <stop offset="100%" stop-color="#1d2846" />
+    </linearGradient>
+
+    <!-- Gear blue gradient -->
+    <linearGradient id="gear-blue" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#0598ff" />
+      <stop offset="55%" stop-color="#0079f6" />
+      <stop offset="100%" stop-color="#005ce5" />
+    </linearGradient>
+
+    <!-- Light silver/white metallic gradient for servers and icons -->
+    <linearGradient id="light-surface" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f6f8fd" />
+      <stop offset="100%" stop-color="#d9e1f1" />
+    </linearGradient>
+
+    <!-- Pipe gradient in userSpaceOnUse so vertical/horizontal strokes render cleanly -->
+    <linearGradient id="pipe-surface" gradientUnits="userSpaceOnUse" x1="256" y1="330" x2="256" y2="396">
+      <stop offset="0%" stop-color="#edf1fa" />
+      <stop offset="100%" stop-color="#d8e0f0" />
+    </linearGradient>
+
+    <!-- Dark server bay gradient -->
+    <linearGradient id="dark-bay" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#37435c" />
+      <stop offset="100%" stop-color="#283349" />
+    </linearGradient>
+
+    <!-- Soft drop shadows -->
+    <filter id="shadow-gear" x="-15%" y="-15%" width="130%" height="135%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#152340" flood-opacity="0.24" />
+    </filter>
+
+    <filter id="shadow-element" x="-15%" y="-15%" width="130%" height="135%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#0e172a" flood-opacity="0.32" />
+    </filter>
+  </defs>
+
+  <g clip-path="url(#icon-clip)">
+    <!-- Light upper-left background -->
+    <rect x="0" y="0" width="512" height="512" fill="url(#bg-light)" />
+
+    <!-- Curved dark navy lower-right background -->
+    <path d="M 0 404 C 118 292, 336 312, 512 172 L 512 512 L 0 512 Z" fill="url(#bg-dark)" />
+
+    <!-- Blue gear behind servers -->
+    <g filter="url(#shadow-gear)">
+      <path d="M 141.91 245.84 Q 139.22 235.69 128.77 234.76 L 114.10 233.45 Q 103.64 232.51 103.64 222.01 L 103.64 185.99 Q 103.64 175.49 114.10 174.55 L 128.77 173.24 Q 139.22 172.31 143.24 162.61 L 147.00 153.54 Q 151.02 143.84 144.28 135.78 L 134.84 124.49 Q 128.11 116.43 135.53 109.00 L 161.00 83.53 Q 168.43 76.11 176.49 82.84 L 187.78 92.28 Q 195.84 99.02 205.54 95.00 L 214.61 91.24 Q 224.31 87.22 225.24 76.77 L 226.55 62.10 Q 227.49 51.64 237.99 51.64 L 274.01 51.64 Q 284.51 51.64 285.45 62.10 L 286.76 76.77 Q 287.69 87.22 297.39 91.24 L 306.46 95.00 Q 316.16 99.02 324.22 92.28 L 335.51 82.84 Q 343.57 76.11 351.00 83.53 L 376.47 109.00 Q 383.89 116.43 377.16 124.49 L 367.72 135.78 Q 360.98 143.84 365.00 153.54 L 368.76 162.61 Q 372.78 172.31 383.23 173.24 L 397.90 174.55 Q 408.36 175.49 408.36 185.99 L 408.36 222.01 Q 408.36 232.51 397.90 233.45 L 383.23 234.76 Q 372.78 235.69 370.09 245.84 L 358.69 288.85 Q 356.00 299.00 345.50 299.00 L 166.50 299.00 Q 156.00 299.00 153.31 288.85 Z" fill="url(#gear-blue)" />
+    </g>
+
+    <!-- Inner circular arch above servers -->
+    <circle cx="256" cy="204" r="90" fill="url(#light-surface)" />
+    <circle cx="256" cy="204" r="68" fill="#35425c" />
+
+    <!-- Connector pipe tree -->
+    <g filter="url(#shadow-element)">
+      <!-- Center vertical stem -->
+      <rect x="249" y="330" width="14" height="66" rx="4" fill="url(#pipe-surface)" />
+      <!-- Horizontal bar with rounded bends down to left and right icons -->
+      <path d="M 129 392 V 378 Q 129 360 147 360 H 365 Q 383 360 383 378 V 392"
+            fill="none" stroke="url(#pipe-surface)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Smooth rounded fillets at the center T-junction -->
+      <path d="M 237 353 H 249 V 341 Q 249 353 237 353 Z M 275 353 H 263 V 341 Q 263 353 275 353 Z" fill="url(#pipe-surface)" />
+    </g>
+
+    <!-- Dark spacer between top and bottom server units -->
+    <rect x="160" y="251" width="192" height="9" fill="#303b52" />
+
+    <!-- Stacked server units -->
+    <g filter="url(#shadow-element)">
+      <!-- Top server unit -->
+      <rect x="140" y="173" width="232" height="80" rx="23" ry="23" fill="url(#light-surface)" />
+      <rect x="157" y="195" width="198" height="39" rx="11" ry="11" fill="url(#dark-bay)" />
+      <circle cx="287" cy="214.5" r="7.5" fill="#009eff" />
+      <circle cx="310" cy="214.5" r="7.5" fill="#009eff" />
+      <circle cx="333" cy="214.5" r="7.5" fill="#009eff" />
+
+      <!-- Bottom server unit -->
+      <rect x="140" y="257" width="232" height="76" rx="23" ry="23" fill="url(#light-surface)" />
+      <rect x="157" y="276" width="198" height="38" rx="11" ry="11" fill="url(#dark-bay)" />
+      <circle cx="287" cy="295" r="7.5" fill="#009eff" />
+      <circle cx="310" cy="295" r="7.5" fill="#009eff" />
+      <circle cx="333" cy="295" r="7.5" fill="#009eff" />
+    </g>
+
+    <!-- Bottom Left: Isometric 3D Cube -->
+    <g filter="url(#shadow-element)">
+      <!-- Top face -->
+      <polygon points="129,385 166,406 129,427 92,406" fill="#f5f8fd" stroke="#f5f8fd" stroke-width="2" stroke-linejoin="round" />
+      <!-- Left face -->
+      <polygon points="93,414 125,432 125,470 93,451" fill="#e3e9f6" stroke="#e3e9f6" stroke-width="2" stroke-linejoin="round" />
+      <!-- Right face -->
+      <polygon points="165,414 133,432 133,470 165,451" fill="#d5def0" stroke="#d5def0" stroke-width="2" stroke-linejoin="round" />
+    </g>
+
+    <!-- Bottom Center: Monitor -->
+    <g filter="url(#shadow-element)">
+      <!-- Outer bezel with cutout screen -->
+      <path fill-rule="evenodd" fill="url(#light-surface)"
+            d="M 224 393 H 288 A 11 11 0 0 1 299 404 V 442 A 11 11 0 0 1 288 453 H 224 A 11 11 0 0 1 213 442 V 404 A 11 11 0 0 1 224 393 Z
+               M 227 401 A 6 6 0 0 0 221 407 V 439 A 6 6 0 0 0 227 445 H 285 A 6 6 0 0 0 291 439 V 407 A 6 6 0 0 0 285 401 Z" />
+      <!-- Stand neck and base -->
+      <rect x="249" y="451" width="14" height="12" fill="#dfe6f4" />
+      <rect x="233" y="461" width="46" height="10" rx="5" ry="5" fill="url(#light-surface)" />
+    </g>
+
+    <!-- Bottom Right: Database Cylinder -->
+    <g filter="url(#shadow-element)">
+      <!-- Top cap -->
+      <ellipse cx="383" cy="404" rx="35" ry="13.5" fill="#f4f7fc" />
+      <!-- Middle disc -->
+      <path d="M 348 417 A 35 13.5 0 0 0 418 417 V 431 A 35 13.5 0 0 1 348 431 Z" fill="#e5ebf6" />
+      <!-- Bottom disc -->
+      <path d="M 348 441 A 35 13.5 0 0 0 418 441 V 455 A 35 13.5 0 0 1 348 455 Z" fill="#d7e0f1" />
+    </g>
+  </g>
+</svg>

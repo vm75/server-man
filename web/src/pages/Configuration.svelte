@@ -306,7 +306,7 @@
     margin-bottom: 24px;
   }
   .apply-alert h2 {
-    color: #fde68a;
+    color: var(--amber-text);
     font-size: 16px;
     margin-bottom: 6px;
   }
@@ -320,7 +320,7 @@
   }
   .recovery-list li {
     padding: 8px 12px;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--panel-subtle);
     border-radius: var(--radius-sm);
     font-size: 12px;
   }

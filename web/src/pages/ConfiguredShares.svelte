@@ -279,18 +279,18 @@
     padding: 10px 14px;
   }
   .issue-item strong {
-    color: #fde68a;
+    color: var(--amber-text);
     font-size: 12px;
   }
   .issue-item p {
-    color: #fef3c7;
+    color: var(--amber-text-secondary);
     font-size: 11.5px;
     margin-top: 3px;
   }
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(5, 9, 15, 0.75);
+    background: var(--backdrop-bg);
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;

@@ -41,6 +41,9 @@ func TestHealthAndUnknownAPI(t *testing.T) {
 		if w.Header().Get("X-Content-Type-Options") != "nosniff" {
 			t.Fatal("missing security header")
 		}
+		if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "worker-src 'self' blob:") {
+			t.Fatalf("unexpected Content-Security-Policy: %q", csp)
+		}
 	}
 }
 

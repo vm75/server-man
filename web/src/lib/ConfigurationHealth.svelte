@@ -102,12 +102,12 @@
   }
   .health-title {
     font-size: 15px;
-    color: #fde68a;
+    color: var(--amber-text);
     display: block;
     margin-bottom: 6px;
   }
   .health-msg {
-    color: #fef3c7;
+    color: var(--amber-text-secondary);
     margin: 4px 0;
     font-size: 13px;
   }
@@ -120,13 +120,13 @@
   .health-details {
     margin-top: 16px;
     padding-top: 14px;
-    border-top: 1px solid rgba(251, 191, 36, 0.2);
+    border-top: 1px solid var(--amber-border);
   }
   .health-details summary {
     cursor: pointer;
     font-weight: 600;
     font-size: 13px;
-    color: #fde68a;
+    color: var(--amber-text);
     outline: none;
   }
   .health-issues-list {
@@ -138,17 +138,17 @@
     gap: 8px;
   }
   .health-issue-card {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(251, 191, 36, 0.15);
+    background: var(--panel);
+    border: 1px solid var(--amber-border);
     border-radius: var(--radius-sm);
     padding: 10px 14px;
   }
   .health-issue-card strong {
-    color: #fde68a;
+    color: var(--amber-text);
     font-size: 12px;
   }
   .health-issue-card p {
-    color: #fef3c7;
+    color: var(--text-secondary);
     font-size: 11.5px;
     margin: 3px 0;
   }

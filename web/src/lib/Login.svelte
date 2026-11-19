@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import Icon from './Icon.svelte'
   import { request } from './api'
+  import { themeState } from './theme.svelte'
 
   let { onSignedIn }: { onSignedIn: () => Promise<void> } = $props()
   let adminConfigured = $state<boolean | null>(null)
@@ -46,7 +47,12 @@
 </script>
 
 <main id="main" class="login-shell">
-  <div class="login-brand"><span class="brand-mark"><Icon name="server" size={25} /></span><span>server-man</span></div>
+  <div class="login-theme-toggle">
+    <button class="theme-toggle" aria-label={`Switch to ${themeState.current === 'dark' ? 'light' : 'dark'} mode`} title={`Current theme: ${themeState.current === 'dark' ? 'Dark' : 'Light'} (click to switch)`} onclick={() => themeState.toggle()}>
+      <Icon name={themeState.current === 'dark' ? 'sun' : 'moon'} size={18} />
+    </button>
+  </div>
+  <div class="login-brand"><span class="brand-mark"><img src="/favicon.svg" alt="server-man" width="46" height="46" /></span><span>server-man</span></div>
   <section class="panel login-panel" aria-labelledby="sign-in-heading">
     <div class="eyebrow">YOUR SERVER WORKSPACE</div>
     <h1 id="sign-in-heading">{adminConfigured === false && !tokenSignIn ? 'Set up administrator.' : 'Welcome back.'}</h1>

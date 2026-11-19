@@ -1,7 +1,8 @@
 <script lang="ts">
-  let { values, times, windowSeconds, secondary = [], ceiling, label, color = '#7be5b3', secondaryColor = '#77b7ee' }: {
+  let { values, times, windowSeconds, secondary = [], ceiling, label, color = 'var(--sparkline-primary, var(--accent))', secondaryColor = 'var(--sparkline-secondary, var(--blue))' }: {
     values: (number | null)[]; times: number[]; windowSeconds: number; secondary?: (number | null)[]; ceiling?: number; label: string; color?: string; secondaryColor?: string
   } = $props()
+  const gradId = $props.id()
   const maximum = $derived(ceiling ?? Math.max(1, ...values.filter((n): n is number => n != null), ...secondary.filter((n): n is number => n != null)))
 
   function paths(data: (number | null)[]) {
@@ -24,16 +25,16 @@
 
 <svg class="sparkline" viewBox="0 0 600 100" preserveAspectRatio="none" role="img" aria-label={label}>
   <defs>
-    <linearGradient id="sparkline-grad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color={color} stop-opacity="0.25" />
-      <stop offset="100%" stop-color={color} stop-opacity="0.0" />
+    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color={color} stop-opacity="0.22" style:stop-color={color} />
+      <stop offset="100%" stop-color={color} stop-opacity="0.0" style:stop-color={color} />
     </linearGradient>
   </defs>
   {#each [25, 50, 75] as y}
-    <line x1="0" x2="600" y1={y} y2={y} stroke="rgba(255, 255, 255, 0.06)" stroke-dasharray="3 4" stroke-width="1" />
+    <line x1="0" x2="600" y1={y} y2={y} stroke="var(--sparkline-grid, rgba(128, 128, 128, 0.1))" stroke-dasharray="3 4" stroke-width="1" />
   {/each}
   {#each paths(values) as path}
-    <path d={path.area} fill="url(#sparkline-grad)" />
+    <path d={path.area} fill={`url(#${gradId})`} />
     <path d={path.line} fill="none" stroke={color} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
   {/each}
   {#each paths(secondary) as path}

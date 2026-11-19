@@ -360,3 +360,17 @@ noninteractive sudo recognizes the operation and rejects an empty password with
 `invalid_arguments` before native execution. The running app was not replaced or
 restarted; no Samba/Linux password was changed. A successful password change and
 subsequent SMB client authentication remain unverified.
+
+## Theme switching and CSP worker alignment (2026-11-19)
+
+- [x] Add system preference and local storage theme manager (`light`/`dark`) with
+  synchronous entry-point initialization in `web/src/main.ts` and UI theme toggle.
+- [x] Align Content Security Policy in `internal/httpapi` with `worker-src 'self' blob:`
+  to support development Vite shared workers and same-origin workers without inline
+  script execution.
+- [x] Verify layout, styling, and absence of CSP errors in headless Firefox across
+  viewports; pass Go race tests and frontend checks.
+
+Verification: `make check`, `make test`, and `make ui-test` passed. Headless Firefox
+verified desktop, mobile, and small-mobile viewports with 0 browser errors and 0 CSP
+violations.
