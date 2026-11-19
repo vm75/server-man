@@ -487,6 +487,13 @@
           <label>Network binding <select aria-label="Network binding" required bind:value={service.vm.network}><option value="">Choose network</option>{#each bindingChoices.filter(([,b]) => service.backend === 'firecracker' ? b.kind === 'bridge' : b.kind === 'network' || b.kind === 'bridge') as [bindingID,b]}<option value={bindingID}>{bindingID} ({b.name})</option>{/each}</select></label>
           {#if service.backend === 'incus'}<label>Local image alias or fingerprint <input bind:value={service.vm.image} disabled={!!resourceID} /></label><label>Root disk GiB <input type="number" min="1" bind:value={service.vm.rootSizeGiB} placeholder="20" /></label>
             {#each ['pool', 'project'] as bindingType}<label>{bindingType === 'pool' ? 'Storage pool binding' : 'Project binding'} <select aria-label={bindingType === 'pool' ? 'Storage pool binding' : 'Project binding'} required value={bindingType === 'pool' ? service.vm.pool : service.vm.project} onchange={(e) => { if (!service.vm) return; if (bindingType === 'pool') service.vm.pool = e.currentTarget.value; else service.vm.project = e.currentTarget.value }}><option value="">Choose binding</option>{#each bindingChoices.filter(([,b]) => b.kind === bindingType) as [bindingID,b]}<option value={bindingID}>{bindingID} ({b.name})</option>{/each}</select></label>{/each}
+          {:else if service.backend === 'firecracker'}
+            {#if service.vm.firecracker}
+              <label>Guest kernel storage <select aria-label="Guest Linux kernel storage" required bind:value={service.vm.firecracker.kernel}><option value="">Choose kernel file</option>{#each storageChoices.filter(([,st]) => st.kind === 'file' && !st.format) as [storageID, st]}<option value={storageID}>{storageID} ({st.path})</option>{/each}</select></label>
+              <label>Kernel boot arguments (optional) <input bind:value={service.vm.firecracker.bootArgs} maxlength="2048" placeholder="console=ttyS0 reboot=k panic=1 root=/dev/vda rw" /></label>
+            {/if}
+            <label>Existing raw disk IDs (root first) <input required bind:value={vmDisks} placeholder="microvm-root" /></label>
+            <p class="resource-hint">Select prepared raw file storage, not QCOW2. The first disk is the guest root at /dev/vda; other disk IDs follow. The kernel must be separate file storage without a disk format.</p>
           {:else}<label>Existing disk storage IDs <input bind:value={vmDisks} placeholder="vm-root" /></label><p>Choose existing file storage with an explicit raw or qcow2 format. Defining a guest never replaces its disk.</p>{/if}
         {/if}
       {:else if kind === 'storage'}
