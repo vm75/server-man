@@ -289,7 +289,7 @@ func (c *Config) Validate() error {
 				}
 			}
 			if s.Backend == "firecracker" {
-				if err := validateFirecrackerVM(*c, *v); err != nil { return err }
+				if err := validateFirecrackerVM(*c, id, *v); err != nil { return err }
 			} else if v.Firecracker != nil {
 				return errors.New("Firecracker settings require the Firecracker backend")
 			}

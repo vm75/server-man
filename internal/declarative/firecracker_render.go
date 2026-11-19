@@ -44,7 +44,7 @@ const defaultFirecrackerBootArgs = "console=ttyS0 reboot=k panic=1 root=/dev/vda
 // command fragment. Linux IFNAMSIZ leaves 15 bytes for the interface name.
 var firecrackerBridgePattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$")
 
-func validateFirecrackerVM(c Config, v VM) error {
+func validateFirecrackerVM(c Config, id string, v VM) error {
 	if v.Firecracker == nil || !validID(v.Firecracker.Kernel) {
 		return errors.New("Firecracker requires a kernel storage ID")
 	}
@@ -72,8 +72,8 @@ func validateFirecrackerVM(c Config, v VM) error {
 		}
 		seen[id] = true
 	}
-	for _, service := range c.Services {
-		if service.VM == nil || &v == service.VM {
+	for otherID, service := range c.Services {
+		if otherID == id || service.VM == nil {
 			continue
 		}
 		// The same raw writable backing file may not be attached to separate
@@ -105,7 +105,7 @@ func RenderFirecracker(c Config, key string) ([]byte, error) {
 		return nil, errors.New("resource is not a Firecracker VM")
 	}
 	v := s.VM
-	if err := validateFirecrackerVM(c, *v); err != nil {
+	if err := validateFirecrackerVM(c, id, *v); err != nil {
 		return nil, err
 	}
 	if v.MAC == "" {
