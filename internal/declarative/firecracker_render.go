@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -39,6 +40,10 @@ type firecrackerNIC struct {
 
 const defaultFirecrackerBootArgs = "console=ttyS0 reboot=k panic=1 root=/dev/vda rw"
 
+// A bridge binding is an existing host network interface, not a free-form
+// command fragment. Linux IFNAMSIZ leaves 15 bytes for the interface name.
+var firecrackerBridgePattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$")
+
 func validateFirecrackerVM(c Config, v VM) error {
 	if v.Firecracker == nil || !validID(v.Firecracker.Kernel) {
 		return errors.New("Firecracker requires a kernel storage ID")
@@ -52,8 +57,8 @@ func validateFirecrackerVM(c Config, v VM) error {
 	if len(v.Disks) == 0 || len(v.Disks) > 8 || v.CPUs < 1 || v.CPUs > 32 || v.MemoryMiB < 128 || v.MemoryMiB > 262144 {
 		return errors.New("Firecracker requires one to eight raw disks, 1-32 CPUs and 128-262144 MiB memory")
 	}
-	if b, ok := c.Bindings[v.Network]; !ok || b.Kind != "bridge" {
-		return errors.New("Firecracker requires an existing Linux bridge binding")
+	if b, ok := c.Bindings[v.Network]; !ok || b.Kind != "bridge" || !firecrackerBridgePattern.MatchString(b.Name) {
+		return errors.New("Firecracker requires a valid existing Linux bridge binding")
 	}
 	kernel, ok := c.Storage[v.Firecracker.Kernel]
 	if !ok || kernel.Kind != "file" || kernel.Format != "" {
@@ -66,6 +71,18 @@ func validateFirecrackerVM(c Config, v VM) error {
 			return errors.New("Firecracker disks must be unique raw file storage references separate from the kernel")
 		}
 		seen[id] = true
+	}
+	for _, service := range c.Services {
+		if service.VM == nil || &v == service.VM {
+			continue
+		}
+		// The same raw writable backing file may not be attached to separate
+		// managed VMs, including other VM backends.
+		for _, id := range service.VM.Disks {
+			if seen[id] && id != v.Firecracker.Kernel {
+				return errors.New("Firecracker writable disk must not be shared with another managed VM")
+			}
+		}
 	}
 	if len(v.Firecracker.BootArgs) > 2048 || strings.ContainsAny(v.Firecracker.BootArgs, "\x00\r\n") {
 		return errors.New("invalid Firecracker kernel boot arguments")
