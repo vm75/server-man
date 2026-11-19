@@ -28,11 +28,40 @@ type LogResult struct {
 	Truncated bool `json:"truncated"`
 	Source string `json:"source"`
 }
-func runtimeHash(spec Spec) string {
-	spec.Enabled = false
+func specHash(spec Spec) string {
 	data,_:=json.Marshal(spec)
 	h:=sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
+}
+func runtimeHash(spec Spec) string {
+	spec.Enabled = false
+	return specHash(spec)
+}
+type publicationIntent struct {
+	DesiredHash string `json:"desired_hash"`
+	Previous *Spec `json:"previous,omitempty"`
+}
+func readIntent(id string) (publicationIntent,bool,error) {
+	data,err:=regularRootFile(filepath.Join(Root(id),"publication.json"))
+	if os.IsNotExist(err) {return publicationIntent{},false,nil}
+	if err!=nil{return publicationIntent{},false,err}
+	var intent publicationIntent
+	dec:=json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if dec.Decode(&intent)!=nil || dec.Decode(new(any))!=io.EOF || len(intent.DesiredHash)!=64 {
+		return intent,false,errors.New("invalid Firecracker interrupted-publication record")
+	}
+	if intent.Previous!=nil {
+		if intent.Previous.Validate()!=nil || Identity(intent.Previous.UID,intent.Previous.ResourceID)!=id {
+			return intent,false,errors.New("invalid previous Firecracker publication")
+		}
+	}
+	return intent,true,nil
+}
+func writeIntent(id string,intent publicationIntent) error {
+	data,err:=json.MarshalIndent(intent,"","  ")
+	if err!=nil{return err}
+	return writeRootFile(filepath.Join(Root(id),"publication.json"),append(data,'\n'),0600)
 }
 func inputRequest(raw json.RawMessage) (Request,error) {
 	if len(raw)>32<<10 {return Request{},errors.New("Firecracker request exceeds limit")}
@@ -109,6 +138,7 @@ func inspect(ctx context.Context, uid int, req Request) (Observation,error) {
 		b,_:=json.Marshal(desired)
 		result.Matches=bytes.Equal(a,b) && enabled==desired.Enabled
 	}
+	if _,pending,e:=readIntent(id);e!=nil {return Observation{},e} else if pending {result.Matches=false}
 	if running {
 		marker,err:=regularRootFile(filepath.Join(Root(id),"started.hash"))
 		result.ActiveMatches=err==nil && strings.TrimSpace(string(marker))==runtimeHash(spec)
@@ -127,8 +157,18 @@ func publish(ctx context.Context, uid,gid int, req Request) (Observation,error) 
 	current,err:=readSpec(id)
 	had:=err==nil
 	if err!=nil && !os.IsNotExist(err) {return Observation{},err}
+	intent,pending,err:=readIntent(id)
+	if err!=nil {return Observation{},err}
+	if pending && intent.DesiredHash!=specHash(spec) {
+		return Observation{},errors.New("another Firecracker native publication is incomplete; inspect and retry it")
+	}
 	var oldUnit []byte
-	if had {
+	if pending {
+		if intent.Previous!=nil {
+			oldUnit,err=intent.Previous.Unit()
+			if err!=nil{return Observation{},err}
+		}
+	} else if had {
 		oldUnit,err=current.Unit()
 		if err!=nil{return Observation{},err}
 	}
@@ -142,12 +182,18 @@ func publish(ctx context.Context, uid,gid int, req Request) (Observation,error) 
 			return Observation{},errors.New("stop Firecracker VM before changing its native hardware")
 		}
 	}
+	if !pending {
+		fresh:=publicationIntent{DesiredHash:specHash(spec)}
+		if had {fresh.Previous=&current}
+		if err=writeIntent(id,fresh);err!=nil{return Observation{},err}
+	}
 	if err=saveSpec(spec);err!=nil{return Observation{},err}
 	if err=writeUnitFile(UnitPath(id),nextUnit);err!=nil{return Observation{},err}
 	if _,err=runCommand(ctx,Systemctl,"daemon-reload");err!=nil{return Observation{},err}
 	action:="disable"
 	if spec.Enabled {action="enable"}
 	if _,err=runCommand(ctx,Systemctl,action,UnitName(id));err!=nil{return Observation{},err}
+	if err=os.Remove(filepath.Join(Root(id),"publication.json"));err!=nil && !os.IsNotExist(err) {return Observation{},err}
 	return inspect(ctx,uid,Request{ID:req.ID,Spec:req.Spec})
 }
 func guestInfo(ctx context.Context,id string) (string,error) {
@@ -256,6 +302,7 @@ func remove(ctx context.Context,uid int,req Request) (Observation,error) {
 	if err=verifyOwnedUnit(id,unit,unit);err!=nil{return Observation{},err}
 	running,_,err:=unitStatus(ctx,id)
 	if err!=nil{return Observation{},err}
+	if _,pending,e:=readIntent(id);e!=nil{return Observation{},e} else if pending {return Observation{},errors.New("complete interrupted Firecracker publication before removing it")}
 	if running {return Observation{},errors.New("stop Firecracker before removing its definition")}
 	if err=Cleanup(id);err!=nil{return Observation{},err}
 	if _,err=runCommand(ctx,Systemctl,"disable",UnitName(id));err!=nil{return Observation{},err}
