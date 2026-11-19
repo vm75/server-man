@@ -9,6 +9,7 @@ import (
 	"io"
 	"server-man/internal/config"
 	"server-man/internal/core"
+	"server-man/internal/firecrackerhost"
 	"server-man/internal/modules/services"
 	"server-man/internal/modules/shares"
 	"server-man/internal/modules/updates"
@@ -32,7 +33,8 @@ func allowed(name string) bool {
 	switch name {
 	case "shares_definitions_validate", "shares_definitions_inspect", "shares_definitions_apply", "dependencies_install", "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list", "shares_samba_password",
 		"services_list", "services_details", "services_logs", "services_start",
-		"services_stop", "services_restart", "services_reload", "services_enable", "services_disable":
+		"services_stop", "services_restart", "services_reload", "services_enable", "services_disable",
+		"firecracker_publish", "firecracker_inspect", "firecracker_action", "firecracker_remove", "firecracker_logs":
 		return true
 	}
 	return false
@@ -81,6 +83,17 @@ func ServeForAccount(ctx context.Context, cfg config.Config, runner core.Executo
 	}
 	if !allowed(req.Operation) {
 		return errors.New("operation is not allowed")
+	}
+	if strings.HasPrefix(req.Operation, "firecracker_") {
+		result, runErr := firecrackerhost.Handle(ctx, account, req.Operation, req.Arguments)
+		reply := Response{Result: result}
+		if runErr != nil {
+			reply.Result = nil
+			reply.Error = runErr.Error()
+			reply.Code = "operation_failed"
+			reply.Status = 500
+		}
+		return json.NewEncoder(out).Encode(reply)
 	}
 	if strings.HasPrefix(req.Operation, "services_") {
 		var args core.Input
