@@ -351,3 +351,12 @@ An isolated Vite root using the committed HTML entry point, with the working
 source and theme changes preserved, passed the full browser suite. No native
 password database or host share was changed; live SMB authentication and installed
 app/helper deployment were not performed. Unrelated UI edits remain uncommitted.
+
+Host helper follow-up: the installed helper predated `shares_samba_password` and
+rejected that operation before dispatch. Replaced only the installed root-owned
+helper with the verified build, preserving the existing sudo policy and a local
+ignored binary backup. Byte equality with the build passes. An invocation through
+noninteractive sudo recognizes the operation and rejects an empty password with
+`invalid_arguments` before native execution. The running app was not replaced or
+restarted; no Samba/Linux password was changed. A successful password change and
+subsequent SMB client authentication remain unverified.
