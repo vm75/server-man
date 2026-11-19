@@ -150,6 +150,44 @@ func publish(ctx context.Context, uid,gid int, req Request) (Observation,error) 
 	if _,err=runCommand(ctx,Systemctl,action,UnitName(id));err!=nil{return Observation{},err}
 	return inspect(ctx,uid,Request{ID:req.ID,Spec:req.Spec})
 }
+func guestInfo(ctx context.Context,id string) (string,error) {
+	socket:=filepath.Join(JailRoot(id),"api.socket")
+	dialer:=&net.Dialer{Timeout:2*time.Second}
+	client:=http.Client{Timeout:3*time.Second,Transport:&http.Transport{
+		DisableKeepAlives:true,
+		DialContext:func(ctx context.Context,_,_ string)(net.Conn,error){return dialer.DialContext(ctx,"unix",socket)},
+	}}
+	req,err:=http.NewRequestWithContext(ctx,http.MethodGet,"http://firecracker/",nil)
+	if err!=nil{return "",err}
+	resp,err:=client.Do(req)
+	if err!=nil{return "",err}
+	defer resp.Body.Close()
+	if resp.StatusCode!=http.StatusOK{return "",errors.New("Firecracker instance metadata is unavailable")}
+	data,err:=io.ReadAll(io.LimitReader(resp.Body,8193))
+	if err!=nil || len(data)>8192{return "",errors.New("invalid Firecracker instance metadata")}
+	var info struct{State string `json:"state"`}
+	if json.Unmarshal(data,&info)!=nil{return "",errors.New("malformed Firecracker instance metadata")}
+	return info.State,nil
+}
+func waitRunning(ctx context.Context,id string) error {
+	timer:=time.NewTimer(30*time.Second)
+	defer timer.Stop()
+	tick:=time.NewTicker(500*time.Millisecond)
+	defer tick.Stop()
+	for {
+		running,err:=isRunning(ctx,id)
+		if err==nil && !running {return errors.New("Firecracker process exited before guest startup")}
+		if err==nil && running {
+			state,e:=guestInfo(ctx,id)
+			if e==nil && state=="Running" {return nil}
+		}
+		select {
+		case <-ctx.Done():return ctx.Err()
+		case <-timer.C:return errors.New("Firecracker did not report a running guest")
+		case <-tick.C:
+		}
+	}
+}
 func shutdown(ctx context.Context,id string) error {
 	socket:=filepath.Join(JailRoot(id),"api.socket")
 	dialer:=&net.Dialer{Timeout:2*time.Second}
@@ -200,6 +238,7 @@ func action(ctx context.Context,uid int, req Request) (Observation,error) {
 		if req.Action=="restart" || !running {
 			if err=checkSources(spec);err!=nil{return Observation{},err}
 			if _,err=runCommand(ctx,Systemctl,"start",UnitName(id));err!=nil{return Observation{},err}
+			if err=waitRunning(ctx,id);err!=nil{return Observation{},err}
 		}
 	}
 	return inspect(ctx,uid,Request{ID:req.ID})
