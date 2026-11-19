@@ -45,6 +45,14 @@ func inputRequest(raw json.RawMessage) (Request,error) {
 	return req,nil
 }
 func (r Request) nativeIdentity(uid int) string { return Identity(uid,r.ID) }
+func validateRequested(uid,gid int,req Request) error {
+	if req.Spec==nil || req.Spec.ResourceID!=req.ID || req.Spec.UID!=0 || req.Spec.GID!=0 {
+		return errors.New("invalid Firecracker validation request")
+	}
+	spec:=*req.Spec
+	spec.UID,spec.GID=uid,gid
+	return checkSources(spec)
+}
 func verifyOwnedUnit(id string, old, desired []byte) error {
 	raw,err:=regularRootFile(UnitPath(id))
 	if os.IsNotExist(err) {
@@ -236,6 +244,7 @@ func Handle(ctx context.Context,account,operation string,raw json.RawMessage)(an
 	req,err:=inputRequest(raw)
 	if err!=nil{return nil,err}
 	switch operation {
+	case "firecracker_validate":return map[string]bool{"valid":true},validateRequested(uid,gid,req)
 	case "firecracker_inspect":return inspect(ctx,uid,req)
 	case "firecracker_publish":return publish(ctx,uid,gid,req)
 	case "firecracker_action":return action(ctx,uid,req)

@@ -34,7 +34,7 @@ func allowed(name string) bool {
 	case "shares_definitions_validate", "shares_definitions_inspect", "shares_definitions_apply", "dependencies_install", "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list", "shares_samba_password",
 		"services_list", "services_details", "services_logs", "services_start",
 		"services_stop", "services_restart", "services_reload", "services_enable", "services_disable",
-		"firecracker_publish", "firecracker_inspect", "firecracker_action", "firecracker_remove", "firecracker_logs":
+		"firecracker_validate", "firecracker_publish", "firecracker_inspect", "firecracker_action", "firecracker_remove", "firecracker_logs":
 		return true
 	}
 	return false
