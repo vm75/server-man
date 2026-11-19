@@ -51,7 +51,7 @@ const fixtures = {
       configuration: 'pending',
       issues: [{ severity: 'error', resource: `share/${call.args.id}`, field: 'share', code: 'share_setup', message: 'Native share server setup is required', remedy: 'Set up the share server.' }]
     }))
-    return { configured: true, revision: 'a'.repeat(64), shares, servers: { samba: { available: false }, nfs: { available: false } } }
+    return { configured: true, sambaUsername: 'workload', revision: 'a'.repeat(64), shares, servers: { samba: { available: false }, nfs: { available: false } } }
   },
   managed_resource_plan: args => ({ baseRevision: args.revision, desiredRevision: 'b'.repeat(64), changes: [{resource: `${args.kind}/${args.id}`,backend:'fixture',operation:args.operation}], files: {issues:[]} }),
   managed_services: () => applicationsScenario === 'partial' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[{id:'website',name:'Website',kind:'container',backend:'podman/compose',enabled:true,state:'partially_running',configuration:'registered',registered:true,members:[{name:'web',state:'running'},{name:'worker',state:'not_running'}],issues:[{severity:'warning',resource:'service/website',field:'runtime',code:'partial_container_group',message:'1 of 2 configured containers are running.',remedy:'Use Start to start missing members, or Stop to stop the application.'}]}]} : applicationsScenario === 'empty' ? {configured:true,valid:true,health:{checkedAt:new Date().toISOString(),issues:[]},services:[]} : ({ configured: true, valid: true, health: { checkedAt: new Date().toISOString(), issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }, services: [{ id: 'website', name: 'Website', kind: 'container', backend: 'podman/quadlet', enabled: true, state: 'unknown', configuration: 'pending', registered: false, issues: [{severity: 'error', resource: 'service/website', field: 'path', code: 'missing_path', message: 'A required folder is missing.', remedy: 'Restore the data folder before starting.'}] }] }),
@@ -154,6 +154,7 @@ async function exerciseManagement(page) {
   await page.locator('.activity-button').click()
 
   await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
+  await exerciseSambaPassword(page)
   await exerciseShareCreation(page, 'documents')
   await page.evaluate(({ id, tool }) => window.dispatchEvent(new CustomEvent('server-man:job-finished', { detail: { id, tool, state: 'succeeded' } })), { id: `fixture-${managementCalls.length}`, tool: 'managed_resource_save' })
   await page.getByRole('button', { name: 'Set up server…', exact: true }).click()
@@ -265,7 +266,7 @@ async function exerciseManagement(page) {
   assert.equal(submitted.services_stop?.unit, 'sshd.service')
   assert.equal(submitted.services_stop?.confirm, true)
   assert.equal(submitted.managed_resource_save?.revision, 'a'.repeat(64))
-  assert.deepEqual(JSON.parse(managementCalls.find(call => call.tool === 'managed_resource_save' && call.args.kind === 'share').args.definition).users, ['alice'])
+  assert.deepEqual(JSON.parse(managementCalls.find(call => call.tool === 'managed_resource_save' && call.args.kind === 'share').args.definition).users, undefined)
   assert.equal(submitted.updates_install?.confirm, true)
   assert.equal(submitted.services_stop?.scope, 'system')
   assert.equal(submitted.packages_install?.packages, 'samba nfs-utils')
@@ -274,7 +275,7 @@ async function exerciseManagement(page) {
   assert.equal(submitted.shares_setup?.confirm, true)
   assert.equal(submitted.dependencies_install?.target, 'podman')
   assert.equal(submitted.dependencies_install?.confirm, true)
-  assert.deepEqual(deniedByServer.sort(), ['managed_backup_prepare', 'managed_backup_prepare', 'managed_backup_recover', 'managed_backup_release', 'managed_backup_release', 'managed_backup_publish', 'managed_resource_save', 'managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].sort())
+  assert.deepEqual(deniedByServer.sort(), ['managed_backup_prepare', 'managed_backup_prepare', 'managed_backup_recover', 'managed_backup_release', 'managed_backup_release', 'managed_backup_publish', 'managed_resource_save', 'managed_resource_save', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'managed_storage_create', 'services_stop', 'updates_install', 'packages_install', 'shares_setup', 'shares_samba_password', 'dependencies_install'].sort())
   // The alert stays mounted on every page; rechecks clear only resolved issues.
   const beforeRepairCalls = managementCalls.length
   readinessScenario = 'unknown'
@@ -379,6 +380,31 @@ async function exerciseBackupInventory(page) {
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'backup inventory overflows')
 }
 
+async function exerciseSambaPassword(page) {
+  await page.getByRole('button', {name:'Set Samba password…',exact:true}).click()
+  const dialog = page.getByRole('dialog', {name:'Set Samba password',exact:true})
+  const field = dialog.getByLabel('New Samba password', {exact:true})
+  const submit = dialog.getByRole('button', {name:'Set password',exact:true})
+  assert.equal(await field.getAttribute('type'),'password')
+  assert.equal(await submit.isDisabled(),true)
+  await field.fill('   ')
+  assert.equal(await submit.isDisabled(),true)
+  await field.fill('synthetic-browser-input')
+  await submit.click()
+  await page.getByText('Samba password update started.',{exact:true}).waitFor()
+  const call = managementCalls.at(-1)
+  assert.equal(call.tool,'shares_samba_password')
+  assert.deepEqual(call.args,{password:'synthetic-browser-input',confirm:true})
+  await page.evaluate(id=>window.dispatchEvent(new CustomEvent('server-man:job-finished',{detail:{id,tool:'shares_samba_password',state:'succeeded'}})),`fixture-${managementCalls.length}`)
+  await page.getByText('Samba password updated for workload.',{exact:true}).waitFor()
+  await page.locator('.activity-button').click()
+  await page.getByRole('button', {name:'Set Samba password…',exact:true}).click()
+  assert.equal(await field.inputValue(),'')
+  assert.equal(await submit.isDisabled(),true)
+  assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth<=window.innerWidth),true,'password dialog overflows')
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
+}
+
 async function exerciseShareCreation(page, name) {
   const callCount = managementCalls.length
   const denialCount = deniedByServer.length
@@ -386,7 +412,7 @@ async function exerciseShareCreation(page, name) {
   const editor = page.getByRole('region', {name:'Definition editor'})
   await editor.getByLabel('Resource ID',{exact:true}).fill(name)
   await editor.getByLabel('Shared storage',{exact:true}).selectOption('documents')
-  await editor.getByLabel('Local users and @groups',{exact:true}).fill('alice')
+  assert.equal(await editor.getByLabel('Local users and @groups',{exact:true}).count(),0)
   await editor.getByLabel('Publish this share',{exact:true}).check()
   await editor.getByRole('button',{name:'Review change',exact:true}).click()
   await editor.getByRole('heading',{name:'Review changes',exact:true}).waitFor()
@@ -401,7 +427,7 @@ async function exerciseShareCreation(page, name) {
   assert.equal(submitted?.args.revision,'a'.repeat(64))
   assert.equal(submitted?.args.confirm,true)
   const definition = JSON.parse(submitted.args.definition)
-  assert.deepEqual(definition.users,['alice'])
+  assert.equal(definition.users,undefined)
   assert.equal(definition.storage,'documents')
   assert.equal(definition.enabled,true)
   assert.equal(deniedByServer.length,denialCount+1)
@@ -451,7 +477,7 @@ try {
           await route.fulfill({ status: reply.status, headers: { 'content-type': 'application/json' }, body: Buffer.from(reply.body, 'base64') })
           return
         }
-        if (['services_stop', 'managed_backup_prepare', 'managed_backup_recover', 'managed_backup_release', 'managed_backup_publish', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'updates_install', 'packages_install', 'shares_setup', 'dependencies_install'].includes(tool)) {
+        if (['services_stop', 'managed_backup_prepare', 'managed_backup_recover', 'managed_backup_release', 'managed_backup_publish', 'managed_resource_save', 'managed_config_revert', 'managed_storage_create', 'updates_install', 'packages_install', 'shares_setup', 'shares_samba_password', 'dependencies_install'].includes(tool)) {
           const reply = await send({ method: request.method(), url: request.url(), headers: request.headers(), body: request.postData() ?? '' })
           const body = JSON.parse(Buffer.from(reply.body, 'base64').toString('utf8'))
           assert.equal(body.error?.code, 'writes_disabled', `${tool} should remain denied by the real server`)
@@ -522,6 +548,7 @@ try {
       await page.getByText('Management enabled', { exact: true }).waitFor()
       await page.getByRole('button', { name: 'Toggle navigation' }).click()
       await page.getByRole('navigation').getByRole('button', { name: 'File shares' }).click()
+      await exerciseSambaPassword(page)
       await exerciseShareCreation(page, 'mobile-documents')
       await page.getByRole('region',{name:'Configuration readiness',exact:true}).getByText('Workload configuration alert',{exact:true}).waitFor()
       assert.equal(await page.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth),true,'mobile configuration alert overflows')

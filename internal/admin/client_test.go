@@ -16,6 +16,7 @@ type clientFixture struct {
 	calls    int
 	request  Request
 	response string
+	err      error
 }
 
 func (f *clientFixture) Run(context.Context, core.Command, io.Writer) error {
@@ -30,7 +31,7 @@ func (f *clientFixture) Capture(_ context.Context, c core.Command) (string, erro
 	if err := json.NewDecoder(c.Stdin).Decode(&f.request); err != nil {
 		f.t.Fatal(err)
 	}
-	return f.response, nil
+	return f.response, f.err
 }
 func TestClientPreservesErrorAndOutput(t *testing.T) {
 	f := &clientFixture{t: t, response: `{"error":"stale revision","code":"conflict","status":409,"output":"rollback complete"}`}
@@ -94,5 +95,19 @@ func TestClientRetainsPrivilegedTruncationNotice(t *testing.T) {
 	text, truncated := out.Snapshot()
 	if !truncated || !strings.Contains(text, "Earlier privileged output was discarded") {
 		t.Fatal("privileged truncation was hidden")
+	}
+}
+
+func TestPasswordClientUsesStdinAndSanitizesTransportFailure(t *testing.T) {
+	password := t.Name() + "-synthetic"
+	f := &clientFixture{t: t, err: errors.New(password)}
+	var out strings.Builder
+	_, err := (Client{Runner: f}).Call(context.Background(), "shares_samba_password", core.Input{"password": password, "confirm": true}, &out)
+	if err == nil || strings.Contains(err.Error(), password) || out.Len() != 0 {
+		t.Fatal("transport failure retained secret")
+	}
+	var input core.Input
+	if json.Unmarshal(f.request.Arguments, &input) != nil || input.String("password") != password || len(input) != 2 {
+		t.Fatal("password not carried in bounded stdin request")
 	}
 }

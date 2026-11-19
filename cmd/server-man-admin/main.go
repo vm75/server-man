@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"os/user"
 	"server-man/internal/admin"
 	"server-man/internal/config"
 	"server-man/internal/core"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -23,6 +25,19 @@ func main() {
 func run() error {
 	if len(os.Args) != 1 || os.Geteuid() != 0 {
 		return fmt.Errorf("helper requires root and no arguments")
+	}
+	// sudo supplies the caller UID. Resolve it before clearing the environment;
+	// management arguments cannot choose which account receives a password.
+	callerUID := os.Getenv("SUDO_UID")
+	if callerUID == "" {
+		callerUID = strconv.Itoa(os.Getuid())
+	}
+	if _, err := strconv.ParseUint(callerUID, 10, 32); err != nil {
+		return fmt.Errorf("invalid helper caller UID")
+	}
+	caller, err := user.LookupId(callerUID)
+	if err != nil {
+		return fmt.Errorf("helper caller account is unavailable")
 	}
 	// Do not inherit user-controlled execution context, home, or executable paths.
 	os.Clearenv()
@@ -64,5 +79,5 @@ func run() error {
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Minute)
 	defer cancel()
-	return admin.Serve(ctx, cfg, core.Runner{}, os.Stdin, os.Stdout)
+	return admin.ServeForAccount(ctx, cfg, core.Runner{}, os.Stdin, os.Stdout, caller.Username)
 }

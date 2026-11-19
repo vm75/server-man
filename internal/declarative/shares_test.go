@@ -108,7 +108,7 @@ func TestShareEditWithManualPathDerivesStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shareJSON := `{"protocol":"samba","path":"/srv/shared_media","enabled":true,"readOnly":false,"users":["alice"]}`
+	shareJSON := `{"protocol":"samba","path":"/srv/shared_media","enabled":true,"readOnly":false}`
 	updated, err := c.EditResource("share", "media", "save", shareJSON, snap.Revision)
 	if err != nil {
 		t.Fatal(err)
@@ -146,5 +146,30 @@ func TestDirectoryBrowseSafeListing(t *testing.T) {
 	dirs, ok := m["directories"].([]string)
 	if !ok || len(dirs) == 0 {
 		t.Fatalf("expected directories list from /, got %v", m["directories"])
+	}
+}
+
+func TestSambaUsesProcessAccountInsteadOfLegacyUsers(t *testing.T) {
+	c, cfg, _ := coordinatorFixture(t)
+	account, err := shares.CurrentAccount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, legacy := range [][]string{nil, {"another", "@staff"}} {
+		cfg.Shares = map[string]Share{"documents": {Protocol: "samba", Storage: "content", Enabled: true, Users: legacy}}
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		adapter := &ShareAdapter{Store: c.Store, Protocol: "samba"}
+		defs, err := adapter.definitions(cfg, false)
+		if err != nil || len(defs) != 1 || len(defs[0].Users) != 1 || defs[0].Users[0] != account {
+			t.Fatal("share did not bind process account", err)
+		}
+	}
+	cfg.Shares = map[string]Share{"documents": {Protocol: "samba", Storage: "content", Enabled: true, Guest: true}}
+	adapter := &ShareAdapter{Store: c.Store, Protocol: "samba"}
+	defs, err := adapter.definitions(cfg, false)
+	if err != nil || len(defs[0].Users) != 0 {
+		t.Fatal("guest share received authenticated restriction", err)
 	}
 }

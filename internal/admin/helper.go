@@ -30,7 +30,7 @@ type Response struct {
 
 func allowed(name string) bool {
 	switch name {
-	case "shares_definitions_validate", "shares_definitions_inspect", "shares_definitions_apply", "dependencies_install", "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list",
+	case "shares_definitions_validate", "shares_definitions_inspect", "shares_definitions_apply", "dependencies_install", "shares_setup", "packages_install", "updates_status", "updates_refresh", "updates_install", "shares_list", "shares_samba_password",
 		"services_list", "services_details", "services_logs", "services_start",
 		"services_stop", "services_restart", "services_reload", "services_enable", "services_disable":
 		return true
@@ -41,6 +41,12 @@ func allowed(name string) bool {
 // Serve accepts exactly one bounded request. Configuration is supplied by the
 // privileged entry point, never by the unprivileged request.
 func Serve(ctx context.Context, cfg config.Config, runner core.Executor, in io.Reader, out io.Writer) error {
+	account, _ := shares.CurrentAccount()
+	return ServeForAccount(ctx, cfg, runner, in, out, account)
+}
+
+// ServeForAccount receives an identity resolved by the trusted entry point.
+func ServeForAccount(ctx context.Context, cfg config.Config, runner core.Executor, in io.Reader, out io.Writer, account string) error {
 	// One read goroutine is bounded by the one-shot process lifetime. Selecting
 	// cancellation ensures a stalled caller cannot hold the privileged lock after
 	// the helper's deadline. The entry point exits after Serve returns.
@@ -86,7 +92,7 @@ func Serve(ctx context.Context, cfg config.Config, runner core.Executor, in io.R
 	if err = services.New("system", runner).Register(registry); err != nil {
 		return err
 	}
-	shareBackend := shares.New(cfg, runner)
+	shareBackend := shares.NewForAccount(cfg, runner, account)
 	if err = shareBackend.Register(registry); err != nil {
 		return err
 	}

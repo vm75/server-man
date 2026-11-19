@@ -36,10 +36,9 @@
 
   let service = $state<ServiceDefinition>(createInitialService())
   let storage = $state<StorageDefinition>({ path: '', kind: 'directory', external: false })
-  let share = $state<ShareDefinition>({ protocol: 'samba', storage: '', enabled: false, readOnly: true, users: [], browseable: true })
+  let share = $state<ShareDefinition>({ protocol: 'samba', storage: '', enabled: false, readOnly: true, browseable: true })
   let binding = $state<BindingDefinition>({ kind: 'network', name: '' })
   let privatePath = $state('')
-  let users = $state('')
   let clients = $state('')
   let dependencyText = $state('')
   let selectedContainer = $state('app')
@@ -212,7 +211,7 @@
         result.path = manualPath.trim()
       }
       if (share.protocol === 'samba') {
-        result.users = share.guest ? [] : splitList(users)
+        delete result.users
         delete result.clients
         delete result.rootSquash
         delete result.security
@@ -270,7 +269,7 @@
         vmDisks = (service.vm?.disks ?? []).join(', ')
         selectContainer(Object.keys(service.containers ?? {})[0] ?? 'app')
       } else if (kind === 'storage') storage = structuredClone(result.config.storage?.[resourceID] ?? storage)
-      else if (kind === 'share') { share = structuredClone(result.config.shares?.[resourceID] ?? share); users = (share.users ?? []).join(', '); clients = (share.clients ?? []).join(', '); if (share.storage && result.config.storage?.[share.storage]) manualPath = result.config.storage[share.storage]?.path ?? ''; else if (share.path) manualPath = share.path }
+      else if (kind === 'share') { share = structuredClone(result.config.shares?.[resourceID] ?? share); clients = (share.clients ?? []).join(', '); if (share.storage && result.config.storage?.[share.storage]) manualPath = result.config.storage[share.storage]?.path ?? ''; else if (share.path) manualPath = share.path }
       else if (kind === 'binding') binding = structuredClone(result.config.bindings?.[resourceID] ?? binding)
       else privatePath = result.config.secrets?.[resourceID] ?? ''
     }
@@ -527,7 +526,7 @@
           {@render directoryBrowser(false)}
         {/if}
         <label><input type="checkbox" bind:checked={share.enabled} /> Publish this share</label><label><input type="checkbox" bind:checked={share.readOnly} /> Read only</label>
-        {#if share.protocol === 'samba'}<label><input type="checkbox" bind:checked={share.guest} /> Guest access (requires host setup)</label><label><input type="checkbox" bind:checked={share.browseable} /> Browseable (discoverable on network)</label>{#if !share.guest}<label>Local users and @groups <input required bind:value={users} placeholder="alice, @staff" /></label>{/if}
+        {#if share.protocol === 'samba'}<label><input type="checkbox" bind:checked={share.guest} /> Guest access (requires host setup)</label><label><input type="checkbox" bind:checked={share.browseable} /> Browseable (discoverable on network)</label><p>Authenticated access uses the Linux account running server-man. Set its Samba password in File shares.</p>
         {:else}<label>Allowed client addresses/CIDRs <textarea required bind:value={clients} placeholder="192.168.1.0/24"></textarea></label><label><input type="checkbox" checked={share.rootSquash ?? true} onchange={(e) => { share.rootSquash = e.currentTarget.checked }} /> Root squashing</label><label>Security <select aria-label="Security" value={share.security || 'sys'} onchange={(e) => { share.security = e.currentTarget.value }}><option value="sys">sys</option><option value="krb5">krb5</option><option value="krb5i">krb5i</option><option value="krb5p">krb5p</option></select></label>{/if}
       {:else if kind === 'binding'}<label>Binding type <select aria-label="Binding type" bind:value={binding.kind}><option value="network">Managed network</option><option value="bridge">Host bridge</option><option value="pool">Incus storage pool</option><option value="project">Incus project</option></select></label><label>Native resource name <input required bind:value={binding.name} /></label>
       {:else}<label>Private file path <input required bind:value={privatePath} placeholder="secrets/application.env" /></label><p>Only the file reference is saved. Secret values are never loaded into this form.</p>{/if}

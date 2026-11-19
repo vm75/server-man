@@ -323,3 +323,31 @@ conflict resolution; one trailing space in the incoming code was removed.
 Verification: `make check` and `make test` passed, including Go race tests and
 Svelte/TypeScript checks. Native Podman/Quadlet acceptance was not run; this
 verification used the existing test fixtures and did not change host workloads.
+
+## Samba account and password follow-up (2026-11-18)
+
+- [x] Remove the File shares user/group input and derive authenticated Samba
+  access from the server-man process account. Accept legacy user lists for
+  compatibility, ignoring them during native generation; the editor drops them
+  on save. Existing published fragments adopt this restriction on reapply.
+- [x] Add one File shares password button and shared `shares_samba_password`
+  HTTP/MCP job, bound to the process account or the privileged helper's verified
+  sudo caller. Reject empty/whitespace-only passwords, NUL/line breaks and inputs
+  over 256 characters. Send credentials only through stdin and suppress native
+  output/errors; preserve Linux login credentials and shared data.
+- [x] Verify fixtures, transport parity, write policy and browser behavior; update
+  current share/authentication documentation.
+
+Verification: `make check`, `make test` (Go race tests), and `make mcp-test`
+(production build, 60 HTTP/MCP tools and schema parity, authentication/origin and
+write denials) passed. Additional helper race tests passed after adding trusted
+caller/secret-redaction coverage. Final frontend checks report zero errors or
+warnings. Headless Firefox verifies desktop/mobile password masking, blank and
+whitespace-only input disabling, submission without a username, completion,
+clearing on reopen, share definitions without user lists and real server-denied
+fixture writes. The first browser run failed its final error check because an
+unrelated pre-existing inline theme script in the working HTML violates CSP.
+An isolated Vite root using the committed HTML entry point, with the working
+source and theme changes preserved, passed the full browser suite. No native
+password database or host share was changed; live SMB authentication and installed
+app/helper deployment were not performed. Unrelated UI edits remain uncommitted.

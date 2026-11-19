@@ -37,6 +37,9 @@ func (c Client) Call(ctx context.Context, operation string, input core.Input, ou
 		Timeout: 25 * time.Minute, CancelGrace: 45 * time.Second,
 	})
 	if err != nil {
+		if operation == "shares_samba_password" {
+			return nil, core.Unavailable("Could not set the Samba password; check privileged helper installation and access")
+		}
 		return nil, fmt.Errorf("privileged helper: %w", err)
 	}
 	var reply Response

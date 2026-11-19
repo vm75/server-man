@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"maps"
-	"os/user"
 	"slices"
 	"strings"
 
@@ -40,7 +39,15 @@ func (s *ShareAdapter) definitions(c Config, checkPaths bool) ([]shares.Definiti
 		if definition.RootSquash != nil {
 			squash = *definition.RootSquash
 		}
-		definitions = append(definitions, shares.Definition{Name: id, Path: s.Store.Resolve(c.Storage[definition.Storage].Path), ReadOnly: definition.ReadOnly, Guest: definition.Guest, Browseable: definition.Browseable, Users: slices.Clone(definition.Users), Clients: slices.Clone(definition.Clients), RootSquash: squash, Security: security})
+		users := []string(nil)
+		if s.Protocol == "samba" && !definition.Guest {
+			account, err := shares.CurrentAccount()
+			if err != nil {
+				return nil, err
+			}
+			users = []string{account}
+		}
+		definitions = append(definitions, shares.Definition{Name: id, Path: s.Store.Resolve(c.Storage[definition.Storage].Path), ReadOnly: definition.ReadOnly, Guest: definition.Guest, Browseable: definition.Browseable, Users: users, Clients: slices.Clone(definition.Clients), RootSquash: squash, Security: security})
 	}
 	return shares.NormalizeDefinitions(s.Protocol, definitions, checkPaths)
 }
@@ -141,25 +148,6 @@ func (s *ShareAdapter) ConfigurationPrerequisites(ctx context.Context, c Config)
 	if err := s.Validate(ctx, c, "share/"+ids[0]); err != nil {
 		return []Issue{{"error", "backend/" + s.Protocol, "share", "share_setup", err.Error(), "Check native share packages/setup, directory permissions and access identities; setup/install are explicit host operations."}}
 	}
-	issues := []Issue{}
-	for _, id := range ids {
-		definition := c.Shares[id]
-		if !definition.Enabled || definition.Protocol != "samba" {
-			continue
-		}
-		for _, identity := range definition.Users {
-			var err error
-			if strings.HasPrefix(identity, "@") {
-				_, err = user.LookupGroup(strings.TrimPrefix(identity, "@"))
-			} else {
-				_, err = user.Lookup(identity)
-			}
-			if err != nil {
-				issues = append(issues, Issue{"error", "share/" + id, "users", "missing_identity", "A share access user/group is unavailable on this host.", "Create or rebind the required local identity; Samba credentials remain a separate explicit host setup step."})
-				break
-			}
-		}
-	}
-	return issues
+	return nil
 }
 func (s *ShareAdapter) Prerequisites(context.Context) []Issue { return nil }

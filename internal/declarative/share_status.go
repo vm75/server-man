@@ -23,6 +23,7 @@ type ShareStatus struct {
 func (c Coordinator) ShareStatuses(ctx context.Context) (any, error) {
 	snapshot, err := c.Store.Read()
 	servers := map[string]map[string]any{}
+	account, _ := shares.CurrentAccount()
 	for _, p := range []string{"samba", "nfs"} {
 		available := false
 		discoveryAvailable := p != "samba"
@@ -37,7 +38,7 @@ func (c Coordinator) ShareStatuses(ctx context.Context) (any, error) {
 		servers[p] = map[string]any{"available": available, "discoveryAvailable": discoveryAvailable}
 	}
 	if os.IsNotExist(err) {
-		return map[string]any{"configured": false, "shares": []ShareStatus{}, "servers": servers}, nil
+		return map[string]any{"configured": false, "shares": []ShareStatus{}, "servers": servers, "sambaUsername": account}, nil
 	}
 	if err != nil {
 		return nil, core.Unavailable("Configuration is unavailable or invalid")
@@ -79,7 +80,7 @@ func (c Coordinator) ShareStatuses(ctx context.Context) (any, error) {
 		}
 		items = append(items, item)
 	}
-	return map[string]any{"configured": true, "revision": snapshot.Revision, "shares": items, "health": health, "servers": servers}, nil
+	return map[string]any{"configured": true, "revision": snapshot.Revision, "shares": items, "health": health, "servers": servers, "sambaUsername": account}, nil
 }
 func (c Coordinator) SetSharePublished(ctx context.Context, id string, published bool) (Journal, error) {
 	if !validID(id) {

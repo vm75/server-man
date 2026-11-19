@@ -24,6 +24,6 @@ func (b *Backend) Register(r *core.Registry) error {
 	}
 	tools := []core.Tool{{Name: "shares_list", Title: "File shares", Description: "Read managed and existing Samba/NFS share metadata, fragment revisions, configured state, Samba connection counts and registered NFS export state. Never returns full daemon configuration.", ReadOnly: true, Fields: map[string]core.Field{"protocol": core.EnumField("Optional protocol filter", false, "samba", "nfs")}, Run: func(ctx context.Context, in core.Input, out io.Writer) (any, error) {
 		return b.List(ctx, in.String("protocol"))
-	}}}
+	}}, b.passwordTool()}
 	return r.AddModule(core.Module{ID: "shares", Title: "File share management", Available: true}, tools...)
 }

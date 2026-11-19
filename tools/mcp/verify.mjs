@@ -153,6 +153,7 @@ async function exercise(client, label, revision = 'missing') {
     ['packages_install', { packages: 'samba', confirm: true }],
     ['dependencies_install', { target: 'podman', confirm: true }],
     ['shares_setup', { protocol: 'nfs', confirm: true }],
+    ['shares_samba_password', { password: 'synthetic-interoperability-input', confirm: true }],
     ['services_restart', { scope: 'user', unit: 'demo.service', confirm: true }],
   ]) {
     assert(names.includes(name))

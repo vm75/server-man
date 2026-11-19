@@ -52,17 +52,19 @@ type Backend struct {
 	sambaConfig, sambaManaged, nfsExports, nfsDir, nfsManaged string
 	programs                                                  map[string]string
 	runner                                                    core.Executor
+	account                                                   string
 }
 
 func New(cfg config.Config, runner core.Executor) *Backend {
-	b := &Backend{sambaConfig: cfg.SambaConfig, sambaManaged: cfg.SambaManagedFile, nfsExports: "/etc/exports", nfsDir: "/etc/exports.d", nfsManaged: "/etc/exports.d/server-man.exports", programs: map[string]string{}, runner: runner}
+	account, _ := CurrentAccount()
+	b := &Backend{account: account, sambaConfig: cfg.SambaConfig, sambaManaged: cfg.SambaManagedFile, nfsExports: "/etc/exports", nfsDir: "/etc/exports.d", nfsManaged: "/etc/exports.d/server-man.exports", programs: map[string]string{}, runner: runner}
 	if b.sambaConfig == "" {
 		b.sambaConfig = "/etc/samba/smb.conf"
 	}
 	if b.sambaManaged == "" {
 		b.sambaManaged = "/etc/samba/server-man.conf"
 	}
-	for _, name := range []string{"testparm", "smbcontrol", "smbstatus", "exportfs"} {
+	for _, name := range []string{"testparm", "smbcontrol", "smbstatus", "smbpasswd", "exportfs"} {
 		if path, err := exec.LookPath(name); err == nil {
 			b.programs[name] = path
 		}
@@ -74,4 +76,12 @@ func (b *Backend) file(protocol string) string {
 		return b.sambaManaged
 	}
 	return b.nfsManaged
+}
+
+// NewForAccount is used by the privileged entry point with its verified caller.
+// The account must never come from a management request.
+func NewForAccount(cfg config.Config, runner core.Executor, account string) *Backend {
+	b := New(cfg, runner)
+	b.account = account
+	return b
 }

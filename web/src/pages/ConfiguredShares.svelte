@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import DefinitionEditor from '../lib/DefinitionEditor.svelte'
+  import SambaPasswordDialog from '../lib/SambaPasswordDialog.svelte'
   import ConfirmDialog from '../lib/ConfirmDialog.svelte'
   import { invokeTool, startJob, type Job } from '../lib/api'
   import type { ShareDefinition } from '../lib/managed'
@@ -16,6 +17,9 @@
   let activeJob = $state<string | null>(null)
   let pending = $state<ShareItem | null>(null)
   let setupPending = $state(false)
+  let passwordOpen = $state(false)
+  let sambaUsername = $state('')
+  let passwordJob = $state<string | null>(null)
   let protocol = $state('samba')
   let controller: AbortController | undefined
   let stopped = false
@@ -44,9 +48,10 @@
     const signal = controller.signal
     loading = true; error = ''
     try {
-      const result = await invokeTool<{ shares: ShareItem[]; servers?: Record<string, ServerStatus> }>('managed_shares', {}, signal)
+      const result = await invokeTool<{ shares: ShareItem[]; servers?: Record<string, ServerStatus>; sambaUsername?: string }>('managed_shares', {}, signal)
       if (!stopped && !signal.aborted) {
         shares = result.shares
+        sambaUsername = result.sambaUsername ?? ''
         if (result.servers) servers = result.servers
       }
     }
@@ -70,7 +75,8 @@
       const job = (e as CustomEvent<Job>).detail
       if (job.id !== activeJob) return
       activeJob = null
-      feedback = job.state === 'succeeded' ? 'Share configuration applied. Existing clients may retain earlier access until reconnecting.' : job.error || `Operation ${job.state}.`
+      feedback = job.state === 'succeeded' ? (job.id === passwordJob ? `Samba password updated for ${sambaUsername}.` : 'Share configuration applied. Existing clients may retain earlier access until reconnecting.') : job.error || `Operation ${job.state}.`
+      passwordJob = null
       void load()
     }
     const onKey = (e: KeyboardEvent) => {
@@ -87,6 +93,7 @@
 
 <div class="shares-toolbar">
   <button class="primary" disabled={!allowWrites || activeJob !== null} onclick={() => { editor = { id: '' } }}>Define file share</button>
+  <button disabled={!allowWrites || activeJob !== null || !sambaUsername} onclick={() => { passwordOpen = true }}>Set Samba password…</button>
   <button disabled={loading} onclick={load}>{loading ? 'Reading…' : 'Refresh shares'}</button>
 </div>
 
@@ -119,7 +126,11 @@
   </section>
 {/if}
 
-<p class="resource-hint intro-hint">Definitions come from server-man configuration. Host packages, daemon setup, accounts and directory permissions are managed separately.</p>
+<p class="resource-hint intro-hint">Authenticated Samba shares use the Linux account running server-man{ sambaUsername ? ` (${sambaUsername})` : '' }. Set its Samba password here. Host packages, daemon setup and directory permissions are managed separately.</p>
+
+{#if passwordOpen}
+  <SambaPasswordDialog username={sambaUsername} onClose={() => { passwordOpen = false }} onStarted={(id) => { passwordOpen = false; activeJob = id; passwordJob = id; feedback = 'Samba password update started.' }} />
+{/if}
 
 {#if editor}
   <div class="modal-backdrop" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) editor = null }}>

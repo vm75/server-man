@@ -112,7 +112,7 @@ inputs, restricts operation names, rejects user-service scope, fixes privileged
 paths, clears inherited environment, and locks across invocations before running
 complete domain transactions. It has no transport listener. Root commands retain
 bounded execution/output; signals cancel their process groups with package grace
-periods. Helper output is bounded and returned when the operation finishes.
+periods. Helper output is bounded and returned when the operation finishes. The Samba password operation binds its target to the sudo caller UID resolved before environment clearing, accepts the secret only through stdin, and discards native output/errors in favor of fixed failure messages. Authenticated managed Samba shares derive their access identity from the main process UID.
 Missing helpers, sudo policy, and denied permissions fail explicitly. Future
 modules must not add arbitrary privileged command execution. Rootless Podman belongs to the invoking account; running as root does not access another user's rootless inventory.
 

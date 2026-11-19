@@ -131,7 +131,7 @@ type Share struct {
 	Path       string   `yaml:"path,omitempty" json:"path,omitempty"`
 	Enabled    bool     `yaml:"enabled" json:"enabled"`
 	ReadOnly   bool     `yaml:"read_only" json:"readOnly"`
-	Users      []string `yaml:"users,omitempty" json:"users,omitempty"`
+	Users      []string `yaml:"users,omitempty" json:"users,omitempty"` // Legacy only; authenticated access uses the process account.
 	Clients    []string `yaml:"clients,omitempty" json:"clients,omitempty"`
 }
 
@@ -326,9 +326,6 @@ func (c *Config) Validate() error {
 		st, ok := c.Storage[s.Storage]
 		if !ok || st.Kind == "file" {
 			return errors.New("share requires directory storage")
-		}
-		if s.Protocol == "samba" && !s.Guest && len(s.Users) == 0 {
-			return errors.New("Samba share requires access users")
 		}
 		if s.Protocol == "nfs" && len(s.Clients) == 0 {
 			return errors.New("NFS share requires clients")

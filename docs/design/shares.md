@@ -1,6 +1,6 @@
 # Samba and NFS shares
 
-File shares manages central YAML share definitions using `managed_resource_plan/save` and `managed_share_publish`. `managed_shares` reports authoritative publication status; `shares_list` remains read-only native inspection. server-man does not edit unmanaged host configuration, create accounts, change directory permissions/ownership/ACLs/SELinux labels, or remove shared data. The server account needs native file/daemon permissions; writes also require `allowWrites: true`.
+File shares manages central YAML share definitions using `managed_resource_plan/save` and `managed_share_publish`. `managed_shares` reports authoritative publication status; `shares_list` remains read-only native inspection. server-man does not edit unmanaged host configuration, create Linux accounts, change directory permissions/ownership/ACLs/SELinux labels, or remove shared data. The server account needs native file/daemon permissions; writes also require `allowWrites: true`.
 
 ## One-time host setup
 
@@ -35,7 +35,11 @@ No existing exports file is rewritten. A new fragment is picked up by the native
 
 All managed shares have a portable name (up to 64 ASCII letters/digits/dot/underscore/hyphen, starting with a letter/digit), an existing absolute directory, and explicit read-only/read-write access. Names are normalized to lowercase; Samba's reserved sections cannot be used. Symlinks in a selected directory are resolved and the canonical path is stored. Paths must be clean/literal and exclude control characters and configuration metacharacters; spaces are supported and escaped in NFS output. Directories are not created or otherwise modified.
 
-Samba adds browseability, guest access, and up to 32 existing local users or `@group` names. A non-guest share requires an explicit access list. Guest mode requires an empty valid-users list and still depends on the host's guest mapping/account settings. Credentials never enter these tools; use the host's Samba account setup. The supported generator sets path, read only, guest ok, browseable and valid users explicitly.
+Samba adds browseability and guest access. Authenticated shares automatically restrict `valid users` to the Linux account running server-man, resolved from its real UID rather than environment variables. The File shares editor has no user/group selector. Legacy central `users` lists remain readable/validated for compatibility but do not select access identities; editing a share drops that legacy field. Reapply existing definitions to publish the account restriction. Guest mode still depends on the host's guest mapping/account settings. The supported generator sets path, read only, guest ok, browseable and valid users explicitly.
+
+File shares provides one **Set Samba password** button for that account. The shared `shares_samba_password` operation requires `password`, `confirm: true`, authentication and enabled writes; it is a serialized management job for HTTP and MCP. It accepts no username. Passwords must contain 1–256 characters, cannot be whitespace-only, and cannot contain NUL, CR or LF. The operation runs fixed `smbpasswd -s -a ACCOUNT` arguments with two password lines on stdin and a 20-second native deadline. It creates or updates only the Samba account entry; Linux login credentials and share definitions are unchanged. Native output is discarded and failures use fixed messages so passwords cannot enter job results, output or audit. Passwords are never stored in central YAML or browser storage. The browser clears its field after submission or when the dialog closes.
+
+With privilege routing, the helper resolves sudo's caller UID before clearing its environment and binds the password operation to that account. The request cannot override the target account. Direct operation requires the necessary native Samba account-management permissions. Guest shares do not use this password; changing it does not guarantee revocation of existing SMB sessions.
 
 NFS adds 1–16 IP/CIDR client selectors or an explicit `*`, root squashing, and one of `sys`, `krb5`, `krb5i`, `krb5p`. Bare addresses become `/32` or `/128`; prefixes are masked and sorted. Hostname patterns/netgroups remain available through unmanaged native configuration. Managed exports use `sync`, `secure`, `no_subtree_check`, and `no_all_squash`. Kerberos requires existing host configuration. NFS identity mapping and underlying filesystem permissions still apply. Only one managed definition may own an export path.
 
@@ -76,6 +80,6 @@ before atomic publication and configuring workgroup/multicast DNS defaults when 
 the corresponding system services (including `wsdd-server.service` on APT systems or `wsdd.service` elsewhere, and optional NetBIOS discovery daemons alongside Samba). Discovery package installation and service enable/start failures fail the setup job; they are not silently retried as Samba-only success. Discovery availability checks for a loaded server service through the shared native/helper inspection, because the `wsdd` executable alone can be a client-only installation. Existing config, unmanaged shares and shared
 data are preserved. Setup is a separate job from share mutations; completed
 package/service changes are not rolled back if a later setup step fails. Network
-firewall access, Samba passwords and directory permissions require deliberate
-administrator configuration. With privilege routing enabled the complete setup
+firewall access and directory permissions require deliberate administrator
+configuration. Samba passwords are set separately with the File shares button. With privilege routing enabled the complete setup
 and share transactions run in the root helper.
