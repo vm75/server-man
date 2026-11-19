@@ -41,6 +41,7 @@ services:
       network: lan
       disks: [root, extra]
       mac: "02:00:00:00:12:34"
+      uuid: "11111111-2222-4222-8222-333333333333"
       firecracker:
         kernel: kernel
 `
@@ -56,7 +57,7 @@ func TestFirecrackerModelAndRenderer(t *testing.T) {
 		len(native.Drives) != 2 || native.Drives[0].PathOnHost != "/disks/root" || !native.Drives[0].IsRootDevice {
 		t.Fatalf("invalid native configuration: %+v", native)
 	}
-	if native.NetworkInterfaces[0].HostDevName != firecrackerTAPName("web") || len(native.NetworkInterfaces[0].HostDevName) > 15 {
+	if native.NetworkInterfaces[0].HostDevName != firecrackerTAPName("11111111-2222-4222-8222-333333333333") || len(native.NetworkInterfaces[0].HostDevName) > 15 {
 		t.Fatal("invalid TAP name")
 	}
 	again, err := RenderFirecracker(c, "service/web")

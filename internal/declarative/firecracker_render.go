@@ -108,7 +108,7 @@ func RenderFirecracker(c Config, key string) ([]byte, error) {
 	if err := validateFirecrackerVM(c, id, *v); err != nil {
 		return nil, err
 	}
-	if v.MAC == "" {
+	if v.MAC == "" || v.UUID == "" {
 		return nil, errors.New("persist the VM identity before rendering native configuration")
 	}
 	args := v.Firecracker.BootArgs
@@ -120,7 +120,7 @@ func RenderFirecracker(c Config, key string) ([]byte, error) {
 		MachineConfig: firecrackerMachine{VCPUCount: v.CPUs, MemSizeMiB: v.MemoryMiB, SMT: false},
 		Drives: make([]firecrackerDrive, 0, len(v.Disks)),
 		NetworkInterfaces: []firecrackerNIC{{
-			IfaceID: "eth0", GuestMAC: v.MAC, HostDevName: firecrackerTAPName(id),
+			IfaceID: "eth0", GuestMAC: v.MAC, HostDevName: firecrackerTAPName(v.UUID),
 		}},
 	}
 	for n := range v.Disks {
