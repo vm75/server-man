@@ -321,6 +321,13 @@ func (c Coordinator) saveApply(ctx context.Context, candidate Config, expected, 
 		}
 	}
 	plan.Changes = ordered
+	// An unsupported backend can also appear as native drift on an unchanged
+	// definition. Refuse before writing a journal in that case as well.
+	for _, change := range plan.Changes {
+		if change.Backend == "firecracker" && c.Adapters["firecracker"] == nil {
+			return Journal{}, errors.New("Firecracker native execution is not available; no changes were saved")
+		}
+	}
 	// Validate before committing intent or configuration; missing adapters can be
 	// represented in next-start desired state, but cannot claim successful apply.
 	for _, change := range plan.Changes {
