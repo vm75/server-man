@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/user"
@@ -33,29 +34,53 @@ func accountIDs(account string) (int, int, error) {
 }
 func validOpaque(id string) bool { return opaquePattern.MatchString(id) }
 func secureDirectory(path string) error {
-	if !filepath.IsAbs(path) || !strings.HasPrefix(path, BasePath) {
+	relative,err:=filepath.Rel(BasePath,path)
+	if err!=nil || !filepath.IsAbs(path) || filepath.Clean(path)!=path ||
+		relative==".." || strings.HasPrefix(relative,"../") {
 		return errors.New("invalid Firecracker state directory")
 	}
-	if err := os.MkdirAll(path, 0700); err != nil { return errors.New("Firecracker state directory cannot be created") }
-	// Each managed state component is checked; no user-owned symlink can be
-	// followed while preparing a privileged VM execution path.
-	for segment := path; segment != filepath.Dir(BasePath); segment = filepath.Dir(segment) {
-		info, err := os.Lstat(segment)
-		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 { return errors.New("unsafe Firecracker state directory") }
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || stat.Uid != 0 || info.Mode().Perm()&0077 != 0 { return errors.New("Firecracker state directory ownership is unsafe") }
-		if segment == BasePath { break }
+	// Never let MkdirAll traverse a user-controlled symlink before checking
+	// its ownership: walk from an independently trusted /var/lib parent.
+	parent,err:=os.Lstat("/var/lib")
+	if err!=nil{return err}
+	pstat,ok:=parent.Sys().(*syscall.Stat_t)
+	if !ok || !parent.IsDir() || pstat.Uid!=0 || parent.Mode().Perm()&0022!=0 {
+		return errors.New("unsafe Firecracker state parent")
+	}
+	walk:=[]string{BasePath}
+	if relative!="." {
+		for _,component:=range strings.Split(relative,string(filepath.Separator)) {
+			walk=append(walk,filepath.Join(walk[len(walk)-1],component))
+		}
+	}
+	for _,dir:=range walk {
+		if err=os.Mkdir(dir,0700);err!=nil && !os.IsExist(err) {
+			return errors.New("Firecracker state directory cannot be created")
+		}
+		info,e:=os.Lstat(dir)
+		if e!=nil || !info.IsDir() || info.Mode()&os.ModeSymlink!=0 {
+			return errors.New("unsafe Firecracker state directory")
+		}
+		stat,ok:=info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid!=0 || info.Mode().Perm()&0077!=0 {
+			return errors.New("Firecracker state directory ownership is unsafe")
+		}
 	}
 	return nil
 }
 func regularRootFile(path string) ([]byte,error) {
-	info, err := os.Lstat(path)
-	if err != nil {return nil,err}
-	stat,ok := info.Sys().(*syscall.Stat_t)
-	if !ok || !info.Mode().IsRegular() || stat.Uid!=0 || info.Mode().Perm()&0022 != 0 || info.Size() > 64<<10 {
+	// Check the opened file descriptor: checking Lstat and then calling
+	// os.ReadFile would permit replacement with a symlink in between.
+	f,err:=os.OpenFile(path,os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC,0)
+	if err!=nil{return nil,err}
+	defer f.Close()
+	info,err:=f.Stat()
+	if err!=nil{return nil,err}
+	stat,ok:=info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || stat.Uid!=0 || info.Mode().Perm()&0022!=0 || info.Size()>64<<10 {
 		return nil,errors.New("unsafe Firecracker native file")
 	}
-	return os.ReadFile(path)
+	return io.ReadAll(io.LimitReader(f,(64<<10)+1))
 }
 func writeRootFile(path string, data []byte, mode os.FileMode) error {
 	if len(data)>64<<10 {return errors.New("oversize Firecracker native file")}
