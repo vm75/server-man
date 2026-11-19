@@ -150,12 +150,55 @@ func sourceFile(path string, uid int) (os.FileInfo,error) {
 	if !ok || stat.Uid != uint32(uid) {return nil,errors.New("Firecracker source must be owned by the selected workload account")}
 	return info,nil
 }
+
+func checkDiskSharing(spec Spec) error {
+	// Storage-ID validation alone misses hardlinks and aliases representing
+	// the same raw inode. Check all existing root-owned Firecracker specs.
+	dir:=filepath.Join(BasePath,"workloads")
+	entries,err:=os.ReadDir(dir)
+	if os.IsNotExist(err) {return nil}
+	if err!=nil{return errors.New("Firecracker native inventory cannot be verified")}
+	if len(entries)>128{return errors.New("Firecracker native inventory exceeds the configured resource limit")}
+	used:=map[string]bool{}
+	inodes:=map[[2]uint64]bool{}
+	for _,path:=range spec.Disks {
+		info,e:=os.Stat(path)
+		if e!=nil{return errors.New("Firecracker writable source is missing")}
+		stat,ok:=info.Sys().(*syscall.Stat_t)
+		if !ok{return errors.New("Firecracker disk identity cannot be established")}
+		used[path]=true
+		inodes[[2]uint64{uint64(stat.Dev),stat.Ino}]=true
+	}
+	self:=Identity(spec.UID,spec.ResourceID)
+	for _,entry:=range entries {
+		if !entry.IsDir() || entry.Name()==self {continue}
+		if !validOpaque(entry.Name()) {
+			return errors.New("foreign Firecracker native directory needs review")
+		}
+		other,e:=readSpec(entry.Name())
+		if e!=nil{return errors.New("another managed VM's native disk inventory is uncertain")}
+		for _,path:=range other.Disks {
+			if used[path] {return errors.New("Firecracker writable disk is already assigned to another VM")}
+			info,e:=os.Stat(path)
+			if os.IsNotExist(e) {continue}
+			if e!=nil{return errors.New("another Firecracker disk identity cannot be verified")}
+			stat,ok:=info.Sys().(*syscall.Stat_t)
+			if !ok{return errors.New("another Firecracker disk identity is unavailable")}
+			if inodes[[2]uint64{uint64(stat.Dev),stat.Ino}] {
+				return errors.New("Firecracker writable disk inode is shared with another VM")
+			}
+		}
+	}
+	return nil
+}
+
 func checkSources(spec Spec) error {
 	if err:=spec.Validate();err!=nil{return err}
 	if _,err:=sourceFile(spec.Kernel,spec.UID);err!=nil{return err}
 	for _,path:=range spec.Disks {
 		if _,err:=sourceFile(path,spec.UID);err!=nil{return err}
 	}
+	if err:=checkDiskSharing(spec);err!=nil{return err}
 	if _,err:=os.Stat(filepath.Join("/sys/class/net",spec.Bridge,"bridge"));err!=nil {
 		return errors.New("configured Linux bridge is unavailable")
 	}
