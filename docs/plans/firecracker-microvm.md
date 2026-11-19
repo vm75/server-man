@@ -5,7 +5,7 @@ Scope: additive backend only; existing Ubuntu-first single-server release gates 
 
 ## 1. Goals and boundaries
 
-Support persistent, prepared Linux microVMs as an optional third \`kind: vm\` backend, alongside libvirt and Incus, in the one authoritative \`server-man.yaml\`. The main use is long-lived or short-lived isolated Go, Node.js and Python web services; the app inside the guest is launched by the guest's own init and is not a separate server-man container. Web UI and MCP must call the same authenticated registry and coordinator functions. Preserve current model invariants: Start/Stop changes execution, Enable/Disable changes boot policy independently, Apply must never start a newly defined stopped guest, and removal must preserve attached disks.
+Support persistent, prepared Linux microVMs as an optional third `kind: vm` backend, alongside libvirt and Incus, in the one authoritative `server-man.yaml`. The main use is long-lived or short-lived isolated Go, Node.js and Python web services; the app inside the guest is launched by the guest's own init and is not a separate server-man container. Web UI and MCP must call the same authenticated registry and coordinator functions. Preserve current model invariants: Start/Stop changes execution, Enable/Disable changes boot policy independently, Apply must never start a newly defined stopped guest, and removal must preserve attached disks.
 
 Only supported initial guest profiles: Linux on the same architecture as the host, compatible prepared kernel, one raw writable root block image, optional additional raw block files, one TAP-backed interface attached to an existing Linux bridge, a persisted MAC address and CPU/RAM. VM names and native resources are owned, deterministic and collision-resistant. Never implicitly change an unmanaged host bridge, firewall, guest filesystem or preexisting VM.
 
@@ -13,7 +13,7 @@ Explicit exclusions for initial release: Windows and GUI guests, OCI image conve
 
 ## 2. Upstream integration and versions
 
-Use the official Firecracker REST API over a Unix domain socket with Go standard-library HTTP transport and bounded JSON. The firecracker-go-sdk repository was archived in November 2026; do not introduce it as a production dependency. Configure \`machine-config\`, \`boot-source\`, \`drives\`, \`network-interfaces\`, and \`actions\` only through known typed payloads; use \`SendCtrlAltDel\` only when supported by the installed release/guest. Prefer a verified native Firecracker+jailer package; where the distro lacks one, an operator-approved, checksummed official-release install with the matching jailer binaries is a separate installer task. Do not pin a hardcoded Firecracker version; fail closed on unsupported API behavior and document a minimum tested version after native acceptance.
+Use the official Firecracker REST API over a Unix domain socket with Go standard-library HTTP transport and bounded JSON. The firecracker-go-sdk repository was archived in November 2026; do not introduce it as a production dependency. Configure `machine-config`, `boot-source`, `drives`, `network-interfaces`, and `actions` only through known typed payloads; use `SendCtrlAltDel` only when supported by the installed release/guest. Prefer a verified native Firecracker+jailer package; where the distro lacks one, an operator-approved, checksummed official-release install with the matching jailer binaries is a separate installer task. Do not pin a hardcoded Firecracker version; fail closed on unsupported API behavior and document a minimum tested version after native acceptance.
 
 A normal non-jail Firecracker launch is suitable only for a bounded development proof-of-concept and must never be silently selected as production fallback. Production requires the native jailer (or an equivalently reviewed hardening boundary), a restricted per-guest identity, cgroups/process limits, precise access to backing files, and tight trust boundaries on the Unix socket.
 
@@ -26,9 +26,9 @@ Upstream references:
 
 ## 3. YAML and shared model
 
-Keep \`services.<id>.kind: vm\`, \`backend: firecracker\`, \`enabled\`, existing \`vm.cpus\`, \`memory_mib\`, \`mac\`, \`uuid\`, \`disks\` and \`network\`. Introduce one optional typed \`vm.firecracker\` mapping with required kernel storage reference and bounded kernel boot args; do not borrow libvirt firmware or Incus pool/project/image semantics. Require \`vm.disks[0]\` as the root, a raw format file; require each additional disk to be raw. Require a bridge binding (not Incus managed-network) and a valid MAC identity. Pin supported architecture and avoid presenting arbitrary hardware overrides. Root backing file and kernel are distinct storage references; the kernel may be a regular file without a \`format\`. Preserve existing \`PrepareIdentities\` ownership on edits and reject backend switches of existing VMs.
+Keep `services.<id>.kind: vm`, `backend: firecracker`, `enabled`, existing `vm.cpus`, `memory_mib`, `mac`, `uuid`, `disks` and `network`. Introduce one optional typed `vm.firecracker` mapping with required kernel storage reference and bounded kernel boot args; do not borrow libvirt firmware or Incus pool/project/image semantics. Require `vm.disks[0]` as the root, a raw format file; require each additional disk to be raw. Require a bridge binding (not Incus managed-network) and a valid MAC identity. Pin supported architecture and avoid presenting arbitrary hardware overrides. Root backing file and kernel are distinct storage references; the kernel may be a regular file without a `format`. Preserve existing `PrepareIdentities` ownership on edits and reject backend switches of existing VMs.
 
-Suggested YAML (illustrative until schema is merged):
+Example YAML accepted by the branch's typed parser; native Apply and Start are not implemented yet:
 
     storage:
       guest-kernel: {kind: file, path: assets/firecracker/vmlinux}
@@ -53,11 +53,11 @@ The runtime config renderer must produce deterministic typed JSON, not expose ar
 
 ## 4. Native definition ownership and recovery
 
-Implement \`internal/declarative/firecracker*.go\` using the existing \`Adapter\`, \`LifecycleAdapter\`, \`PrerequisiteAdapter\`, \`ResourcePrerequisiteAdapter\`, and \`ManagedLogAdapter\` contracts. Generate private, ownership-marked Firecracker configuration and supervised systemd unit(s) under deterministic per-resource paths. A unit is persistent across server-man process restarts. Generated native bytes must use the same ownership-manifest and exact-byte drift/reconciliation system as Quadlet/Compose/libvirt/Incus.
+Implement `internal/declarative/firecracker*.go` using the existing `Adapter`, `LifecycleAdapter`, `PrerequisiteAdapter`, `ResourcePrerequisiteAdapter`, and `ManagedLogAdapter` contracts. Generate private, ownership-marked Firecracker configuration and supervised systemd unit(s) under deterministic per-resource paths. A unit is persistent across server-man process restarts. Generated native bytes must use the same ownership-manifest and exact-byte drift/reconciliation system as Quadlet/Compose/libvirt/Incus.
 
-\`Validate\`: validate typed schema, references, local bridge and KVM/prerequisites without side effects; render exact guest config; never run a guest. \`Inspect\`: return registered, active, activeMatches and matches independently; use native process/unit state rather than a stale socket as proof of health. \`Apply\`: stage and verify private artifacts, update owned stopped definition and boot policy, never start a previously stopped guest; \`now\` on an active incompatible hardware change must reject with actionable stop requirement, while \`next_start\` must not falsely report an active guest as reconfigured. \`VerifyRemoved\`: require stopped, retire only owned unit/TAP/jail artifacts, preserve root/kernel/other data. Foreign native files or a drifted ownership sidecar block destructive operations.
+`Validate`: validate typed schema, references, local bridge and KVM/prerequisites without side effects; render exact guest config; never run a guest. `Inspect`: return registered, active, activeMatches and matches independently; use native process/unit state rather than a stale socket as proof of health. `Apply`: stage and verify private artifacts, update owned stopped definition and boot policy, never start a previously stopped guest; `now` on an active incompatible hardware change must reject with actionable stop requirement, while `next_start` must not falsely report an active guest as reconfigured. `VerifyRemoved`: require stopped, retire only owned unit/TAP/jail artifacts, preserve root/kernel/other data. Foreign native files or a drifted ownership sidecar block destructive operations.
 
-Review and explicitly integrate the current type switches in \`artifact_recovery.go\`, native backup inventory and resource-specific logs/status, rather than treating the new backend as an unknown or as libvirt.
+Review and explicitly integrate the current type switches in `artifact_recovery.go`, native backup inventory and resource-specific logs/status, rather than treating the new backend as an unknown or as libvirt.
 
 ## 5. Secure host execution and networking
 
@@ -79,11 +79,12 @@ Applications: add 'Firecracker VM' type; editor includes CPU, RAM, kernel file s
 - [x] Create a dedicated feature branch; no PR or merge to main.
 
 ### Phase 1 — typed definition, renderer, contracts
-- [ ] Add typed Firecracker YAML fields, validation and provider-specific limitations.
-- [ ] Include kernel storage in shared reference/fingerprint/preflight logic.
-- [ ] Implement deterministic typed Firecracker config rendering and unit tests with no native execution.
-- [ ] Add bounded, isolated Unix-socket API client tests using a fake Unix server.
-- [ ] Reject unsupported disk/firmware/pool/project/network combinations before save.
+- [x] Add typed Firecracker YAML fields, validation and provider-specific limitations.
+- [x] Include kernel storage in shared reference/fingerprint/preflight logic.
+- [x] Implement deterministic typed Firecracker config rendering and unit tests with no native execution.
+- [x] Add bounded, isolated Unix-socket API client tests using a fake Unix server (test source committed; execution pending matching toolchain).
+- [x] Reject unsupported disk/firmware/pool/project/network combinations before save.
+- [ ] Execute the Go race suite on the repository's Go 1.26 toolchain, and resolve any errors.
 
 ### Phase 2 — secure supervisor and native adapter
 - [ ] Add constrained helper requests with path/owner/collision tests and no arbitrary shell.
@@ -100,7 +101,7 @@ Applications: add 'Firecracker VM' type; editor includes CPU, RAM, kernel file s
 - [ ] Classify Firecracker explicitly in deferred backup/restore inventory.
 
 ### Phase 4 — test and rollout gates
-- [ ] \`make check test mcp-test ui-test\` on expected Go/Node toolchains, with fake native commands and HTTP API.
+- [ ] `make check test mcp-test ui-test` on expected Go/Node toolchains, with fake native commands and HTTP API.
 - [ ] Explicitly authorized disposable Ubuntu x86-64 KVM test: create stopped, apply, start, guest HTTP request, stop, restart, enable/disable with no immediate state change.
 - [ ] Cold boot with enabled and disabled VMs; server-man restart without guest termination; VM crash and unexpected host-power-loss recovery.
 - [ ] Tests for missing kernel/disk, readonly mount, bridge loss, disk-sharing, stolen socket, foreign TAP/unit, ownership drift, stale journal, partial artifact publication, helper path escape and failed stop.
@@ -116,3 +117,5 @@ Completion requires genuine jailed guest execution, stable boot and stop behavio
 ## 9. Progress and evidence
 
 - 2026-11-19: reviewed code on main c1a9f32 and upstream official jailer/getting-started docs; created branch. External online environment has no access to a trusted disposable KVM host, and the available container has Go 1.23 rather than repository's required toolchain. Native execution, boot and privilege tests cannot be claimed here. All subsequent completed steps should record precise checks and limitations.
+
+- 2026-11-19 (implementation checkpoint): added the Firecracker typed YAML model and validation, deterministic jailed config renderer, bounded Unix-socket API, unit-test fixtures, kernel storage reference propagation and explicit unknown Firecracker native backup coverage. This is **phase 1 code only**: no Firecracker adapter is registered, no privileged runner/systemd unit/TAP/jail is created, and no lifecycle operation is claimed. Main remains unchanged; only the feature branch contains these changes. Hosted Go/Node test execution and native acceptance remain pending.
