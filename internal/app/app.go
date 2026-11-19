@@ -61,6 +61,12 @@ func Registry(cfg config.Config, jobs *core.Jobs, monitoring *monitor.Sampler, r
 		err = declarative.RegisterInspection(registry, declarative.Store{Path: path})
 		if err == nil {
 			coordinator := declarative.Coordinator{RunningServer: &cfg, HealthCache: &declarative.HealthCache{}, Store: declarative.Store{Path: path}, Adapters: map[string]declarative.Adapter{"podman/quadlet": declarative.NewQuadlet(declarative.Store{Path: path}, runner), "podman/compose": declarative.NewCompose(declarative.Store{Path: path}, "podman", runner), "docker/compose": declarative.NewCompose(declarative.Store{Path: path}, "docker", runner), "libvirt": declarative.NewLibvirt(declarative.Store{Path: path}, cfg.LibvirtURI, runner), "incus": declarative.NewIncus(declarative.Store{Path: path}, runner)}}
+			// Firecracker native execution needs the reviewed root helper; do not
+			// register a fake or unjailed fallback when privileged operations
+			// are intentionally disabled.
+			if cfg.PrivilegedOperations {
+				coordinator.Adapters["firecracker"] = declarative.NewFirecracker(declarative.Store{Path: path}, runner)
+			}
 			if len(adminCredentials) > 0 {
 				coordinator.AdminCredentials = adminCredentials[0]
 			}
