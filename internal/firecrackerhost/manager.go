@@ -302,28 +302,80 @@ func action(ctx context.Context,uid int, req Request) (Observation,error) {
 	}
 	return inspect(ctx,uid,Request{ID:req.ID})
 }
+// A removal marker is retained until the systemd unit and root-owned metadata
+// have both been retired. It permits retry after an interrupted remove without
+// trusting a newly created or foreign service file.
+type removalIntent struct {
+	Spec Spec `json:"spec"`
+}
+func readRemoval(id string) (removalIntent,bool,error) {
+	data,err:=regularRootFile(filepath.Join(Root(id),"removal.json"))
+	if os.IsNotExist(err) {return removalIntent{},false,nil}
+	if err!=nil{return removalIntent{},false,err}
+	decoder:=json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var intent removalIntent
+	if decoder.Decode(&intent)!=nil || decoder.Decode(new(any))!=io.EOF ||
+		intent.Spec.Validate()!=nil || Identity(intent.Spec.UID,intent.Spec.ResourceID)!=id {
+		return removalIntent{},false,errors.New("invalid interrupted Firecracker removal record")
+	}
+	return intent,true,nil
+}
 func remove(ctx context.Context,uid int,req Request) (Observation,error) {
 	id:=req.nativeIdentity(uid)
+	pending,present,err:=readRemoval(id)
+	if err!=nil {return Observation{},err}
 	spec,err:=readSpec(id)
-	if os.IsNotExist(err) {
-		if _,e:=os.Lstat(UnitPath(id));e==nil {return Observation{},errors.New("untracked systemd unit cannot be removed")}
+	had:=err==nil
+	if err!=nil && !os.IsNotExist(err) {return Observation{},err}
+	if !had && !present {
+		if _,e:=os.Lstat(UnitPath(id));e==nil {
+			return Observation{},errors.New("untracked systemd unit cannot be removed")
+		}
 		return Observation{State:"stopped"},nil
 	}
-	if err!=nil {return Observation{},err}
+	if !had {spec=pending.Spec}
+	if present && specHash(spec)!=specHash(pending.Spec) {
+		return Observation{},errors.New("interrupted Firecracker removal identity changed")
+	}
 	unit,err:=spec.Unit()
 	if err!=nil{return Observation{},err}
-	if err=verifyOwnedUnit(id,unit,unit);err!=nil{return Observation{},err}
-	running,_,err:=unitStatus(ctx,id)
-	if err!=nil{return Observation{},err}
-	if _,pending,e:=readIntent(id);e!=nil{return Observation{},e} else if pending {return Observation{},errors.New("complete interrupted Firecracker publication before removing it")}
-	if running {return Observation{},errors.New("stop Firecracker before removing its definition")}
-	if err=Cleanup(id);err!=nil{return Observation{},err}
-	if _,err=runCommand(ctx,Systemctl,"disable",UnitName(id));err!=nil{return Observation{},err}
-	if err=os.Remove(UnitPath(id));err!=nil{return Observation{},err}
-	if err=os.Remove(filepath.Join(Root(id),"spec.json"));err!=nil{return Observation{},err}
-	_ = os.Remove(filepath.Join(Root(id),"started.hash"))
-	_ = os.Remove(Root(id))
+	raw,e:=regularRootFile(UnitPath(id))
+	unitExists:=e==nil
+	if e!=nil && !os.IsNotExist(e) {return Observation{},e}
+	if unitExists && !bytes.Equal(raw,unit) {
+		return Observation{},errors.New("Firecracker unit differs from the owned definition")
+	}
+	if _,saving,e:=readIntent(id);e!=nil {return Observation{},e} else if saving {
+		return Observation{},errors.New("complete interrupted Firecracker publication before removing it")
+	}
+	if unitExists {
+		running,_,e:=unitStatus(ctx,id)
+		if e!=nil{return Observation{},e}
+		if running {return Observation{},errors.New("stop Firecracker before removing its definition")}
+	}
+	if !present {
+		removalIntent:=removalIntent{Spec:spec}
+		data,e:=json.Marshal(removalIntent)
+		if e!=nil{return Observation{},e}
+		if e=writeRootFile(filepath.Join(Root(id),"removal.json"),append(data,'\n'),0600);e!=nil {
+			return Observation{},e
+		}
+	}
+	if had {
+		if err=Cleanup(id);err!=nil{return Observation{},err}
+	}
+	if unitExists {
+		if _,err=runCommand(ctx,Systemctl,"disable",UnitName(id));err!=nil{return Observation{},err}
+		if err=os.Remove(UnitPath(id));err!=nil && !os.IsNotExist(err) {return Observation{},err}
+	}
 	if _,err=runCommand(ctx,Systemctl,"daemon-reload");err!=nil{return Observation{},err}
+	if had {
+		if err=os.Remove(filepath.Join(Root(id),"spec.json"));err!=nil && !os.IsNotExist(err) {return Observation{},err}
+	}
+	_ = os.Remove(filepath.Join(Root(id),"started.hash"))
+	if err=os.Remove(filepath.Join(Root(id),"removal.json"));err!=nil{return Observation{},err}
+	if err=os.Remove(Root(id));err!=nil && !os.IsNotExist(err) {return Observation{},errors.New("native metadata remains; inspect root state")}
 	return Observation{State:"stopped"},nil
 }
 func logs(ctx context.Context,uid int,req Request) (LogResult,error) {
