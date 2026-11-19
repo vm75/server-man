@@ -195,9 +195,9 @@
         {/each}
       </ul>
     {/if}
-    {#if service.kind === 'container' || service.backend === 'incus'}
+    {#if service.kind === 'container' || service.backend === 'incus' || service.backend === 'firecracker'}
       <div class="project-log-controls">
-        <h3>{service.backend === 'incus' ? 'VM instance diagnostics' : 'Application logs'}</h3>
+        <h3>{service.backend === 'incus' || service.backend === 'firecracker' ? 'VM instance diagnostics' : 'Application logs'}</h3>
         <div>
           <label class="sr-only" for="application-log-tail-{service.id}">Log entries for {service.name || service.id}</label>
           <select id="application-log-tail-{service.id}" bind:value={logTail}>
@@ -213,7 +213,7 @@
       {#if logServiceID === service.id}
         {#if logError}<p class="form-error" role="alert">{logError}</p>{/if}
         {#if logs}<pre class="project-log-output">{logs.text || 'No visible log entries. The workload may not have emitted output or the account may lack access.'}</pre>{#if logs.truncated}<p class="resource-hint">Showing only the most recent 128 KiB of output.</p>{/if}{/if}
-        <p class="resource-hint">Logs can contain private application data and are requested only when you click Read logs.{service.backend === 'incus' ? ' Incus reports instance diagnostics, not guest application logs.' : ''}</p>
+        <p class="resource-hint">Logs can contain private application data and are requested only when you click Read logs.{service.backend === 'incus' ? ' Incus reports instance diagnostics, not guest application logs.' : service.backend === 'firecracker' ? ' Firecracker reports VMM and host service diagnostics, not guest web application logs.' : ''}</p>
       {/if}
     {:else if service.kind === 'vm'}
       <p class="resource-hint">Guest application logs are not exposed by this VM backend; inspect them inside the guest.</p>

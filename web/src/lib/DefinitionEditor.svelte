@@ -54,7 +54,7 @@
   let reviewDefinition = $state('')
   let operation = $state('save')
   let mode = $state('now')
-  const firecrackerEditNotice = 'Firecracker requires a prepared Linux kernel, raw disk images and an existing Linux bridge. Guest networking and application startup must be configured inside the VM. Native Firecracker execution is not yet available on this branch.'
+  const firecrackerEditNotice = 'Firecracker requires a prepared Linux kernel, raw disk images and an existing Linux bridge. Guest networking and application startup must be configured inside the VM. The native launcher is experimental and requires verified host KVM, jailer, systemd and privileged-helper setup; native boot and crash-recovery acceptance is pending.'
   const incusEditNotice = 'Incus v1: Stop the VM before changing CPU, memory, storage, network, firmware or native description. Save for next start does not defer running hardware edits. Start at boot can be changed without stopping the VM.'
   const storageChoices = $derived(Object.entries(snapshot?.config.storage ?? {}))
   const directoryStorageChoices = $derived(storageChoices.filter(([, s]) => s.kind !== 'file'))

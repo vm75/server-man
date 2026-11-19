@@ -146,6 +146,7 @@ Wants=network-online.target
 After=network-online.target
 [Service]
 Type=exec
+Delegate=yes
 ExecStartPre=%s prepare %s
 ExecStart=%s --id %s --exec-file %s --uid %d --gid %d --chroot-base-dir %s/jails --cgroup-version 2 --resource-limit no-file=1024 -- --api-sock /api.socket --config-file /vm.json
 ExecStopPost=%s cleanup %s
