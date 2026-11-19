@@ -28,7 +28,7 @@ Upstream references:
 
 Keep `services.<id>.kind: vm`, `backend: firecracker`, `enabled`, existing `vm.cpus`, `memory_mib`, `mac`, `uuid`, `disks` and `network`. Introduce one optional typed `vm.firecracker` mapping with required kernel storage reference and bounded kernel boot args; do not borrow libvirt firmware or Incus pool/project/image semantics. Require `vm.disks[0]` as the root, a raw format file; require each additional disk to be raw. Require a bridge binding (not Incus managed-network) and a valid MAC identity. Pin supported architecture and avoid presenting arbitrary hardware overrides. Root backing file and kernel are distinct storage references; the kernel may be a regular file without a `format`. Preserve existing `PrepareIdentities` ownership on edits and reject backend switches of existing VMs.
 
-Example YAML accepted by the branch's typed parser; native Apply and Start are not implemented yet:
+Example YAML accepted by the branch's typed parser (jailer execution and host boot acceptance are not yet verified):
 
     storage:
       guest-kernel: {kind: file, path: assets/firecracker/vmlinux}
@@ -87,21 +87,21 @@ Applications: add 'Firecracker VM' type; editor includes CPU, RAM, kernel file s
 - [ ] Execute the Go race suite on the repository's Go 1.26 toolchain, and resolve any errors.
 
 ### Phase 2 — secure supervisor and native adapter
-- [ ] Add constrained helper requests with path/owner/collision tests and no arbitrary shell.
-- [ ] Add jailed per-VM systemd supervisor, TAP setup, cleanup and recovery.
-- [ ] Add complete Validate/Inspect/Apply/Action/VerifyRemoved and boot policy.
-- [ ] Integrate owned generated artifact sidecar and reviewed reconciliation.
-- [ ] Confirm explicit stop vs force-stop semantics and active-guest edit policy.
+- [x] Add allowlisted root-helper requests, strict resource validation and source unit tests (native execution unverified).
+- [x] Implement jailed systemd definition, bind-mounted prepared disks, owned TAP setup, cleanup, and interrupted-publication/removal journal code (native recovery testing pending).
+- [x] Connect Validate/Inspect/Apply/Action/VerifyRemoved and independent boot policy through one backend; source-level contract tests added (native acceptance pending).
+- [x] Integrate local definition into owned artifact sidecar validation and reviewed reconciliation (fault-injection verification pending).
+- [x] Implement separate guest-API graceful stop and explicit acknowledged force-stop; running hardware edits rejected. [ ] Verify real systemd timeout and guest power-off semantics.
 
 ### Phase 3 — UI, prerequisites and packaging
-- [ ] Add form and Applications launcher with backend-specific errors and guidance.
-- [ ] Expose bounded managed guest/VM diagnostics through existing registry.
-- [ ] Check installed binaries, KVM, bridge/TAP, jailer, cgroups, UID/GID and files.
-- [ ] Integrate optional package/dependency installation and documentation.
-- [ ] Classify Firecracker explicitly in deferred backup/restore inventory.
+- [x] Add Firecracker VM form, Applications launcher, boot/force-stop controls and backend-specific guidance.
+- [x] Add bounded scoped native journal diagnostics through the existing registry.
+- [x] Add executable ownership, raw-file ownership/shape, bridge, KVM and cgroup-v2 presence checks (native permission and version compatibility acceptance pending).
+- [x] Package the root-only runtime helper and add optional Firecracker dependency selection (APT installs iproute2 only; upstream Firecracker+jailer binaries still require a trusted manual install on APT targets). [ ] Verify native package and release installation on each claimed distro.
+- [x] Classify Firecracker native backup as explicitly unsupported/unresolved rather than misclassifying it as libvirt.
 
 ### Phase 4 — test and rollout gates
-- [ ] `make check test mcp-test ui-test` on expected Go/Node toolchains, with fake native commands and HTTP API.
+- [ ] Execute `make check test mcp-test ui-test` with Go 1.26/Node toolchains. New source-level fixtures cover config rendering, Unix API, host input validation, and adapter lifecycle, but have not been executed in this environment.
 - [ ] Explicitly authorized disposable Ubuntu x86-64 KVM test: create stopped, apply, start, guest HTTP request, stop, restart, enable/disable with no immediate state change.
 - [ ] Cold boot with enabled and disabled VMs; server-man restart without guest termination; VM crash and unexpected host-power-loss recovery.
 - [ ] Tests for missing kernel/disk, readonly mount, bridge loss, disk-sharing, stolen socket, foreign TAP/unit, ownership drift, stale journal, partial artifact publication, helper path escape and failed stop.
@@ -121,3 +121,12 @@ Completion requires genuine jailed guest execution, stable boot and stop behavio
 - 2026-11-19 (implementation checkpoint): added the Firecracker typed YAML model and validation, deterministic jailed config renderer, bounded Unix-socket API, unit-test fixtures, kernel storage reference propagation and explicit unknown Firecracker native backup coverage. The coordinator also refuses Firecracker changes before persisting the desired YAML if the native adapter is absent, avoiding an unapplyable journal that could block unrelated workloads. This is **phase 1 code only**: no Firecracker adapter is registered, no privileged runner/systemd unit/TAP/jail is created, and no lifecycle operation is claimed. Main remains unchanged; only the feature branch contains these changes. Hosted Go/Node test execution and native acceptance remain pending.
 
 - Verification this turn: GitHub confirmed the branch and expected changed files against its base, and the source of the Go contract tests is committed. Go vet/race tests, frontend compilation, systemd verification and native KVM tests were **not executed**: the available container does not contain the checkout and has Go 1.23 rather than the project's Go 1.26 toolchain. This source-only checkpoint is not a runnable VM backend.
+
+
+## 10. Current implementation and required release gates (2026-11-19)
+
+Source is implemented on this branch in `internal/declarative/firecracker*.go`, `internal/firecrackerhost/`, `cmd/server-man-firecracker-runtime/`, `internal/admin/helper.go`, the unified VM UI and shared installer. The adapter is registered only when `server.privileged_operations` is true; no unjailed fallback is available. Host supervisor definitions live in `/etc/systemd/system`, with private root-owned metadata in `/var/lib/server-man-firecracker`. The native Firecracker and jailer binaries are currently expected at `/usr/bin/firecracker` and `/usr/bin/jailer`. The selected workload account currently supplies the jailer's UID/GID and owns the guest disk files.
+
+**Not yet production-accepted:** source/race/frontend tests are unrun; a disposable KVM guest has not been booted; systemd service/jailer compatibility, cold-boot persistence, shutdown behavior, outage recovery, root-helper access, guest HTTP service and host TAP data-plane tests are unverified. Separate jailer UID/GID identities per microVM are not yet implemented; sharing the workload UID is a security limitation for hostile multi-tenant workloads. Official-release binary verification/install is not yet automated on Ubuntu/Debian. Complete snapshot/backup and guest health are deferred by scope.
+
+Do not mark the user request or original deployment goals complete solely from committed source; only a disposable native acceptance campaign can close the production gates. No real host bridge, guest disk, or service was modified during this online session. The full `make check test mcp-test ui-test` suite was not run, so even source compatibility is not yet established.
