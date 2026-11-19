@@ -171,8 +171,8 @@ func checkDiskSharing(spec Spec) error {
 	}
 	self:=Identity(spec.UID,spec.ResourceID)
 	for _,entry:=range entries {
-		if !entry.IsDir() || entry.Name()==self {continue}
-		if !validOpaque(entry.Name()) {
+		if entry.Name()==self {continue}
+		if !entry.IsDir() || !validOpaque(entry.Name()) {
 			return errors.New("foreign Firecracker native directory needs review")
 		}
 		other,e:=readSpec(entry.Name())
@@ -217,7 +217,11 @@ func checkSources(spec Spec) error {
 }
 func runCommand(ctx context.Context, program string, args ...string) (string,error) {
 	// The executable is a constant, arguments are validated identifiers only.
-	timeoutCtx,cancel:=context.WithTimeout(ctx,15*time.Second)
+	timeout:=15*time.Second
+	if program==Systemctl && len(args)>0 && (args[0]=="start" || args[0]=="stop") {
+		timeout=75*time.Second
+	}
+	timeoutCtx,cancel:=context.WithTimeout(ctx,timeout)
 	defer cancel()
 	cmd:=exec.CommandContext(timeoutCtx,program,args...)
 	cmd.Env=[]string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin","LC_ALL=C","LANG=C"}
