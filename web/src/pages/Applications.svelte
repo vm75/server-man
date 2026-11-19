@@ -92,8 +92,8 @@
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('container', 'podman', 'compose')}>Podman Compose</button>
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('container', 'podman', 'quadlet')}>Podman Quadlet</button>
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('container', 'docker', 'compose')}>Docker Compose</button>
-    <button class="small-button" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
-    <button class="small-button" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
+    <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
+    <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
   </div>
   <div class="search-wrap">
     <label class="sr-only" for="app-search">Find an application</label>
@@ -134,8 +134,8 @@
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('container', 'podman', 'compose')}>Podman Compose</button>
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('container', 'podman', 'quadlet')}>Podman Quadlet</button>
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('container', 'docker', 'compose')}>Docker Compose</button>
-      <button disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
-      <button disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
+      <button class="primary" disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
+      <button class="primary" disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
     </div>
   </section>
 {:else if inventory && !inventory.error && inventory.services.length && !filtered.length}
