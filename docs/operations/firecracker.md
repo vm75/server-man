@@ -21,7 +21,7 @@ Review the plan and use the normal guided install for approved changes. `--backe
 The host must have:
 
 - Linux with KVM (`/dev/kvm`) and cgroup v2, systemd and a working `ip` command.
-- A trusted matching `/usr/bin/firecracker` and `/usr/bin/jailer` pair, root-owned and not group/world writable. On Arch, the native `firecracker` package includes both binaries. On Ubuntu/Debian, the current installer only installs `iproute2`; an operator must separately obtain and verify the upstream matching release binaries from a trusted source and install them at the expected paths. Server-man does **not** download unverified binaries or auto-select an upstream release.
+- A trusted matching `/usr/bin/firecracker` and `/usr/bin/jailer` pair, root-owned and not group/world writable. On Arch, the native `firecracker` package includes both binaries. On Ubuntu/Debian, `--backends firecracker` installs `iproute2`. An operator may separately install trusted matching upstream binaries or pass an already downloaded official release tarball using `--firecracker-release /path/to/firecracker-vX.Y.Z-ARCH.tgz --firecracker-sha256 TRUSTED_64_CHAR_HEX`. The installer validates the SHA-256 (obtained independently from a trusted source), selects matching ELF executables for the host architecture, and installs them at `/usr/bin/firecracker` and `/usr/bin/jailer`. It does **not** download the archive or infer a trusted checksum from unverified network content. Archive installation is opt-in and APT-only; Arch uses the native package.
 - An existing and persistent Linux bridge (for example `br-microvm`), set up outside server-man with DHCP/routing as appropriate. Do not attach a physical NIC to a bridge without a remote-console/recovery plan.
 - One selected non-root workload account with the private `server-man.yaml`, `server.privileged_operations: true` and `server.allow_writes: true`. Kernel and raw disk images must be nonempty regular files **owned by that account**, readable by the owner (writable as owner for disks), and inaccessible for writing by group/other users. Source paths may not contain symlinks. The root-owned staging helper grants the jailed VMM access to its private `/disks` directory and binds verified image inodes rather than copying or changing their contents.
 - Root-owned helper and runtime binaries, systemd units and native metadata directories with their expected ownership. The helper alone performs TAP, jail staging, native unit and lifecycle operations.
@@ -136,3 +136,17 @@ This one-process fixture does **not** test a host reboot, systemd's poweroff
 ordering, installer packages, KVM compatibility on another architecture, or
 outage recovery. Those require separate manual acceptance cycles described
 above and in the implementation plan.
+
+For example, after obtaining an official Firecracker release and its trusted,
+independently verified SHA-256 digest on the operator's machine:
+
+```sh
+./install.sh --user YOUR_ACCOUNT --backends firecracker \
+  --firecracker-release /path/to/firecracker-vX.Y.Z-x86_64.tgz \
+  --firecracker-sha256 VERIFIED_SHA256_HEX --dry-run
+```
+
+Remove `--dry-run` and approve the plan only after reviewing its exact paths,
+binary pair, package operations and trust source. This installs the release
+supplied by the operator, not a hardcoded Firecracker version. Never obtain
+both an executable and its purported checksum from an untrusted source.
