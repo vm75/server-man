@@ -30,6 +30,8 @@ dev-admin:
 
 check:
 	go vet ./...
+	# Compile the opt-in native acceptance fixture without executing host mutations.
+	go test -tags firecracker_native -run '^$' ./internal/declarative
 	npm --prefix web run check
 
 test:

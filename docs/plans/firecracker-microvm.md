@@ -84,7 +84,7 @@ Applications: add 'Firecracker VM' type; editor includes CPU, RAM, kernel file s
 - [x] Implement deterministic typed Firecracker config rendering and unit tests with no native execution.
 - [x] Add bounded, isolated Unix-socket API client tests using a fake Unix server (test source committed; execution pending matching toolchain).
 - [x] Reject unsupported disk/firmware/pool/project/network combinations before save.
-- [ ] Execute the Go race suite on the repository's Go 1.26 toolchain, and resolve any errors.
+- [x] Execute the Go race suite on the repository's Go 1.26 toolchain, and resolve any errors (GitHub Actions success on `dcadb3c` and `8ed7251`; see CI links below).
 
 ### Phase 2 — secure supervisor and native adapter
 - [x] Add allowlisted root-helper requests, strict resource validation and source unit tests (native execution unverified).
@@ -101,7 +101,7 @@ Applications: add 'Firecracker VM' type; editor includes CPU, RAM, kernel file s
 - [x] Classify Firecracker native backup as explicitly unsupported/unresolved rather than misclassifying it as libvirt.
 
 ### Phase 4 — test and rollout gates
-- [ ] Execute `make check test mcp-test ui-test` with Go 1.26/Node toolchains. New source-level fixtures cover config rendering, Unix API, host input validation, and adapter lifecycle, but have not been executed in this environment.
+- [x] Execute `make check test mcp-test ui-test` with Go 1.26/Node toolchains. GitHub Actions PR verification passed on `dcadb3c` and `8ed7251`, including the Go race suite, frontend checks, MCP/UI tests and staged install. The newer opt-in native acceptance fixture is compiled but not executed by default; see the latest CI run.
 - [ ] Explicitly authorized disposable Ubuntu x86-64 KVM test: create stopped, apply, start, guest HTTP request, stop, restart, enable/disable with no immediate state change.
 - [ ] Cold boot with enabled and disabled VMs; server-man restart without guest termination; VM crash and unexpected host-power-loss recovery.
 - [ ] Tests for missing kernel/disk, readonly mount, bridge loss, disk-sharing, stolen socket, foreign TAP/unit, ownership drift, stale journal, partial artifact publication, helper path escape and failed stop.
@@ -130,3 +130,5 @@ Source is implemented on this branch in `internal/declarative/firecracker*.go`, 
 **Not yet production-accepted:** source/race/frontend tests are unrun; a disposable KVM guest has not been booted; systemd service/jailer compatibility, cold-boot persistence, shutdown behavior, outage recovery, root-helper access, guest HTTP service and host TAP data-plane tests are unverified. Separate jailer UID/GID identities per microVM are not yet implemented; sharing the workload UID is a security limitation for hostile multi-tenant workloads. Official-release binary verification/install is not yet automated on Ubuntu/Debian. Complete snapshot/backup and guest health are deferred by scope.
 
 Do not mark the user request or original deployment goals complete solely from committed source; only a disposable native acceptance campaign can close the production gates. No real host bridge, guest disk, or service was modified during this online session. The full `make check test mcp-test ui-test` suite was not run, so even source compatibility is not yet established.
+
+- 2026-11-19 (CI/review follow-up): repaired missing `time` import, jailed disk directory accessibility, source-file FD bind safety, startup failure cleanup, systemd guest-shutdown hook, force-stop path, bounded journal output and frontend destructive-action warning; added source-permission and adapter contract tests. CI passed for `dcadb3c`: https://github.com/vm75/server-man/actions/runs/44674235587 and for `8ed7251`: https://github.com/vm75/server-man/actions/runs/44674520272. No real guest was booted in the hosted CI environment. An explicitly acknowledged `firecracker_native` integration test was added for an operator's disposable KVM machine, with separate recompilation coverage in `make check`.

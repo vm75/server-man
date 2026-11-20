@@ -82,3 +82,57 @@ Scoped logs are from the host's generated systemd unit/journal, not guest Node.j
 Use an explicitly acknowledged, disposable KVM-capable Ubuntu guest, not the workstation. Prepare a known compatible Linux kernel/root disk, persistent bridge and a guest HTTP service. Run source checks (`make check test mcp-test ui-test`) before touching native workloads. Then verify: stopped definition, start and HTTP response, guest graceful shutdown, force-stop after a deliberately unresponsive guest, Start/Stop/Enable/Disable independence, daemon restart, cold boot, missing data/mount, foreign TAP, hardlinked disks, run-as account permissions, failed/partial publication, interrupted removal, crash recovery and preservation of VM disk files. Repeat provider, boot and permission checks on Debian and any other distribution you claim supported.
 
 Neither schema/command fixtures nor the presence of `/dev/kvm` prove guest boot, network reachability or stable long-running web services. Firecracker native backup/restore remains explicitly unsupported; create a separate validated data-protection plan before hosting irreplaceable data.
+
+
+## Executable native acceptance fixture (disposable hosts only)
+
+The source includes an **opt-in** native integration test at
+`internal/declarative/firecracker_native_test.go`. Ordinary `make test`
+and GitHub CI never run its host mutations; CI only compiles the test.
+The fixture must run with real root privileges on an explicitly approved,
+disposable KVM-capable Linux machine. **Never run it on a workstation or a
+host with irreplaceable data.**
+
+Prepare a compatible Linux guest kernel and a disposable, writable raw root
+image owned by the workload account. Guest init must configure a static/DHCP
+IP on the selected bridge and start an HTTP service. Use a dedicated
+preexisting Linux bridge on that disposable host, and install matching
+trusted Firecracker and jailer binaries at `/usr/bin`. Install the built
+root-owned `server-man-firecracker-runtime` at `/usr/local/libexec`.
+The test does not create or change bridges, guest data images, host firewall,
+DHCP, or Firecracker binaries.
+
+Compile the dedicated test binary as the normal development user:
+
+```sh
+go test -c -tags firecracker_native -o bin/firecracker-native.test ./internal/declarative
+```
+
+Then run it on the **disposable host only**, with actual paths and addresses
+supplied locally (replace the placeholders; do not commit host details):
+
+```sh
+sudo env \
+  SERVER_MAN_FIRECRACKER_NATIVE_ACK=disposable-kvm-only \
+  SERVER_MAN_FIRECRACKER_ACCOUNT=YOUR_ACCOUNT \
+  SERVER_MAN_FIRECRACKER_KERNEL=/path/to/disposable/vmlinux \
+  SERVER_MAN_FIRECRACKER_ROOT=/path/to/disposable/root.ext4 \
+  SERVER_MAN_FIRECRACKER_BRIDGE=br-microvm \
+  SERVER_MAN_FIRECRACKER_HTTP_URL=http://192.0.2.2:8080/ \
+  ./bin/firecracker-native.test -test.v -test.run '^TestFirecrackerNativeAcceptance$'
+```
+
+The HTTP address above is a documentation-only example; use the actual
+reachable address of your disposable guest. The test provisions a random
+managed service ID, applies without starting, starts the jailed VMM, verifies
+HTTP, checks a fresh manager instance can observe it, enables boot without
+interrupting execution, rejects live hardware changes, stops gracefully,
+restarts, force-stops, disables boot, removes the stopped definition, and
+checks that kernel and disk files remain. It tries to clean up only the
+randomly created test resource after failure; inspect systemd/TAP/jail state
+and retain the guest images before manually recovering any partial failure.
+
+This one-process fixture does **not** test a host reboot, systemd's poweroff
+ordering, installer packages, KVM compatibility on another architecture, or
+outage recovery. Those require separate manual acceptance cycles described
+above and in the implementation plan.
