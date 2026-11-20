@@ -15,6 +15,8 @@ func TestPreparedSourcePermissionsAndSymlinks(t *testing.T) {
 	path:=filepath.Join(dir,"root.ext4")
 	if err:=os.WriteFile(path,[]byte("raw disk fixture"),0600);err!=nil{t.Fatal(err)}
 	if _,err:=sourceFile(path,uid,true);err!=nil{t.Fatal(err)}
+	if err:=os.Chmod(path,0666);err!=nil{t.Fatal(err)}
+	if _,err:=sourceFile(path,uid,true);err==nil{t.Fatal("world-writable source accepted")}
 	if err:=os.Chmod(path,0400);err!=nil{t.Fatal(err)}
 	if _,err:=sourceFile(path,uid,false);err!=nil{t.Fatal("read-only kernel should be accepted",err)}
 	if _,err:=sourceFile(path,uid,true);err==nil{t.Fatal("read-only disk accepted")}
