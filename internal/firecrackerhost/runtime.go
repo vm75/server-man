@@ -52,7 +52,7 @@ func removeTAP(ctx context.Context,spec Spec) error {
 	_,err=runCommand(ctx,ipBinary(),"link","delete","dev",tap)
 	return err
 }
-func bindJailSource(from,to string) error {
+func bindJailSource(from,to string,uid int,writable bool) error {
 	if info,err:=os.Lstat(to);err==nil {
 		if !info.Mode().IsRegular() {return errors.New("unsafe Firecracker jail target")}
 		// Unmount is never attempted here: stale mounts are handled by Cleanup.
@@ -61,13 +61,15 @@ func bindJailSource(from,to string) error {
 	target,err:=os.OpenFile(to,os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW,0600)
 	if err!=nil{return errors.New("cannot stage Firecracker jail input")}
 	target.Close()
-	// Pin the verified source inode; do not follow a writable pathname again
-	// after validation, since the workload account can replace it.
+	// Validate the pathname and ownership just before the bind, then pin
+	// that same inode. A writable directory may be renamed concurrently.
+	verified,err:=sourceFile(from,uid,writable)
+	if err!=nil{return err}
 	src,err:=os.OpenFile(from,os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC,0)
 	if err!=nil{return errors.New("Firecracker source became inaccessible")}
 	defer src.Close()
 	before,err:=src.Stat()
-	if err!=nil || !before.Mode().IsRegular(){return errors.New("Firecracker source is no longer a regular file")}
+	if err!=nil || !os.SameFile(verified,before){return errors.New("Firecracker source identity changed during staging")}
 	fdPath:=fmt.Sprintf("/proc/self/fd/%d",src.Fd())
 	if err=syscall.Mount(fdPath,to,"",syscall.MS_BIND,"");err!=nil{return errors.New("failed to bind Firecracker source")}
 	after,err:=os.Stat(to)
@@ -87,11 +89,11 @@ func prepareJail(spec Spec,id string) error {
 	// The jailer chowns the jail root, but not /disks. Allow only this
 	// guest's unprivileged VMM to traverse the disk directory.
 	if err:=os.Chown(filepath.Join(root,"disks"),spec.UID,spec.GID);err!=nil{return errors.New("cannot assign Firecracker disk directory ownership")}
-	if err:=bindJailSource(spec.Kernel,filepath.Join(root,"kernel"));err!=nil{return err}
+	if err:=bindJailSource(spec.Kernel,filepath.Join(root,"kernel"),spec.UID,false);err!=nil{return err}
 	for n,source:=range spec.Disks {
 		name:="root"
 		if n>0 {name=fmt.Sprintf("disk%d",n)}
-		if err:=bindJailSource(source,filepath.Join(root,"disks",name));err!=nil{return err}
+		if err:=bindJailSource(source,filepath.Join(root,"disks",name),spec.UID,true);err!=nil{return err}
 	}
 	data,err:=spec.NativeJSON()
 	if err!=nil{return err}
