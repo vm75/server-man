@@ -224,7 +224,7 @@ func checkSources(spec Spec) error {
 	}
 	return nil
 }
-func runCommand(ctx context.Context, program string, args ...string) (string,error) {
+func runCommandBounded(ctx context.Context, program string, capBytes int, args ...string) (string,bool,error) {
 	// The executable is a constant, arguments are validated identifiers only.
 	timeout:=15*time.Second
 	if program==Systemctl && len(args)>0 && (args[0]=="start" || args[0]=="stop") {
@@ -234,12 +234,17 @@ func runCommand(ctx context.Context, program string, args ...string) (string,err
 	defer cancel()
 	cmd:=exec.CommandContext(timeoutCtx,program,args...)
 	cmd.Env=[]string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin","LC_ALL=C","LANG=C"}
-	output:=core.NewTail(32 << 10)
+	output:=core.NewTail(capBytes)
 	cmd.Stdout,cmd.Stderr=output,output
-	if err:=cmd.Run();err!=nil {return "",fmt.Errorf("Firecracker host operation failed: %w",err)}
+	if err:=cmd.Run();err!=nil {return "",false,fmt.Errorf("Firecracker host operation failed: %w",err)}
 	text,truncated:=output.Snapshot()
+	return text,truncated,nil
+}
+func runCommand(ctx context.Context, program string, args ...string) (string,error) {
+	output,truncated,err:=runCommandBounded(ctx,program,32<<10,args...)
+	if err!=nil{return "",err}
 	if truncated{return "",errors.New("native Firecracker command output exceeded bound")}
-	return text,nil
+	return output,nil
 }
 func isRunning(ctx context.Context,id string) (bool,error) {
 	out,err:=runCommand(ctx,Systemctl,"show",UnitName(id),"--property=ActiveState","--value","--no-pager")

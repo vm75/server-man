@@ -37,6 +37,9 @@ func validateNativeTransition(ctx context.Context, a Adapter, previous, desired 
 		if errors.Is(err, errIncusStoppedUpdate) {
 			return fmt.Errorf("%s: %w", key, errIncusStoppedUpdate)
 		}
+		if errors.Is(err, errFirecrackerStoppedUpdate) {
+			return fmt.Errorf("%s: %w", key, errFirecrackerStoppedUpdate)
+		}
 		return fmt.Errorf("%s: native transition could not be verified", key)
 	}
 	return nil
@@ -440,6 +443,8 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 			// contain secret-derived output and must retain generic diagnostics.
 			if errors.Is(err, errArtifactConflict) {
 				message, jobError = artifactConflictRemedy, artifactConflictRemedy
+			} else if errors.Is(err, errFirecrackerStoppedUpdate) {
+				message, jobError = errFirecrackerStoppedUpdate.Error(), errFirecrackerStoppedUpdate.Error()
 			} else if errors.Is(err, errIncusStoppedUpdate) {
 				// Native state may have changed after the pre-save guard. Preserve
 				// the actionable reason in the durable journal, without backend output.

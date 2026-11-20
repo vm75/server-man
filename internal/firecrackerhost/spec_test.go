@@ -40,7 +40,7 @@ func TestNativeSpecAndSystemdUnit(t *testing.T) {
 	if err!=nil || !bytes.Equal(raw,next) {t.Fatal("unstable native config",err)}
 	unit,err:=spec.Unit()
 	if err!=nil {t.Fatal(err)}
-	for _,text:=range []string{header,"ExecStartPre="+RuntimePath+" prepare "+id,"ExecStopPost="+RuntimePath+" cleanup "+id,"--chroot-base-dir "+BasePath+"/jails","--config-file /vm.json","Restart=no","WantedBy=multi-user.target"} {
+	for _,text:=range []string{header,"ExecStartPre="+RuntimePath+" prepare "+id,"ExecStop="+RuntimePath+" shutdown "+id,"ExecStopPost="+RuntimePath+" cleanup "+id,"--chroot-base-dir "+BasePath+"/jails","--config-file /vm.json","Restart=no","TimeoutStopSec=110s","WantedBy=multi-user.target"} {
 		if !strings.Contains(string(unit),text) {t.Fatalf("missing secure unit directive %q",text)}
 	}
 	if strings.Contains(string(unit),spec.Kernel) || strings.Contains(string(unit),spec.Disks[0]) {

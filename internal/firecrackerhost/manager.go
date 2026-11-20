@@ -392,9 +392,9 @@ func logs(ctx context.Context,uid int,req Request) (LogResult,error) {
 	id:=req.nativeIdentity(uid)
 	if _,err:=readSpec(id);err!=nil{return LogResult{},errors.New("unknown managed Firecracker VM")}
 	if req.Tail<1 || req.Tail>2000{return LogResult{},errors.New("invalid Firecracker log limit")}
-	output,err:=runCommand(ctx,"/usr/bin/journalctl","--no-pager","--quiet","--output=short-iso","--lines",strconv.Itoa(req.Tail),"--unit",UnitName(id))
+	output,truncated,err:=runCommandBounded(ctx,"/usr/bin/journalctl",128<<10,"--no-pager","--quiet","--output=short-iso","--lines",strconv.Itoa(req.Tail),"--unit",UnitName(id))
 	if err!=nil{return LogResult{},err}
-	return LogResult{Text:output,Source:"firecracker-systemd"},nil
+	return LogResult{Text:output,Truncated:truncated,Source:"firecracker-systemd"},nil
 }
 
 // Handle executes exclusively fixed root operations for one sudo caller.

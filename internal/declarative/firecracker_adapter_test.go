@@ -85,6 +85,9 @@ func TestFirecrackerAdapterPublicationAndLifecycleContracts(t *testing.T) {
 	if err=f.ValidateTransition(ctx,next,changed,"service/web");!errors.Is(err,errFirecrackerStoppedUpdate) {
 		t.Fatal("running VM hardware edit not rejected",err)
 	}
+	if err=validateNativeTransition(ctx,f,next,changed,"service/web");!errors.Is(err,errFirecrackerStoppedUpdate) {
+		t.Fatal("coordinator masked the actionable stop requirement",err)
+	}
 	if err=f.Apply(ctx,next,Config{Version:1},"service/web","now");err==nil {
 		t.Fatal("active VM removal accepted")
 	}

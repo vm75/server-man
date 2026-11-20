@@ -105,7 +105,11 @@ func Prepare(id string) error {
 	spec,err:=readSpec(id)
 	if err!=nil{return err}
 	if err=checkSources(spec);err!=nil{return err}
-	if err=prepareJail(spec,id);err!=nil{return err}
+	if err=prepareJail(spec,id);err!=nil{
+		// A partial bind staging must not survive a failed start.
+		_ = Cleanup(id)
+		return err
+	}
 	ctx,cancel:=context.WithTimeout(context.Background(),20*time.Second)
 	defer cancel()
 	if err=prepareTAP(ctx,spec);err!=nil{
