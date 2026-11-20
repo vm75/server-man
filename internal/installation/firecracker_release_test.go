@@ -68,7 +68,7 @@ func TestReadFirecrackerVerifiedReleasePair(t *testing.T) {
 		{"duplicate binary",[]releaseMember{firecracker,firecracker,jailer}},
 		{"version mismatch",[]releaseMember{firecracker,{name:"release-v1.98.0-"+arch+"/jailer-v1.98.0-"+arch,data:elf,kind:tar.TypeReg}}},
 		{"symlink member",[]releaseMember{firecracker,jailer,{name:prefix+"link",kind:tar.TypeSymlink}}},
-		{"wrong binary arch",[]releaseMember{{name:"release-v1.99.0-aarch64/firecracker-v1.99.0-aarch64",data:elf,kind:tar.TypeReg},jailer}},
+		{"wrong binary arch",[]releaseMember{{name:"release-v1.99.0-wrong_arch/firecracker-v1.99.0-wrong_arch",data:elf,kind:tar.TypeReg},jailer}},
 	} {
 		t.Run(tt.name,func(t *testing.T) {
 			archive,sha:=releaseFixture(t,tt.members)
