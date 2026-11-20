@@ -153,6 +153,9 @@ func sourceFile(path string, uid int, writable bool) (os.FileInfo,error) {
 	stat,ok:=info.Sys().(*syscall.Stat_t)
 	if !ok || stat.Uid != uint32(uid) {return nil,errors.New("Firecracker source must be owned by the selected workload account")}
 	if info.Mode().Perm()&0022!=0 {return nil,errors.New("Firecracker source must not be writable by group or other users")}
+	if writable && info.Mode().Perm()&0077!=0 {
+		return nil,errors.New("Firecracker writable disk must have owner-only permissions")
+	}
 	required:=os.FileMode(0400)
 	if writable {required=0600}
 	if info.Mode().Perm()&required!=required {
