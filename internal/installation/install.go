@@ -372,9 +372,7 @@ func (p plan) apply(ctx context.Context, out io.Writer) error {
 		if err=rootDirectory("/usr/bin");err!=nil{return err}
 		release,_,verifyErr:=readFirecrackerRelease(p.FirecrackerArchive,p.FirecrackerSHA256)
 		if verifyErr!=nil{return fmt.Errorf("Firecracker archive changed since review: %w",verifyErr)}
-		for _,name:=range []string{"firecracker","jailer"} {
-			if err=atomicFile("/usr/bin/"+name,release[name],0755);err!=nil{return err}
-		}
+		if err=installFirecrackerPair("/usr/bin",release);err!=nil{return err}
 	}
 	if err = atomicFile("/etc/sudoers.d/server-man", rule, 0440); err != nil {
 		return err
