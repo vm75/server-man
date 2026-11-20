@@ -37,6 +37,9 @@ func validateNativeTransition(ctx context.Context, a Adapter, previous, desired 
 		if errors.Is(err, errIncusStoppedUpdate) {
 			return fmt.Errorf("%s: %w", key, errIncusStoppedUpdate)
 		}
+		if errors.Is(err, errFirecrackerStoppedUpdate) {
+			return fmt.Errorf("%s: %w", key, errFirecrackerStoppedUpdate)
+		}
 		return fmt.Errorf("%s: native transition could not be verified", key)
 	}
 	return nil
@@ -219,6 +222,14 @@ func (c Coordinator) prepare(candidate Config, expected string) (Config, Config,
 			plan.Changes = append(plan.Changes, Change{key, backend(desired, key), op, fp})
 		}
 	}
+	// The typed Firecracker model can be reviewed before its secure native
+	// runner is implemented. Never persist an unapplyable Firecracker change:
+	// a failed journal would otherwise block unrelated managed mutations.
+	for _, change := range plan.Changes {
+		if change.Backend == "firecracker" && c.Adapters["firecracker"] == nil {
+			return Config{}, Config{}, Plan{}, errors.New("Firecracker native execution is not available; this definition cannot be applied yet")
+		}
+	}
 	plan.RestartRequired = c.serverRestartRequired(desired)
 	if plan.RestartRequired && len(plan.Changes) > 0 {
 		return Config{}, Config{}, Plan{}, errors.New("save server settings separately and restart server-man before changing managed resources")
@@ -313,6 +324,13 @@ func (c Coordinator) saveApply(ctx context.Context, candidate Config, expected, 
 		}
 	}
 	plan.Changes = ordered
+	// An unsupported backend can also appear as native drift on an unchanged
+	// definition. Refuse before writing a journal in that case as well.
+	for _, change := range plan.Changes {
+		if change.Backend == "firecracker" && c.Adapters["firecracker"] == nil {
+			return Journal{}, errors.New("Firecracker native execution is not available; no changes were saved")
+		}
+	}
 	// Validate before committing intent or configuration; missing adapters can be
 	// represented in next-start desired state, but cannot claim successful apply.
 	for _, change := range plan.Changes {
@@ -425,6 +443,8 @@ func (c Coordinator) apply(ctx context.Context, previous, desired Config, change
 			// contain secret-derived output and must retain generic diagnostics.
 			if errors.Is(err, errArtifactConflict) {
 				message, jobError = artifactConflictRemedy, artifactConflictRemedy
+			} else if errors.Is(err, errFirecrackerStoppedUpdate) {
+				message, jobError = errFirecrackerStoppedUpdate.Error(), errFirecrackerStoppedUpdate.Error()
 			} else if errors.Is(err, errIncusStoppedUpdate) {
 				// Native state may have changed after the pre-save guard. Preserve
 				// the actionable reason in the durable journal, without backend output.

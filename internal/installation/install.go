@@ -32,6 +32,7 @@ var safePath = regexp.MustCompile(`^/[A-Za-z0-9_./-]+$`)
 type plan struct {
 	Account, Home, UID, GID, Bundle, Manager string
 	Backends, Packages, Groups               []string
+	FirecrackerArchive, FirecrackerSHA256     string
 	SkipPackages                             bool
 }
 
@@ -42,7 +43,7 @@ func selected(value string) ([]string, error) {
 	var result []string
 	for _, item := range strings.Split(value, ",") {
 		switch item {
-		case "podman", "docker", "virtualization", "incus", "samba", "nfs":
+		case "podman", "docker", "virtualization", "incus", "firecracker", "samba", "nfs":
 		default:
 			return nil, fmt.Errorf("unknown backend %q", item)
 		}
@@ -114,10 +115,12 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	fs.SetOutput(out)
 	account := fs.String("user", "", "existing workload account (required)")
 	bundle := fs.String("bundle", ".", "built source tree or extracted release directory")
-	backends := fs.String("backends", "all", "comma-separated podman,docker,virtualization,incus,samba,nfs; or all")
+	backends := fs.String("backends", "all", "comma-separated podman,docker,virtualization,incus,firecracker,samba,nfs; or all")
 	yes := fs.Bool("yes", false, "approve the printed package, privilege and service changes")
 	dry := fs.Bool("dry-run", false, "print the installation plan without changes")
 	skip := fs.Bool("skip-packages", false, "use installed dependencies without refreshing or installing packages")
+	firecrackerArchive := fs.String("firecracker-release", "", "optional local matching official Firecracker+jailer tarball (APT only)")
+	firecrackerSHA := fs.String("firecracker-sha256", "", "trusted SHA-256 of the local Firecracker release tarball")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -152,11 +155,22 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	if err != nil {
 		return err
 	}
+	if (*firecrackerArchive == "") != (*firecrackerSHA == "") {
+		return errors.New("specify both --firecracker-release and --firecracker-sha256")
+	}
+	if *firecrackerArchive != "" {
+		if !slices.Contains(targets,"firecracker") || manager != "apt" {
+			return errors.New("a verified Firecracker release bundle requires --backends firecracker on Ubuntu/Debian")
+		}
+		if _,_,err := readFirecrackerRelease(*firecrackerArchive,*firecrackerSHA);err!=nil {
+			return fmt.Errorf("Firecracker release did not verify: %w",err)
+		}
+	}
 	absolute, err := filepath.Abs(*bundle)
 	if err != nil {
 		return err
 	}
-	p := plan{Account: *account, Home: u.HomeDir, UID: u.Uid, GID: u.Gid, Bundle: absolute, Manager: manager, Packages: packages, Backends: targets, SkipPackages: *skip}
+	p := plan{Account: *account, Home: u.HomeDir, UID: u.Uid, GID: u.Gid, Bundle: absolute, Manager: manager, Packages: packages, Backends: targets, SkipPackages: *skip, FirecrackerArchive:*firecrackerArchive,FirecrackerSHA256:*firecrackerSHA}
 	for _, target := range targets {
 		switch target {
 		case "docker":
@@ -167,7 +181,7 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			p.Groups = append(p.Groups, "libvirt")
 		}
 	}
-	for _, binary := range []string{"server-man", "server-man-admin", "server-man-install"} {
+	for _, binary := range []string{"server-man", "server-man-admin", "server-man-install", "server-man-firecracker-runtime"} {
 		info, err := os.Stat(filepath.Join(absolute, "bin", binary))
 		if err != nil {
 			return err
@@ -178,8 +192,11 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	}
 	fmt.Fprintf(out, "Account: %s (%s)\nBackends: %s\nPackage manager: %s\nPackages: %s\nSkip package installation: %t\nGroups: %s\n", p.Account, p.UID, strings.Join(targets, ", "), manager, strings.Join(packages, " "), *skip, strings.Join(p.Groups, ", "))
 	fmt.Fprintln(out, "Package policy: unpinned latest candidates from the configured native distribution repositories; no upstream repository additions or exact version locks. --skip-packages preserves installed versions.")
+	if p.FirecrackerArchive!="" {
+		fmt.Fprintf(out,"Verified Firecracker release bundle: %s (SHA-256 %s). Install matching Firecracker and jailer to /usr/bin; the archive checksum must come from a trusted independent source.\n",p.FirecrackerArchive,p.FirecrackerSHA256)
+	}
 	fmt.Fprintln(out, "Host units to enable/start:", strings.Join(hostUnits(targets), ", "))
-	fmt.Fprintln(out, "Install: /usr/local/bin/server-man, /usr/local/libexec/server-man-admin, /usr/local/sbin/server-man-install")
+	fmt.Fprintln(out, "Install: /usr/local/bin/server-man, /usr/local/libexec/server-man-admin, /usr/local/libexec/server-man-firecracker-runtime, /usr/local/sbin/server-man-install")
 	fmt.Fprintf(out, "Privilege rule: %s ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/server-man-admin \"\"\n", p.Account)
 	fmt.Fprintln(out, "Enable lingering and server-man.service as the workload account, with loopback access and management writes. Docker/Incus groups and helper operations grant broad host control. Package installation can start daemons; Arch uses a full system upgrade. Existing configuration is preserved. Incus pools/networks and shares are not initialized.")
 	if *dry {
@@ -342,7 +359,7 @@ func (p plan) apply(ctx context.Context, out io.Writer) error {
 	if err = run(ctx, out, "visudo", "-cf", f.Name()); err != nil {
 		return err
 	}
-	for _, binary := range []struct{ source, target string }{{"server-man", "/usr/local/bin/server-man"}, {"server-man-admin", "/usr/local/libexec/server-man-admin"}, {"server-man-install", "/usr/local/sbin/server-man-install"}} {
+	for _, binary := range []struct{ source, target string }{{"server-man", "/usr/local/bin/server-man"}, {"server-man-admin", "/usr/local/libexec/server-man-admin"}, {"server-man-install", "/usr/local/sbin/server-man-install"}, {"server-man-firecracker-runtime", "/usr/local/libexec/server-man-firecracker-runtime"}} {
 		data, err := os.ReadFile(filepath.Join(p.Bundle, "bin", binary.source))
 		if err != nil {
 			return err
@@ -350,6 +367,12 @@ func (p plan) apply(ctx context.Context, out io.Writer) error {
 		if err = atomicFile(binary.target, data, 0755); err != nil {
 			return err
 		}
+	}
+	if p.FirecrackerArchive!="" {
+		if err=rootDirectory("/usr/bin");err!=nil{return err}
+		release,_,verifyErr:=readFirecrackerRelease(p.FirecrackerArchive,p.FirecrackerSHA256)
+		if verifyErr!=nil{return fmt.Errorf("Firecracker archive changed since review: %w",verifyErr)}
+		if err=installFirecrackerPair("/usr/bin",release);err!=nil{return err}
 	}
 	if err = atomicFile("/etc/sudoers.d/server-man", rule, 0440); err != nil {
 		return err

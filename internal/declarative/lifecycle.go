@@ -17,7 +17,7 @@ func (c Coordinator) ServiceAction(ctx context.Context, id, action string) error
 	if !validID(id) {
 		return errors.New("invalid service ID")
 	}
-	if action != "start" && action != "stop" && action != "restart" {
+	if action != "start" && action != "stop" && action != "restart" && action != "force_stop" {
 		return errors.New("unsupported service action")
 	}
 	snapshot, err := c.Store.Read()
@@ -28,12 +28,15 @@ func (c Coordinator) ServiceAction(ctx context.Context, id, action string) error
 		return errors.New("managed service does not exist")
 	}
 	key := "service/" + id
+	if action == "force_stop" && backend(snapshot.Config, key) != "firecracker" {
+		return errors.New("force-stop is available only for Firecracker VMs")
+	}
 	a := c.Adapters[backend(snapshot.Config, key)]
 	life, ok := a.(LifecycleAdapter)
 	if !ok {
 		return errors.New("service backend does not support lifecycle operations")
 	}
-	if action != "stop" {
+	if action == "start" || action == "restart" {
 		if err = c.readinessError(ctx, snapshot.Config, id, false); err != nil {
 			return err
 		}

@@ -21,6 +21,7 @@ func serviceDataReferences(service Service) []string {
 		for _, disk := range service.VM.Disks {
 			refs["storage/"+disk] = true
 		}
+		if service.VM.Firecracker != nil { refs["storage/"+service.VM.Firecracker.Kernel] = true }
 	}
 	return slices.Sorted(maps.Keys(refs))
 }

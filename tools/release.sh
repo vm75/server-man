@@ -9,7 +9,7 @@ mkdir -p dist
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT HUP INT TERM
 mkdir -p "$stage/$name/bin" "$stage/$name/docs"
-for binary in server-man server-man-admin server-man-install; do
+for binary in server-man server-man-admin server-man-install server-man-firecracker-runtime; do
     install -m 0755 "bin/$binary" "$stage/$name/bin/$binary"
 done
 install -m 0755 install.sh "$stage/$name/install.sh"

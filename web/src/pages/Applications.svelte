@@ -16,7 +16,7 @@
     id: string
     initialKind?: 'container' | 'vm'
     initialEngine?: 'podman' | 'docker'
-    initialBackend?: 'quadlet' | 'compose' | 'libvirt' | 'incus'
+    initialBackend?: 'quadlet' | 'compose' | 'libvirt' | 'incus' | 'firecracker'
   }
   let editor = $state<EditorState | null>(null)
   let feedback = $state('')
@@ -37,7 +37,7 @@
   function openEditor(
     kind: 'container' | 'vm',
     engine?: 'podman' | 'docker',
-    backend?: 'quadlet' | 'compose' | 'libvirt' | 'incus'
+    backend?: 'quadlet' | 'compose' | 'libvirt' | 'incus' | 'firecracker'
   ) {
     editor = {
       id: '',
@@ -94,6 +94,7 @@
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('container', 'docker', 'compose')}>Docker Compose</button>
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
     <button class="small-button primary" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
+    <button class="small-button" disabled={!allowWrites || activeJob !== null} onclick={() => openEditor('vm', undefined, 'firecracker')}>Firecracker VM (experimental)</button>
   </div>
   <div class="search-wrap">
     <label class="sr-only" for="app-search">Find an application</label>
@@ -136,6 +137,7 @@
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('container', 'docker', 'compose')}>Docker Compose</button>
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'incus')}>Incus VM</button>
       <button class="primary" disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'libvirt')}>KVM/Libvirt VM</button>
+      <button disabled={!allowWrites} onclick={() => openEditor('vm', undefined, 'firecracker')}>Firecracker VM (experimental)</button>
     </div>
   </section>
 {:else if inventory && !inventory.error && inventory.services.length && !filtered.length}
@@ -193,9 +195,9 @@
         {/each}
       </ul>
     {/if}
-    {#if service.kind === 'container' || service.backend === 'incus'}
+    {#if service.kind === 'container' || service.backend === 'incus' || service.backend === 'firecracker'}
       <div class="project-log-controls">
-        <h3>{service.backend === 'incus' ? 'VM instance diagnostics' : 'Application logs'}</h3>
+        <h3>{service.backend === 'incus' || service.backend === 'firecracker' ? 'VM instance diagnostics' : 'Application logs'}</h3>
         <div>
           <label class="sr-only" for="application-log-tail-{service.id}">Log entries for {service.name || service.id}</label>
           <select id="application-log-tail-{service.id}" bind:value={logTail}>
@@ -211,15 +213,15 @@
       {#if logServiceID === service.id}
         {#if logError}<p class="form-error" role="alert">{logError}</p>{/if}
         {#if logs}<pre class="project-log-output">{logs.text || 'No visible log entries. The workload may not have emitted output or the account may lack access.'}</pre>{#if logs.truncated}<p class="resource-hint">Showing only the most recent 128 KiB of output.</p>{/if}{/if}
-        <p class="resource-hint">Logs can contain private application data and are requested only when you click Read logs.{service.backend === 'incus' ? ' Incus reports instance diagnostics, not guest application logs.' : ''}</p>
+        <p class="resource-hint">Logs can contain private application data and are requested only when you click Read logs.{service.backend === 'incus' ? ' Incus reports instance diagnostics, not guest application logs.' : service.backend === 'firecracker' ? ' Firecracker reports VMM and host service diagnostics, not guest web application logs.' : ''}</p>
       {/if}
     {:else if service.kind === 'vm'}
-      <p class="resource-hint">Guest application logs are not exposed by the libvirt backend; inspect them inside the guest.</p>
+      <p class="resource-hint">Guest application logs are not exposed by this VM backend; inspect them inside the guest.</p>
     {/if}
     <div class="actions">
       <button disabled={!allowWrites || activeJob !== null} onclick={() => { editor = {id:service.id} }}>Edit definition</button>
-      {#each ['start', 'stop', 'restart', service.enabled ? 'disable' : 'enable'] as action}
-        <button class:primary={action === 'start'} disabled={!allowWrites || activeJob !== null || loading || ((action === 'start' || action === 'restart' || action === 'enable') && service.issues.some(i => i.severity !== 'warning' && (action === 'enable' || i.field !== 'autostart')))} onclick={() => { if (action === 'start') void perform(service, action); else pending = { service, action } }}>{action === 'enable' ? 'Enable boot startup' : action === 'disable' ? 'Disable boot startup' : action.charAt(0).toUpperCase() + action.slice(1)}</button>
+      {#each ['start', 'stop', 'restart', ...(service.backend === 'firecracker' ? ['force_stop'] : []), service.enabled ? 'disable' : 'enable'] as action}
+        <button class:primary={action === 'start'} disabled={!allowWrites || activeJob !== null || loading || ((action === 'start' || action === 'restart' || action === 'enable') && service.issues.some(i => i.severity !== 'warning' && (action === 'enable' || i.field !== 'autostart')))} onclick={() => { if (action === 'start') void perform(service, action); else pending = { service, action } }}>{action === 'enable' ? 'Enable boot startup' : action === 'disable' ? 'Disable boot startup' : action === 'force_stop' ? 'Force stop VM' : action.charAt(0).toUpperCase() + action.slice(1)}</button>
       {/each}
     </div>
   </section>
@@ -240,7 +242,7 @@
   </details>
 {/if}
 
-<ConfirmDialog open={pending !== null} title={pending ? `${pending.action}: ${pending.service.name || pending.service.id}` : ''} description={pending?.action === 'enable' || pending?.action === 'disable' ? 'Change automatic startup at boot. The current running state stays unchanged.' : 'This interrupts the selected application.'} label="Confirm" busy={activeJob !== null} onConfirm={() => { if (pending) void perform(pending.service, pending.action) }} onClose={() => { pending = null }} />
+<ConfirmDialog open={pending !== null} title={pending ? `${pending.action}: ${pending.service.name || pending.service.id}` : ''} description={pending?.action === 'enable' || pending?.action === 'disable' ? 'Change automatic startup at boot. The current running state stays unchanged.' : pending?.action === 'force_stop' ? 'Forcefully terminate this Firecracker VM without waiting for guest shutdown. Unsaved guest data may be lost. Only use this if graceful Stop fails.' : 'This interrupts the selected application.'} label="Confirm" busy={activeJob !== null} onConfirm={() => { if (pending) void perform(pending.service, pending.action) }} onClose={() => { pending = null }} />
 
 <style>
   .toolbar {
