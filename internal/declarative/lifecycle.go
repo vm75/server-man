@@ -36,7 +36,7 @@ func (c Coordinator) ServiceAction(ctx context.Context, id, action string) error
 	if !ok {
 		return errors.New("service backend does not support lifecycle operations")
 	}
-	if action != "stop" {
+	if action == "start" || action == "restart" {
 		if err = c.readinessError(ctx, snapshot.Config, id, false); err != nil {
 			return err
 		}

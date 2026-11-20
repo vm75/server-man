@@ -276,6 +276,9 @@ func action(ctx context.Context,uid int, req Request) (Observation,error) {
 	if req.Action!="start" && req.Action!="stop" && req.Action!="restart" && req.Action!="force_stop" {return Observation{},errors.New("unsupported Firecracker action")}
 	if req.Action=="force_stop" {
 		if running {
+			// Bypass the normal ExecStop guest-shutdown hook: this is the
+			// separately acknowledged destructive operation.
+			if _,err=runCommand(ctx,Systemctl,"kill","--kill-who=main","--signal=SIGKILL",UnitName(id));err!=nil{return Observation{},err}
 			if _,err=runCommand(ctx,Systemctl,"stop",UnitName(id));err!=nil{return Observation{},err}
 		}
 		return inspect(ctx,uid,Request{ID:req.ID})

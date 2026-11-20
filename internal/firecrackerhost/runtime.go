@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 func writeUnitFile(path string, data []byte) error {
@@ -59,12 +61,15 @@ func bindJailSource(from,to string) error {
 	target,err:=os.OpenFile(to,os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW,0600)
 	if err!=nil{return errors.New("cannot stage Firecracker jail input")}
 	target.Close()
-	src,err:=os.Open(from)
+	// Pin the verified source inode; do not follow a writable pathname again
+	// after validation, since the workload account can replace it.
+	src,err:=os.OpenFile(from,os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC,0)
 	if err!=nil{return errors.New("Firecracker source became inaccessible")}
 	defer src.Close()
 	before,err:=src.Stat()
-	if err!=nil{return err}
-	if err=syscall.Mount(from,to,"",syscall.MS_BIND,"");err!=nil{return errors.New("failed to bind Firecracker source")}
+	if err!=nil || !before.Mode().IsRegular(){return errors.New("Firecracker source is no longer a regular file")}
+	fdPath:=fmt.Sprintf("/proc/self/fd/%d",src.Fd())
+	if err=syscall.Mount(fdPath,to,"",syscall.MS_BIND,"");err!=nil{return errors.New("failed to bind Firecracker source")}
 	after,err:=os.Stat(to)
 	if err!=nil || !os.SameFile(before,after) {
 		_ = syscall.Unmount(to,0)
@@ -79,6 +84,9 @@ func prepareJail(spec Spec,id string) error {
 		if err=Cleanup(id);err!=nil{return err}
 	} else if !os.IsNotExist(err) {return errors.New("jail location is inaccessible")}
 	if err:=secureDirectory(filepath.Join(root,"disks"));err!=nil{return err}
+	// The jailer chowns the jail root, but not /disks. Allow only this
+	// guest's unprivileged VMM to traverse the disk directory.
+	if err:=os.Chown(filepath.Join(root,"disks"),spec.UID,spec.GID);err!=nil{return errors.New("cannot assign Firecracker disk directory ownership")}
 	if err:=bindJailSource(spec.Kernel,filepath.Join(root,"kernel"));err!=nil{return err}
 	for n,source:=range spec.Disks {
 		name:="root"
@@ -153,6 +161,28 @@ func Cleanup(id string) error {
 }
 // RuntimeMain handles fixed systemd hooks with zero environment-sensitive
 // arguments. It is not sudo-authorized and cannot serve arbitrary requests.
+// StopForSystemd gives guest userspace time to shut down on host reboot or
+// operator systemctl stop. If the guest refuses, systemd's stop timeout still
+// applies; this is not a replacement for the explicitly acknowledged force stop.
+func StopForSystemd(id string) error {
+	if _,err:=readSpec(id);err!=nil{return errors.New("unknown Firecracker native VM")}
+	ctx,cancel:=context.WithTimeout(context.Background(),85*time.Second)
+	defer cancel()
+	if err:=shutdown(ctx,id);err!=nil{return err}
+	tick:=time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		out,err:=runCommand(ctx,Systemctl,"show",UnitName(id),"--property=MainPID","--value","--no-pager")
+		if err!=nil{return err}
+		pid,err:=strconv.Atoi(strings.TrimSpace(out))
+		if err!=nil || pid<0 {return errors.New("Firecracker main process identity is ambiguous")}
+		if pid==0{return nil}
+		select {
+		case <-ctx.Done():return errors.New("Firecracker guest did not shut down before host deadline")
+		case <-tick.C:
+		}
+	}
+}
 func RuntimeMain(args []string) error {
 	if os.Geteuid()!=0 || len(args)!=2 || !validOpaque(args[1]) {
 		return errors.New("Firecracker runtime requires root, operation and identity")
@@ -160,6 +190,7 @@ func RuntimeMain(args []string) error {
 	switch args[0] {
 	case "prepare":return Prepare(args[1])
 	case "cleanup":return Cleanup(args[1])
+	case "shutdown":return StopForSystemd(args[1])
 	default:return errors.New("unsupported Firecracker runtime operation")
 	}
 }

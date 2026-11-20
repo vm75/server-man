@@ -140,14 +140,23 @@ func sameRuntime(a,b Spec) bool {
 	bb,_:=json.Marshal(b)
 	return bytes.Equal(aa,bb)
 }
-func sourceFile(path string, uid int) (os.FileInfo,error) {
-	if !filepath.IsAbs(path) || filepath.Clean(path)!=path {return nil,errors.New("invalid Firecracker disk path")}
+func sourceFile(path string, uid int, writable bool) (os.FileInfo,error) {
+	if !filepath.IsAbs(path) || filepath.Clean(path)!=path {return nil,errors.New("invalid Firecracker source path")}
 	resolved,err:=filepath.EvalSymlinks(path)
-	if err!=nil || resolved!=path {return nil,errors.New("Firecracker source cannot be a symlink")}
-	info,err:=os.Lstat(path)
+	if err!=nil || resolved!=path {return nil,errors.New("Firecracker source cannot traverse symlinks")}
+	// Verify the opened inode, not just an earlier lstat result.
+	file,err:=os.OpenFile(path,os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC,0)
+	if err!=nil{return nil,errors.New("Firecracker kernel or disk is inaccessible")}
+	defer file.Close()
+	info,err:=file.Stat()
 	if err!=nil || !info.Mode().IsRegular() || info.Size()<=0 {return nil,errors.New("Firecracker kernel or disk is missing or invalid")}
 	stat,ok:=info.Sys().(*syscall.Stat_t)
 	if !ok || stat.Uid != uint32(uid) {return nil,errors.New("Firecracker source must be owned by the selected workload account")}
+	required:=os.FileMode(0400)
+	if writable {required=0600}
+	if info.Mode().Perm()&required!=required {
+		return nil,errors.New("Firecracker kernel must be readable and writable disks need owner read/write permission")
+	}
 	return info,nil
 }
 
@@ -194,9 +203,9 @@ func checkDiskSharing(spec Spec) error {
 
 func checkSources(spec Spec) error {
 	if err:=spec.Validate();err!=nil{return err}
-	if _,err:=sourceFile(spec.Kernel,spec.UID);err!=nil{return err}
+	if _,err:=sourceFile(spec.Kernel,spec.UID,false);err!=nil{return err}
 	for _,path:=range spec.Disks {
-		if _,err:=sourceFile(path,spec.UID);err!=nil{return err}
+		if _,err:=sourceFile(path,spec.UID,true);err!=nil{return err}
 	}
 	if err:=checkDiskSharing(spec);err!=nil{return err}
 	if _,err:=os.Stat(filepath.Join("/sys/class/net",spec.Bridge,"bridge"));err!=nil {

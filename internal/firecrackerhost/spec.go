@@ -149,10 +149,11 @@ Type=exec
 Delegate=yes
 ExecStartPre=%s prepare %s
 ExecStart=%s --id %s --exec-file %s --uid %d --gid %d --chroot-base-dir %s/jails --cgroup-version 2 --resource-limit no-file=1024 -- --api-sock /api.socket --config-file /vm.json
+ExecStop=%s shutdown %s
 ExecStopPost=%s cleanup %s
 Restart=no
 TimeoutStartSec=60s
-TimeoutStopSec=30s
+TimeoutStopSec=110s
 MemoryMax=%dM
 TasksMax=512
 LogRateLimitIntervalSec=30s
@@ -161,6 +162,6 @@ StandardOutput=journal
 StandardError=journal
 [Install]
 WantedBy=multi-user.target
-`,id,RuntimePath,id,JailerPath,id,VMMPath,s.UID,s.GID,BasePath,RuntimePath,id,s.MemoryMiB+256)
+`,id,RuntimePath,id,JailerPath,id,VMMPath,s.UID,s.GID,BasePath,RuntimePath,id,RuntimePath,id,s.MemoryMiB+256)
 	return []byte(header+unit),nil
 }
